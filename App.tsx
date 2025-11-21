@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelLeft, SquarePen, ArrowUp, Paperclip } from 'lucide-react';
-import { GenerateContentStreamResult } from "@google/genai";
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
 import { Role, Message, GeminiModel, ModelConfig } from './types';
 import { generateResponseStream } from './services/geminiService';
@@ -106,7 +105,7 @@ const App: React.FC = () => {
 
         const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
-        const streamResult: GenerateContentStreamResult = await generateResponseStream(
+        const streamResult = await generateResponseStream(
           selectedModelConfig.id, 
           userText, 
           history,
@@ -115,8 +114,8 @@ const App: React.FC = () => {
 
         let fullText = '';
         
-        for await (const chunk of streamResult.stream) {
-             const chunkText = chunk.text(); 
+        for await (const chunk of streamResult) {
+             const chunkText = chunk.text; 
              if (chunkText) {
                 fullText += chunkText;
                 
@@ -201,14 +200,14 @@ const App: React.FC = () => {
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
            {messages.length === 0 ? (
-             <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500">
+             <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
                 <div className="bg-white dark:bg-black border border-gray-200 dark:border-neon-blue/30 text-neon-blue p-4 rounded-full mb-6 shadow-lg dark:shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)] transition-all">
                    <div className="scale-125">{CHATGPT_LOGO}</div>
                 </div>
                 <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
                 
                 {/* Suggestion Chips */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mb-12">
                    {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
                      <button 
                         key={i}
@@ -242,8 +241,7 @@ const App: React.FC = () => {
                     onKeyDown={handleKeyDown}
                     placeholder="Message Gemini..."
                     rows={1}
-                    className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-4 md:py-3.5 pr-12 resize-none outline-none max-h-[200px] overflow-y-auto scrollbar-hidden"
-                    style={{ minHeight: '52px' }}
+                    className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden"
                  />
                  
                  {/* Actions Row */}

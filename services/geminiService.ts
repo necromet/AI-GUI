@@ -1,4 +1,4 @@
-import { GoogleGenAI, GenerateContentStreamResult } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { GeminiModel } from '../types';
 
 // Initialize API Key from environment variable
@@ -10,7 +10,7 @@ export const generateResponseStream = async (
   prompt: string,
   history: { role: string; content: string }[],
   systemInstruction?: string
-): Promise<GenerateContentStreamResult> => {
+) => {
   
   // Add thinking config for Pro model if needed
   const config: any = {};

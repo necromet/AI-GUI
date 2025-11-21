@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GeminiGPT - Neon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -80,6 +83,33 @@
         margin-bottom: 1rem;
         overflow-x: auto;
       }
+      
+      /* Neon code block styling */
+      .prose .neon-code-block-container {
+        background-color: transparent !important;
+        border: 1px solid #00f3ff;
+        border-radius: 0.5rem;
+        padding: 0;
+        box-shadow: 0 0 10px rgba(0, 243, 255, 0.3),
+                    0 0 20px rgba(0, 243, 255, 0.15),
+                    inset 0 0 20px rgba(0, 243, 255, 0.05);
+        transition: all 0.3s ease;
+        overflow: hidden;
+        background: #1c1c1e !important;
+      }
+      
+      .prose .neon-code-block-container:hover {
+        border-color: #ffffff;
+        box-shadow: 0 0 15px rgba(0, 243, 255, 0.4),
+                    0 0 30px rgba(0, 243, 255, 0.2),
+                    inset 0 0 25px rgba(0, 243, 255, 0.08);
+      }
+      
+      /* Override syntax highlighter styles for neon theme */
+      .prose pre[class*="language-"] {
+        margin: 0 !important;
+        border-radius: 0.5rem !important;
+      }
       .prose code {
         background-color: rgba(0, 243, 255, 0.1);
         color: #00f3ff;
@@ -116,20 +146,9 @@
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
-  }
-}
-</script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
