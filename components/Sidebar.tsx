@@ -1,13 +1,14 @@
 import React from 'react';
-import { Plus, PanelLeftClose, History } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   onNewChat: () => void;
+  onOpenSettings: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onNewChat }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onNewChat, onOpenSettings }) => {
   // Mock history data
   const historyItems = [
     "React component help",
@@ -73,7 +74,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onNewChat }) => {
         </div>
 
         {/* Footer / User Profile */}
-        <div className="p-3 border-t border-white/5">
+        <div className="p-3 border-t border-white/5 space-y-1">
+          <button 
+            onClick={onOpenSettings}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-100 hover:bg-hover transition-colors group"
+          >
+            <SettingsIcon size={18} className="text-gray-400 group-hover:text-white" />
+            <span className="font-medium">Settings</span>
+          </button>
+
           <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-100 hover:bg-hover transition-colors group">
              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-blue-600 flex items-center justify-center text-white text-xs font-bold shadow-[0_0_10px_rgba(188,19,254,0.4)]">
                 JD

@@ -1,7 +1,7 @@
 import React from 'react';
 import { GeminiModel, ModelConfig } from './types';
 
-export const MODELS: ModelConfig[] = [
+export const DEFAULT_MODELS: ModelConfig[] = [
   {
     id: GeminiModel.Flash,
     name: "Gemini 2.5 Flash",

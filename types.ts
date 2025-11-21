@@ -24,8 +24,10 @@ export enum GeminiModel {
 }
 
 export interface ModelConfig {
-  id: GeminiModel;
+  id: string; // Changed from enum to string to support custom model IDs
   name: string;
   description: string;
   isReasoning: boolean;
+  systemInstruction?: string;
+  isCustom?: boolean;
 }

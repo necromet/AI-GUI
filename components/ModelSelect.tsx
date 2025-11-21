@@ -1,18 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Sparkles, Zap } from 'lucide-react';
+import { ChevronDown, Sparkles, Zap, MessageSquare } from 'lucide-react';
 import { GeminiModel, ModelConfig } from '../types';
-import { MODELS } from '../constants';
 
 interface ModelSelectProps {
-  currentModel: GeminiModel;
-  onSelect: (model: GeminiModel) => void;
+  currentModel: string;
+  models: ModelConfig[];
+  onSelect: (modelId: string) => void;
 }
 
-const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, onSelect }) => {
+const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const selectedConfig = MODELS.find(m => m.id === currentModel) || MODELS[0];
+  const selectedConfig = models.find(m => m.id === currentModel) || models[0];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -36,7 +36,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, onSelect }) => 
 
       {isOpen && (
         <div className="absolute left-0 top-full mt-2 w-80 rounded-xl bg-[#0a0a0a] border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden py-1 backdrop-blur-xl">
-          {MODELS.map((model) => (
+          {models.map((model) => (
             <button
               key={model.id}
               onClick={() => {
@@ -48,9 +48,12 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, onSelect }) => 
               <div className={`flex-shrink-0 ${currentModel === model.id ? 'text-neon-purple' : 'text-gray-500'} group-hover:text-neon-purple transition-colors`}>
                 {model.isReasoning ? <Sparkles size={24} /> : <Zap size={24} />}
               </div>
-              <div className="relative z-10">
-                <div className={`font-medium ${currentModel === model.id ? 'text-white' : 'text-gray-300'} group-hover:text-white transition-colors`}>
+              <div className="relative z-10 flex-1">
+                <div className={`font-medium ${currentModel === model.id ? 'text-white' : 'text-gray-300'} group-hover:text-white transition-colors flex items-center gap-2`}>
                     {model.name}
+                    {model.systemInstruction && (
+                      <MessageSquare size={12} className="text-neon-blue" />
+                    )}
                 </div>
                 <div className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{model.description}</div>
               </div>
