@@ -1,0 +1,5 @@
+{
+  "name": "GeminiGPT",
+  "description": "A faithful recreation of the ChatGPT interface powered by Google's Gemini 2.5 and Pro models.",
+  "requestFramePermissions": []
+}

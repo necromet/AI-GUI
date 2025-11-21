@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeminiGPT - Neon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              sidebar: '#000000',
+              main: '#050505',
+              input: '#121212',
+              hover: '#1a1a1a',
+              user: '#1a1a1a',
+              neon: {
+                blue: '#00f3ff',
+                purple: '#bc13fe',
+                green: '#00ff9f',
+              }
+            },
+            fontFamily: {
+              sans: ['Söhne', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Ubuntu', 'Cantarell', 'Noto Sans', 'sans-serif', 'Helvetica Neue', 'Arial', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'],
+            },
+            animation: {
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'glow': 'glow 2s ease-in-out infinite alternate',
+            },
+            keyframes: {
+              glow: {
+                '0%': { boxShadow: '0 0 5px #00f3ff' },
+                '100%': { boxShadow: '0 0 20px #00f3ff, 0 0 10px #bc13fe' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #050505;
+        color: #ececec;
+      }
+      
+      /* Neon Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #000; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #333; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #00f3ff; 
+        box-shadow: 0 0 10px #00f3ff;
+      }
+
+      .scrollbar-hidden::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hidden {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      /* Markdown styles simulation */
+      .prose pre {
+        background-color: #0a0a0a !important;
+        border: 1px solid #222;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+      }
+      .prose code {
+        background-color: rgba(0, 243, 255, 0.1);
+        color: #00f3ff;
+        border-radius: 0.25rem;
+        padding: 0.2em 0.4em;
+        font-size: 0.875em;
+      }
+      .prose pre code {
+        background-color: transparent;
+        color: inherit;
+        padding: 0;
+      }
+      .prose p {
+        margin-bottom: 1.25em;
+      }
+      .prose strong {
+        color: #fff;
+        text-shadow: 0 0 2px rgba(255,255,255,0.5);
+      }
+      .prose a {
+        color: #bc13fe;
+        text-decoration: underline;
+      }
+      
+      /* Neon Selection */
+      ::selection {
+        background: #bc13fe;
+        color: #fff;
+      }
+
+      .glass-panel {
+        background: rgba(20, 20, 20, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
