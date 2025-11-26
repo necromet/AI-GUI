@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelLeft, SquarePen, ArrowUp, Paperclip } from 'lucide-react';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
-import { Role, Message, GeminiModel, ModelConfig } from './types';
+import { Role, Message, GeminiModel, ModelConfig, ChatSession } from './types';
 import { generateResponseStream } from './services/geminiService';
+import * as db from './services/databaseService';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
@@ -22,9 +23,26 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
+  
+  // Database-backed conversation state
+  const [conversations, setConversations] = useState<ChatSession[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize database and load conversations
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        await db.getDatabase(); // Initialize database
+        await loadConversations();
+      } catch (error) {
+        console.error('Database initialization error:', error);
+      }
+    };
+    initDb();
+  }, []);
 
   // Theme Effect
   useEffect(() => {
@@ -59,6 +77,63 @@ const App: React.FC = () => {
     setMessages([]);
     setInput('');
     setIsStreaming(false);
+    setCurrentConversationId(null);
+  };
+
+  const loadConversations = async () => {
+    const dbConversations = await db.getConversations();
+    const sessions: ChatSession[] = dbConversations.map(conv => ({
+      id: conv.conversation_id!.toString(),
+      title: conv.title || 'New Chat',
+      messages: [],
+      updatedAt: new Date(conv.updated_at).getTime(),
+      dbConversationId: conv.conversation_id,
+      modelId: conv.model_id
+    }));
+    setConversations(sessions);
+  };
+
+  const loadConversation = async (conversationId: number) => {
+    const dbMessages = await db.getMessagesByConversation(conversationId);
+    const loadedMessages: Message[] = dbMessages.map(msg => ({
+      id: msg.message_id!.toString(),
+      role: msg.role === 'assistant' ? Role.Assistant : Role.User,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp).getTime(),
+      messageOrder: msg.message_order,
+      dbMessageId: msg.message_id
+    }));
+    setMessages(loadedMessages);
+    setCurrentConversationId(conversationId);
+  };
+
+  const saveMessageToDb = async (conversationId: number, role: 'user' | 'assistant', content: string): Promise<number> => {
+    const messageOrder = await db.getNextMessageOrder(conversationId);
+    return await db.addMessage(conversationId, role, content, messageOrder);
+  };
+
+  const ensureConversation = async (): Promise<number> => {
+    if (currentConversationId) {
+      return currentConversationId;
+    }
+    
+    // Get or create model in database
+    let dbModel = await db.getModelByName(currentModelId);
+    if (!dbModel) {
+      const selectedModel = models.find(m => m.id === currentModelId);
+      const modelId = await db.addModel(
+        currentModelId,
+        selectedModel?.description || null,
+        selectedModel?.contextWindowSize || null
+      );
+      dbModel = await db.getModelById(modelId);
+    }
+    
+    // Create new conversation
+    const newConversationId = await db.createConversation(dbModel!.model_id!, null);
+    setCurrentConversationId(newConversationId);
+    await loadConversations();
+    return newConversationId;
   };
 
   const handleAddModel = (newModel: ModelConfig) => {
@@ -79,12 +154,19 @@ const App: React.FC = () => {
     setInput(''); 
     if (textareaRef.current) textareaRef.current.style.height = 'auto'; 
 
+    // Ensure we have a conversation in the database
+    const conversationId = await ensureConversation();
+
     const userMessage: Message = {
       id: generateId(),
       role: Role.User,
       content: userText,
       timestamp: Date.now(),
     };
+
+    // Save user message to database
+    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText);
+    userMessage.dbMessageId = userDbMessageId;
 
     setMessages(prev => [...prev, userMessage]);
 
@@ -113,6 +195,7 @@ const App: React.FC = () => {
         );
 
         let fullText = '';
+        let aiDbMessageId: number | null = null;
         
         for await (const chunk of streamResult) {
              const chunkText = chunk.text; 
@@ -130,6 +213,18 @@ const App: React.FC = () => {
                     return msg;
                 }));
              }
+        }
+
+        // Save AI response to database
+        if (fullText) {
+          aiDbMessageId = await saveMessageToDb(conversationId, 'assistant', fullText);
+          
+          // Update conversation title if it's the first exchange
+          if (messages.length === 0) {
+            const title = userText.substring(0, 50) + (userText.length > 50 ? '...' : '');
+            await db.updateConversationTitle(conversationId, title);
+            await loadConversations();
+          }
         }
 
     } catch (error) {
@@ -167,6 +262,16 @@ const App: React.FC = () => {
         onToggle={() => setIsSidebarOpen(false)}
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={loadConversation}
+        onDeleteConversation={async (id) => {
+          await db.deleteConversation(id);
+          if (currentConversationId === id) {
+            handleNewChat();
+          }
+          await loadConversations();
+        }}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
@@ -181,7 +286,7 @@ const App: React.FC = () => {
               </button>
            )}
            <div className="flex items-center gap-2 md:hidden">
-             <span className="font-semibold text-gray-800 dark:text-gray-200">GeminiGPT</span>
+             <span className="font-semibold text-gray-800 dark:text-gray-200">Work Ship</span>
            </div>
            <div className="hidden md:flex items-center gap-3">
              <ModelSelect 
@@ -201,8 +306,8 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
            {messages.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
-                <div className="bg-white dark:bg-black border border-gray-200 dark:border-neon-blue/30 text-neon-blue p-4 rounded-full mb-6 shadow-lg dark:shadow-[0_0_30px_-5px_rgba(0,243,255,0.3)] transition-all">
-                   <div className="scale-125">{CHATGPT_LOGO}</div>
+                <div className="bg-white dark:bg-black border border-gray-200 dark:border-red-400/30 p-6 rounded-full mb-6 shadow-lg dark:shadow-[0_0_30px_-5px_rgba(248,113,113,0.6)] transition-all w-20 h-20 flex items-center justify-center">
+                   <div className="scale-[2]">{CHATGPT_LOGO}</div>
                 </div>
                 <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
                 
@@ -231,8 +336,8 @@ const App: React.FC = () => {
 
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
-           <div className="max-w-3xl mx-auto w-full">
-              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 dark:focus-within:border-neon-blue/50 dark:focus-within:shadow-[0_0_20px_-5px_rgba(0,243,255,0.2)] shadow-lg overflow-hidden transition-all duration-300">
+           <div className="max-w-4xl mx-auto w-full">
+              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 dark:focus-within:border-red-400/50 dark:focus-within:shadow-[0_0_20px_-5px_rgba(248,113,113,0.2)] shadow-lg overflow-hidden transition-all duration-300">
                  {/* Textarea Container */}
                  <textarea
                     ref={textareaRef}
@@ -247,7 +352,7 @@ const App: React.FC = () => {
                  {/* Actions Row */}
                  <div className="flex items-center justify-between px-2 pb-2">
                     <div className="flex items-center gap-2">
-                       <button className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-neon-blue hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors">
+                       <button className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors">
                           <Paperclip size={20} strokeWidth={1.5} />
                        </button>
                     </div>

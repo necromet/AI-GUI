@@ -9,6 +9,8 @@ export interface Message {
   content: string;
   isThinking?: boolean; // For model thinking state
   timestamp: number;
+  messageOrder?: number; // Database message order
+  dbMessageId?: number; // Database message ID
 }
 
 export interface ChatSession {
@@ -16,6 +18,8 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   updatedAt: number;
+  dbConversationId?: number; // Database conversation ID
+  modelId?: number; // Database model ID
 }
 
 export enum GeminiModel {
@@ -30,4 +34,6 @@ export interface ModelConfig {
   isReasoning: boolean;
   systemInstruction?: string;
   isCustom?: boolean;
+  dbModelId?: number; // Database model ID
+  contextWindowSize?: number; // Database context window size
 }

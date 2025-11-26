@@ -78,14 +78,14 @@ const Settings: React.FC<SettingsProps> = ({
           <div className="w-48 bg-gray-50 dark:bg-transparent border-r border-gray-200 dark:border-white/5 p-2 flex flex-col gap-1">
             <button 
               onClick={() => setActiveTab('general')}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'general' ? 'bg-neon-purple/10 text-neon-purple' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-white/5 dark:text-gray-400'}`}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'general' ? 'bg-red-400/10 text-red-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-white/5 dark:text-gray-400'}`}
             >
               <Monitor size={16} />
               General
             </button>
             <button 
               onClick={() => setActiveTab('models')}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'models' ? 'bg-neon-purple/10 text-neon-purple' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-white/5 dark:text-gray-400'}`}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'models' ? 'bg-red-400/10 text-red-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-white/5 dark:text-gray-400'}`}
             >
               <Cpu size={16} />
               Models
@@ -102,7 +102,7 @@ const Settings: React.FC<SettingsProps> = ({
                   <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Appearance</h3>
                   <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
                     <div className="flex items-center gap-3">
-                      {theme === 'dark' ? <Moon size={20} className="text-neon-blue" /> : <Sun size={20} className="text-orange-500" />}
+                      {theme === 'dark' ? <Moon size={20} className="text-red-400" /> : <Sun size={20} className="text-orange-500" />}
                       <div>
                         <div className="font-medium text-gray-800 dark:text-gray-200">Theme</div>
                         <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -112,7 +112,7 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                     <button 
                       onClick={onToggleTheme}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-neon-purple' : 'bg-gray-300'}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-red-400' : 'bg-gray-300'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
@@ -137,7 +137,7 @@ const Settings: React.FC<SettingsProps> = ({
                           value={newModelName}
                           onChange={(e) => setNewModelName(e.target.value)}
                           placeholder="e.g. My Coding Helper"
-                          className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-neon-blue outline-none transition-colors"
+                          className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-red-500 outline-none transition-colors"
                         />
                       </div>
                       <div>
@@ -147,7 +147,7 @@ const Settings: React.FC<SettingsProps> = ({
                           value={newModelId}
                           onChange={(e) => setNewModelId(e.target.value)}
                           placeholder="e.g. gemini-1.5-flash"
-                          className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-neon-blue outline-none transition-colors"
+                          className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-red-500 outline-none transition-colors"
                         />
                       </div>
                     </div>
@@ -160,14 +160,14 @@ const Settings: React.FC<SettingsProps> = ({
                         value={newSystemPrompt}
                         onChange={(e) => setNewSystemPrompt(e.target.value)}
                         placeholder="You are an expert programmer who only speaks in Python code..."
-                        className="w-full h-24 bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-neon-blue outline-none transition-colors resize-none"
+                        className="w-full h-24 bg-transparent border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-red-500 outline-none transition-colors resize-none"
                       />
                     </div>
                     <div className="flex justify-end">
                       <button 
                         type="submit"
                         disabled={!newModelName || !newModelId}
-                        className="flex items-center gap-2 px-4 py-2 bg-neon-blue/10 hover:bg-neon-blue/20 text-neon-blue border border-neon-blue/50 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 bg-red-400/10 hover:bg-red-400/20 text-red-400 border border-red-400/50 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus size={16} />
                         Add Model
@@ -181,12 +181,12 @@ const Settings: React.FC<SettingsProps> = ({
                   <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Your Models</h3>
                   <div className="space-y-2">
                     {models.map((model) => (
-                      <div key={model.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-neon-purple/30 transition-colors group">
+                      <div key={model.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-red-400/30 transition-colors group">
                         <div>
                           <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             {model.name}
-                            {model.isCustom && <span className="text-[10px] bg-neon-purple/20 text-neon-purple px-1.5 py-0.5 rounded border border-neon-purple/30">CUSTOM</span>}
-                            {model.systemInstruction && <span className="text-[10px] bg-neon-blue/20 text-neon-blue px-1.5 py-0.5 rounded border border-neon-blue/30">SYSTEM PROMPT</span>}
+                            {model.isCustom && <span className="text-[10px] bg-red-400/20 text-red-400 px-1.5 py-0.5 rounded border border-red-400/30">CUSTOM</span>}
+                            {model.systemInstruction && <span className="text-[10px] bg-red-300/20 text-red-300 px-1.5 py-0.5 rounded border border-red-300/30">SYSTEM PROMPT</span>}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-500 font-mono mt-1">{model.id}</div>
                         </div>

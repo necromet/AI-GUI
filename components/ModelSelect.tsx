@@ -28,10 +28,10 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
     <div className="relative inline-block text-left" ref={ref}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-200 hover:bg-white/5 hover:text-neon-blue transition-all group"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-200 hover:bg-white/5 hover:text-red-400 transition-all group"
       >
-        <span className="group-hover:drop-shadow-[0_0_5px_rgba(0,243,255,0.5)]">{selectedConfig.name}</span>
-        <ChevronDown size={16} className={`text-gray-500 group-hover:text-neon-blue transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="group-hover:drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]">{selectedConfig.name}</span>
+        <ChevronDown size={16} className={`text-gray-500 group-hover:text-red-400 transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
