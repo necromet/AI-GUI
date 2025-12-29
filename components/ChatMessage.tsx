@@ -91,11 +91,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         <div className="flex-shrink-0 flex flex-col relative items-end">
           <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center ${isUser ? '' : 'shadow-[0_0_15px_rgba(0,243,255,0.2)]'}`}>
             {isUser ? (
-              <div className="w-full h-full bg-[#2f2f2f] flex items-center justify-center text-gray-300 font-semibold border border-white/10">
-                U
+              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" style={{ filter: 'drop-shadow(0 0 3px var(--neon-color))' }}>
+                  <path d="m223-120-89-481q-37 7-65.5-17T40-680q0-33 23.5-56.5T120-760q33 0 56.5 23.5T200-680q0 14-4 26t-12 22q22 13 44.5 21.5T276-602q44 0 81.5-22t58.5-60l25-46q-19-11-30-29t-11-41q0-33 23.5-56.5T480-880q33 0 56.5 23.5T560-800q0 23-11 41t-30 29l25 46q21 38 58.5 60t81.5 22q25 0 47.5-8t44.5-21q-8-10-12-22.5t-4-26.5q0-33 23.5-56.5T840-760q33 0 56.5 23.5T920-680q0 38-28.5 62T826-601l-89 481H223Zm67-80h380l60-326q-11 2-23 3.5t-23 1.5q-63 0-117-30t-87-84q-33 54-87 84t-117 30q-11 0-23-1.5t-23-3.5l60 326Zm190 0Z" fill="var(--neon-color)" />
+                </svg>
               </div>
             ) : (
-              <div className="bg-black border border-red-400/30 rounded-full w-full h-full flex items-center justify-center p-1 shadow-[0_0_10px_rgba(248,113,113,0.4)]">
+              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)' }}>
                  {CHATGPT_LOGO}
               </div>
             )}
@@ -108,22 +110,35 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             {isUser ? (
                 <span className="text-white">You</span>
             ) : (
-                <span className="text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]">Gemini</span>
+                <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))' }}>Ember</span>
             )}
           </div>
           
           {message.isThinking ? (
-            <div className="flex items-center gap-2 text-red-400 animate-pulse mt-1">
-              <div className="w-2 h-2 bg-red-400 rounded-full shadow-[0_0_5px_#ff4444]"></div>
-              <div className="w-2 h-2 bg-red-300 rounded-full shadow-[0_0_5px_#ff6666] animation-delay-200"></div>
-              <div className="w-2 h-2 bg-red-400 rounded-full shadow-[0_0_5px_#ff4444] animation-delay-400"></div>
+            <div className="flex items-center gap-2 animate-pulse mt-1" style={{ color: 'var(--neon-color)' }}>
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+              <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
+              <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
             </div>
           ) : (
             <div className="prose prose-invert max-w-none leading-8 break-words text-lg [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4">
               <ReactMarkdown
                 components={{
                   pre: ({ node, ...props }) => (
-                    <div className="code-block-wrapper relative my-4 mt-8 group/code">
+                    <div 
+                      className="code-block-wrapper relative my-6 mt-10 group/code rounded-lg" 
+                      style={{ 
+                        border: '1px solid var(--neon-color)',
+                        boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.3), 0 0 20px rgba(var(--neon-rgb), 0.15)',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(var(--neon-rgb), 0.4), 0 0 30px rgba(var(--neon-rgb), 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 0 10px rgba(var(--neon-rgb), 0.3), 0 0 20px rgba(var(--neon-rgb), 0.15)';
+                      }}
+                    >
                       <pre {...props} className="neon-code-block-container" />
                     </div>
                   ),
@@ -138,13 +153,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
                       
                       return (
                         <>
-                          <div className="absolute -top-9 left-0 right-0 flex items-center justify-between px-4 py-2 rounded-t-lg bg-[#1e1e2e]/95 backdrop-blur-sm border-t border-x border-red-400/30 z-10">
-                            <span className="text-xs text-red-400/80 font-mono uppercase tracking-wider">
+                          <div className="absolute -top-9 left-0 right-0 flex items-center justify-between px-4 py-2 rounded-t-lg bg-[#1e1e2e]/95 backdrop-blur-sm border-t border-x z-10" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)' }}>
+                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(var(--neon-rgb), 0.8)' }}>
                               {language}
                             </span>
                             <button
                               onClick={() => handleCopyCode(codeString, language)}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-red-400/50 rounded transition-all"
+                              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition-all"
+                              style={{ borderColor: isCopied ? 'rgba(var(--neon-rgb), 0.5)' : undefined }}
+                              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.5)'}
+                              onMouseLeave={(e) => !isCopied && (e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)')}
                               title="Copy code"
                             >
                               {isCopied ? (
@@ -195,17 +213,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
 
           {/* Message Actions (Assistant only mostly) */}
           {!isUser && !message.isThinking && (
-            <div className="flex items-center gap-2 mt-2 pt-2 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-               <button className="p-1.5 hover:text-red-400 rounded hover:bg-white/5 transition-colors" title="Copy">
+            <div className="flex items-center gap-2 mt-2 pt-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
+               <button className="p-1.5 rounded hover:bg-white/5 transition-colors" title="Copy" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>
                  <Copy size={16} />
                </button>
-               <button className="p-1.5 hover:text-red-400 rounded hover:bg-white/5 transition-colors" title="Good response">
+               <button className="p-1.5 rounded hover:bg-white/5 transition-colors" title="Good response" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>
                  <ThumbsUp size={16} />
                </button>
-               <button className="p-1.5 hover:text-red-400 rounded hover:bg-white/5 transition-colors" title="Bad response">
+               <button className="p-1.5 rounded hover:bg-white/5 transition-colors" title="Bad response" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>
                  <ThumbsDown size={16} />
                </button>
-               <button className="p-1.5 hover:text-red-400 rounded hover:bg-white/5 transition-colors" title="Regenerate">
+               <button className="p-1.5 rounded hover:bg-white/5 transition-colors" title="Regenerate" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>
                  <RefreshCw size={16} />
                </button>
             </div>

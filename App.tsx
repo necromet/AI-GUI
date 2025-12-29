@@ -3,11 +3,13 @@ import { PanelLeft, SquarePen, ArrowUp, Paperclip } from 'lucide-react';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
 import { Role, Message, GeminiModel, ModelConfig, ChatSession } from './types';
 import { generateResponseStream } from './services/geminiService';
-import * as db from './services/databaseService';
+import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
+import DatabaseViewer from './components/DatabaseViewer';
+import Notification, { NotificationType } from './components/Notification';
 
 // Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -20,7 +22,11 @@ const App: React.FC = () => {
   
   // State for Settings and Models
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDatabaseViewerOpen, setIsDatabaseViewerOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [neonColor, setNeonColor] = useState<string>(() => {
+    return localStorage.getItem('neonColor') || 'red';
+  });
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
   
@@ -28,15 +34,19 @@ const App: React.FC = () => {
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
 
+  // Notification state
+  const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Initialize database and load conversations
+  // Initialize database and load conversations and models
   useEffect(() => {
     const initDb = async () => {
       try {
         await db.getDatabase(); // Initialize database
         await loadConversations();
+        await loadModels();
       } catch (error) {
         console.error('Database initialization error:', error);
       }
@@ -53,6 +63,29 @@ const App: React.FC = () => {
       root.classList.remove('dark');
     }
   }, [theme]);
+
+  // Neon Color Effect
+  useEffect(() => {
+    const root = document.documentElement;
+    const colorMap: Record<string, { rgb: string; tailwind: string }> = {
+      red: { rgb: '248, 113, 113', tailwind: 'rgb(248, 113, 113)' },
+      orange: { rgb: '251, 146, 60', tailwind: 'rgb(251, 146, 60)' },
+      yellow: { rgb: '250, 204, 21', tailwind: 'rgb(250, 204, 21)' },
+      lime: { rgb: '163, 230, 53', tailwind: 'rgb(163, 230, 53)' },
+      green: { rgb: '74, 222, 128', tailwind: 'rgb(74, 222, 128)' },
+      cyan: { rgb: '34, 211, 238', tailwind: 'rgb(34, 211, 238)' },
+      blue: { rgb: '96, 165, 250', tailwind: 'rgb(96, 165, 250)' },
+      indigo: { rgb: '129, 140, 248', tailwind: 'rgb(129, 140, 248)' },
+      purple: { rgb: '192, 132, 252', tailwind: 'rgb(192, 132, 252)' },
+      pink: { rgb: '244, 114, 182', tailwind: 'rgb(244, 114, 182)' },
+      rose: { rgb: '251, 113, 133', tailwind: 'rgb(251, 113, 133)' },
+      teal: { rgb: '45, 212, 191', tailwind: 'rgb(45, 212, 191)' },
+    };
+    const color = colorMap[neonColor] || colorMap.red;
+    root.style.setProperty('--neon-rgb', color.rgb);
+    root.style.setProperty('--neon-color', color.tailwind);
+    localStorage.setItem('neonColor', neonColor);
+  }, [neonColor]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -91,6 +124,27 @@ const App: React.FC = () => {
       modelId: conv.model_id
     }));
     setConversations(sessions);
+  };
+
+  const loadModels = async () => {
+    const dbModels = await db.getModels();
+    const customModels: ModelConfig[] = dbModels
+      .filter(m => m.is_custom)
+      .map(m => ({
+        id: m.name,
+        name: m.name,
+        description: m.description || 'Custom configured model',
+        isReasoning: false,
+        systemInstruction: m.system_instruction || undefined,
+        isCustom: true,
+        dbModelId: m.model_id,
+        contextWindowSize: m.context_window_size || undefined,
+        apiKey: m.api_key || undefined,
+        provider: m.provider || undefined
+      }));
+    
+    // Merge default models with custom models from database
+    setModels([...DEFAULT_MODELS, ...customModels]);
   };
 
   const loadConversation = async (conversationId: number) => {
@@ -136,11 +190,46 @@ const App: React.FC = () => {
     return newConversationId;
   };
 
-  const handleAddModel = (newModel: ModelConfig) => {
-    setModels([...models, newModel]);
+  const handleAddModel = async (newModel: ModelConfig) => {
+    try {
+      // Save custom model to database
+      const dbModelId = await db.addModel(
+        newModel.id,
+        newModel.description,
+        newModel.contextWindowSize || null,
+        newModel.apiKey || null,
+        newModel.provider || null,
+        newModel.systemInstruction || null,
+        true // isCustom
+      );
+      
+      // Add dbModelId to the model config
+      const modelWithDbId = { ...newModel, dbModelId };
+      setModels([...models, modelWithDbId]);
+      
+      // Show success notification
+      setNotification({
+        message: `Model "${newModel.name}" added successfully!`,
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Error adding model:', error);
+      // Show error notification
+      setNotification({
+        message: `Failed to add model "${newModel.name}". Please try again.`,
+        type: 'error'
+      });
+    }
   };
 
-  const handleDeleteModel = (id: string) => {
+  const handleDeleteModel = async (id: string) => {
+    const model = models.find(m => m.id === id);
+    
+    // Deactivate in database if it has a dbModelId
+    if (model?.dbModelId) {
+      await db.deactivateModel(model.dbModelId);
+    }
+    
     setModels(models.filter(m => m.id !== id));
     if (currentModelId === id) {
       setCurrentModelId(models[0].id);
@@ -262,6 +351,7 @@ const App: React.FC = () => {
         onToggle={() => setIsSidebarOpen(false)}
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenDatabase={() => setIsDatabaseViewerOpen(true)}
         conversations={conversations}
         currentConversationId={currentConversationId}
         onSelectConversation={loadConversation}
@@ -306,7 +396,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
            {messages.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
-                <div className="bg-white dark:bg-black border border-gray-200 dark:border-red-400/30 p-6 rounded-full mb-6 shadow-lg dark:shadow-[0_0_30px_-5px_rgba(248,113,113,0.6)] transition-all w-20 h-20 flex items-center justify-center">
+                <div className="bg-white dark:bg-black border border-gray-200 p-6 rounded-full mb-6 shadow-lg transition-all w-20 h-20 flex items-center justify-center" style={{ borderColor: theme === 'dark' ? `rgba(var(--neon-rgb), 0.3)` : undefined, boxShadow: theme === 'dark' ? `0 0 30px -5px rgba(var(--neon-rgb), 0.6)` : undefined }}>
                    <div className="scale-[2]">{CHATGPT_LOGO}</div>
                 </div>
                 <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
@@ -337,14 +427,14 @@ const App: React.FC = () => {
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
            <div className="max-w-4xl mx-auto w-full">
-              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 dark:focus-within:border-red-400/50 dark:focus-within:shadow-[0_0_20px_-5px_rgba(248,113,113,0.2)] shadow-lg overflow-hidden transition-all duration-300">
+              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 shadow-lg overflow-hidden transition-all duration-300" style={{ borderColor: theme === 'dark' && input ? `rgba(var(--neon-rgb), 0.5)` : undefined, boxShadow: theme === 'dark' && input ? `0 0 20px -5px rgba(var(--neon-rgb), 0.2)` : undefined }}>
                  {/* Textarea Container */}
                  <textarea
                     ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Message Gemini..."
+                    placeholder="Message Ember..."
                     rows={1}
                     className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden"
                  />
@@ -352,7 +442,7 @@ const App: React.FC = () => {
                  {/* Actions Row */}
                  <div className="flex items-center justify-between px-2 pb-2">
                     <div className="flex items-center gap-2">
-                       <button className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors">
+                       <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors" style={{ color: theme === 'dark' ? undefined : undefined }} onMouseEnter={(e) => theme === 'dark' && (e.currentTarget.style.color = 'var(--neon-color)')} onMouseLeave={(e) => theme === 'dark' && (e.currentTarget.style.color = '')}>
                           <Paperclip size={20} strokeWidth={1.5} />
                        </button>
                     </div>
@@ -367,7 +457,7 @@ const App: React.FC = () => {
               </div>
               <div className="text-center mt-3">
                 <p className="text-xs text-gray-500 dark:text-gray-600">
-                  Gemini can make mistakes. Check important info.
+                  Ember can make mistakes. Check important info.
                 </p>
               </div>
            </div>
@@ -379,10 +469,36 @@ const App: React.FC = () => {
           onClose={() => setIsSettingsOpen(false)}
           theme={theme}
           onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          neonColor={neonColor}
+          onChangeNeonColor={setNeonColor}
           models={models}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
         />
+
+        {/* Database Viewer Modal */}
+        {isDatabaseViewerOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+            <div className="relative w-full h-full">
+              <button
+                onClick={() => setIsDatabaseViewerOpen(false)}
+                className="absolute top-4 right-4 z-50 px-4 py-2 bg-input hover:bg-hover neon-border rounded-lg text-white transition-colors"
+              >
+                Close
+              </button>
+              <DatabaseViewer />
+            </div>
+          </div>
+        )}
+
+        {/* Notification Toast */}
+        {notification && (
+          <Notification
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
+        )}
 
       </main>
     </div>

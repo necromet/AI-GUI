@@ -87,6 +87,10 @@ export interface DBModel {
   description: string | null;
   context_window_size: number | null;
   active: boolean;
+  api_key?: string | null;
+  provider?: string | null;
+  system_instruction?: string | null;
+  is_custom?: boolean;
 }
 
 /**
@@ -118,13 +122,25 @@ export const getModelByName = async (name: string): Promise<DBModel | undefined>
 /**
  * Add a new model
  */
-export const addModel = async (name: string, description: string | null, contextWindowSize: number | null): Promise<number> => {
+export const addModel = async (
+  name: string, 
+  description: string | null, 
+  contextWindowSize: number | null,
+  apiKey?: string | null,
+  provider?: string | null,
+  systemInstruction?: string | null,
+  isCustom?: boolean
+): Promise<number> => {
   const db = await getDatabase();
   const model: DBModel = {
     name,
     description,
     context_window_size: contextWindowSize,
-    active: true
+    active: true,
+    api_key: apiKey,
+    provider: provider,
+    system_instruction: systemInstruction,
+    is_custom: isCustom
   };
   return await db.add('models', model);
 };
@@ -132,13 +148,26 @@ export const addModel = async (name: string, description: string | null, context
 /**
  * Update a model
  */
-export const updateModel = async (modelId: number, name: string, description: string | null, contextWindowSize: number | null): Promise<void> => {
+export const updateModel = async (
+  modelId: number, 
+  name: string, 
+  description: string | null, 
+  contextWindowSize: number | null,
+  apiKey?: string | null,
+  provider?: string | null,
+  systemInstruction?: string | null,
+  isCustom?: boolean
+): Promise<void> => {
   const db = await getDatabase();
   const model = await db.get('models', modelId);
   if (model) {
     model.name = name;
     model.description = description;
     model.context_window_size = contextWindowSize;
+    model.api_key = apiKey;
+    model.provider = provider;
+    model.system_instruction = systemInstruction;
+    model.is_custom = isCustom;
     await db.put('models', model);
   }
 };

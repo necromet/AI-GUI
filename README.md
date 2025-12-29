@@ -12,6 +12,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1O9JV_9VX0xyHwLBW98bj2D
 
 **Prerequisites:**  Node.js
 
+### Web Version (Browser)
 
 1. Install dependencies:
    `npm install`
@@ -19,9 +20,25 @@ View your app in AI Studio: https://ai.studio/apps/drive/1O9JV_9VX0xyHwLBW98bj2D
 3. Run the app:
    `npm run dev`
 
+### Desktop App (Electron)
+
+1. Install dependencies:
+   `npm install`
+2. Run the Electron app:
+   `npm run electron:dev`
+3. Build the desktop app:
+   `npm run electron:build`
+
+The Electron version uses **SQLite** for data persistence instead of IndexedDB, providing better performance and reliability for desktop usage.
+
 ## Database Persistence
 
-This app uses **IndexedDB** (browser-native database) to persist conversations, messages, and AI models. The database is automatically created in your browser when you first run the app.
+This app supports two database backends:
+
+- **Web Version**: Uses IndexedDB (browser-native database)
+- **Electron Version**: Uses SQLite (better-sqlite3) with the database stored at `~/.config/geminigpt/chat.db`
+
+The database is automatically created when you first run the app.
 
 ### Database Schema
 

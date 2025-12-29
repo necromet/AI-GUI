@@ -7,7 +7,12 @@ CREATE TABLE Models (
     name TEXT NOT NULL UNIQUE,
     description TEXT,
     context_window_size INTEGER,
-    active BOOLEAN NOT NULL DEFAULT 1
+    active BOOLEAN NOT NULL DEFAULT 1,
+    -- Additional fields for custom models
+    api_key TEXT,
+    provider TEXT,
+    system_instruction TEXT,
+    is_custom BOOLEAN DEFAULT 0
 );
 
 -- Initialize with a common default model

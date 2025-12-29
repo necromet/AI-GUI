@@ -18,7 +18,7 @@ export const DEFAULT_MODELS: ModelConfig[] = [
 ];
 
 export const CHATGPT_LOGO = (
-  <Flame className="w-6 h-6 text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]" strokeWidth={2} fill="currentColor" />
+  <Flame className="w-6 h-6 drop-shadow-[0_0_8px_rgba(var(--neon-rgb),0.8)]" strokeWidth={2} fill="currentColor" style={{ color: 'var(--neon-color)' }} />
 );
 
 export const USER_AVATAR = (

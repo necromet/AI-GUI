@@ -45,6 +45,11 @@
       }
     </script>
     <style>
+      :root {
+        --neon-rgb: 248, 113, 113; /* Red default */
+        --neon-color: rgb(248, 113, 113);
+      }
+
       body {
         background-color: #050505;
         color: #ececec;
@@ -63,8 +68,8 @@
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #00f3ff; 
-        box-shadow: 0 0 10px #00f3ff;
+        background: var(--neon-color); 
+        box-shadow: 0 0 10px var(--neon-color);
       }
 
       .scrollbar-hidden::-webkit-scrollbar {
@@ -89,22 +94,18 @@
       /* Neon code block styling */
       .prose .neon-code-block-container {
         background-color: transparent !important;
-        border: 1px solid #00f3ff;
+        border: none;
         border-radius: 0.5rem;
         padding: 0;
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.3),
-                    0 0 20px rgba(0, 243, 255, 0.15),
-                    inset 0 0 20px rgba(0, 243, 255, 0.05);
+        box-shadow: none;
         transition: all 0.3s ease;
         overflow: hidden;
         background: #1c1c1e !important;
+        margin: 0 !important;
       }
       
-      .prose .neon-code-block-container:hover {
-        border-color: #ffffff;
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.4),
-                    0 0 30px rgba(0, 243, 255, 0.2),
-                    inset 0 0 25px rgba(0, 243, 255, 0.08);
+      .code-block-wrapper:hover .neon-code-block-container {
+        background: #1c1c1e !important;
       }
       
       /* Override syntax highlighter styles for neon theme */
@@ -113,8 +114,8 @@
         border-radius: 0.5rem !important;
       }
       .prose code {
-        background-color: rgba(0, 243, 255, 0.1);
-        color: #00f3ff;
+        background-color: rgba(var(--neon-rgb), 0.1);
+        color: var(--neon-color);
         border-radius: 0.25rem;
         padding: 0.2em 0.4em;
         font-size: 0.875em;
@@ -127,18 +128,24 @@
       .prose p {
         margin-bottom: 1.25em;
       }
+      .prose hr {
+        margin-top: 3em;
+        margin-bottom: 3em;
+        border: none;
+        border-top: 1px solid rgba(var(--neon-rgb), 0.3);
+      }
       .prose strong {
         color: #fff;
         text-shadow: 0 0 2px rgba(255,255,255,0.5);
       }
       .prose a {
-        color: #bc13fe;
+        color: var(--neon-color);
         text-decoration: underline;
       }
       
       /* Neon Selection */
       ::selection {
-        background: #bc13fe;
+        background: var(--neon-color);
         color: #fff;
       }
 
@@ -146,6 +153,24 @@
         background: rgba(20, 20, 20, 0.7);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      /* Dynamic Neon Color Utilities */
+      .neon-text {
+        color: var(--neon-color);
+      }
+      .neon-border {
+        border-color: var(--neon-color);
+      }
+      .neon-bg {
+        background-color: var(--neon-color);
+      }
+      .neon-shadow {
+        box-shadow: 0 0 20px rgba(var(--neon-rgb), 0.6);
+      }
+      .neon-glow {
+        box-shadow: 0 0 10px rgba(var(--neon-rgb), 0.3),
+                    0 0 20px rgba(var(--neon-rgb), 0.15);
       }
     </style>
   </head>

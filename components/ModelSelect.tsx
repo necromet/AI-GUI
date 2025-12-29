@@ -28,10 +28,26 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
     <div className="relative inline-block text-left" ref={ref}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-200 hover:bg-white/5 hover:text-red-400 transition-all group"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-200 hover:bg-white/5 transition-all group"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'var(--neon-color)';
+          const span = e.currentTarget.querySelector('span');
+          if (span) (span as HTMLElement).style.filter = 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = '';
+          const span = e.currentTarget.querySelector('span');
+          if (span) (span as HTMLElement).style.filter = '';
+        }}
       >
-        <span className="group-hover:drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]">{selectedConfig.name}</span>
-        <ChevronDown size={16} className={`text-gray-500 group-hover:text-red-400 transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="transition-all">{selectedConfig.name}</span>
+        <ChevronDown 
+          size={16} 
+          className={`text-gray-500 transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`}
+          style={{ color: isOpen ? 'var(--neon-color)' : undefined }}
+          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'}
+          onMouseLeave={(e) => !isOpen && (e.currentTarget.style.color = '')}
+        />
       </button>
 
       {isOpen && (
@@ -45,7 +61,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors group relative"
             >
-              <div className={`flex-shrink-0 ${currentModel === model.id ? 'text-neon-purple' : 'text-gray-500'} group-hover:text-neon-purple transition-colors`}>
+              <div className={`flex-shrink-0 ${currentModel === model.id ? '' : 'text-gray-500'} transition-colors`} style={{ color: currentModel === model.id ? 'var(--neon-color)' : undefined }}>
                 {model.isReasoning ? <Sparkles size={24} /> : <Zap size={24} />}
               </div>
               <div className="relative z-10 flex-1">
@@ -58,11 +74,11 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
                 <div className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{model.description}</div>
               </div>
               {currentModel === model.id && (
-                 <div className="ml-auto w-2 h-2 rounded-full bg-neon-blue shadow-[0_0_10px_#00f3ff]"></div>
+                 <div className="ml-auto w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 10px var(--neon-color)' }}></div>
               )}
               
               {/* Hover glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-neon-purple/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: `linear-gradient(to right, rgba(var(--neon-rgb), 0.1), transparent)` }} />
             </button>
           ))}
         </div>

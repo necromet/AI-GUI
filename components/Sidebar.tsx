@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, Database } from 'lucide-react';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -7,6 +7,7 @@ interface SidebarProps {
   onToggle: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
+  onOpenDatabase?: () => void;
   conversations: ChatSession[];
   currentConversationId: number | null;
   onSelectConversation: (id: number) => Promise<void>;
@@ -18,6 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggle, 
   onNewChat, 
   onOpenSettings,
+  onOpenDatabase,
   conversations,
   currentConversationId,
   onSelectConversation,
@@ -36,6 +38,51 @@ const Sidebar: React.FC<SidebarProps> = ({
   const lastWeekConvos = conversations.filter(c => c.updatedAt >= lastWeek.getTime() && c.updatedAt < yesterday.getTime());
   const olderConvos = conversations.filter(c => c.updatedAt < lastWeek.getTime());
 
+  const renderConversation = (conv: ChatSession) => {
+    return (
+      <li key={conv.id}>
+        <div 
+          onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
+          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors truncate group cursor-pointer ${
+            conv.dbConversationId === currentConversationId
+              ? 'bg-hover'
+              : 'text-gray-300 hover:bg-hover'
+          }`}
+          style={{ color: conv.dbConversationId === currentConversationId ? 'var(--neon-color)' : undefined }}
+          onMouseEnter={(e) => {
+            if (conv.dbConversationId !== currentConversationId) {
+              e.currentTarget.style.color = 'var(--neon-color)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (conv.dbConversationId !== currentConversationId) {
+              e.currentTarget.style.color = '';
+            }
+          }}
+        >
+          <span className="truncate relative flex-1">
+            {conv.title}
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 transition-all"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--neon-color)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '';
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </li>
+    );
+  };
+
   return (
     <aside 
       className={`
@@ -51,9 +98,17 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-3 flex items-center justify-between group">
           <button 
             onClick={onNewChat}
-            className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-gray-200 bg-transparent hover:bg-hover hover:shadow-[0_0_10px_rgba(248,113,113,0.1)] hover:border-red-400/30 transition-all border border-white/10 text-sm font-medium"
+            className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-gray-200 bg-transparent hover:bg-hover transition-all border border-white/10 text-sm font-medium"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 10px rgba(var(--neon-rgb), 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            }}
           >
-            <Plus size={16} className="text-red-400" />
+            <Plus size={16} style={{ color: 'var(--neon-color)' }} />
             <span>New chat</span>
           </button>
           <button 
@@ -70,31 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <>
               <div className="text-xs font-semibold text-gray-500 mb-2 px-2 tracking-wider uppercase">Today</div>
               <ul>
-                {todayConvos.map((conv) => (
-                  <li key={conv.id}>
-                    <div 
-                      onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-                      className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors truncate group cursor-pointer ${
-                        conv.dbConversationId === currentConversationId
-                          ? 'bg-hover text-red-400'
-                          : 'text-gray-300 hover:bg-hover hover:text-red-400'
-                      }`}
-                    >
-                      <span className="truncate relative flex-1">
-                        {conv.title}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {todayConvos.map(renderConversation)}
               </ul>
             </>
           )}
@@ -103,31 +134,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <>
               <div className="text-xs font-semibold text-gray-500 mt-6 mb-2 px-2 tracking-wider uppercase">Yesterday</div>
               <ul>
-                {yesterdayConvos.map((conv) => (
-                  <li key={conv.id}>
-                    <div 
-                      onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-                      className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors truncate group cursor-pointer ${
-                        conv.dbConversationId === currentConversationId
-                          ? 'bg-hover text-neon-blue'
-                          : 'text-gray-300 hover:bg-hover hover:text-neon-blue'
-                      }`}
-                    >
-                      <span className="truncate relative flex-1">
-                        {conv.title}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {yesterdayConvos.map(renderConversation)}
               </ul>
             </>
           )}
@@ -136,31 +143,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <>
               <div className="text-xs font-semibold text-gray-500 mt-6 mb-2 px-2 tracking-wider uppercase">Last 7 Days</div>
               <ul>
-                {lastWeekConvos.map((conv) => (
-                  <li key={conv.id}>
-                    <div 
-                      onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-                      className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors truncate group cursor-pointer ${
-                        conv.dbConversationId === currentConversationId
-                          ? 'bg-hover text-neon-blue'
-                          : 'text-gray-300 hover:bg-hover hover:text-neon-blue'
-                      }`}
-                    >
-                      <span className="truncate relative flex-1">
-                        {conv.title}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {lastWeekConvos.map(renderConversation)}
               </ul>
             </>
           )}
@@ -169,31 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <>
               <div className="text-xs font-semibold text-gray-500 mt-6 mb-2 px-2 tracking-wider uppercase">Older</div>
               <ul>
-                {olderConvos.map((conv) => (
-                  <li key={conv.id}>
-                    <div 
-                      onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-                      className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors truncate group cursor-pointer ${
-                        conv.dbConversationId === currentConversationId
-                          ? 'bg-hover text-neon-blue'
-                          : 'text-gray-300 hover:bg-hover hover:text-neon-blue'
-                      }`}
-                    >
-                      <span className="truncate relative flex-1">
-                        {conv.title}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {olderConvos.map(renderConversation)}
               </ul>
             </>
           )}
@@ -201,6 +160,16 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer / User Profile */}
         <div className="p-3 border-t border-white/5 space-y-1">
+          {onOpenDatabase && typeof window !== 'undefined' && window.electron !== undefined && (
+            <button 
+              onClick={onOpenDatabase}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-100 hover:bg-hover transition-colors group"
+            >
+              <Database size={18} className="text-gray-400 group-hover:text-white" />
+              <span className="font-medium">Database Viewer</span>
+            </button>
+          )}
+          
           <button 
             onClick={onOpenSettings}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-100 hover:bg-hover transition-colors group"
@@ -213,9 +182,12 @@ const Sidebar: React.FC<SidebarProps> = ({
              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 shadow-md">
                 <User size={18} strokeWidth={2} />
              </div>
-             <div className="text-left font-medium group-hover:text-neon-purple transition-colors">
-               <div>John Doe</div>
-               <div className="text-xs text-gray-500">Premium</div>
+             <div 
+               className="text-left font-medium transition-colors" 
+               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--neon-color)'; }}
+               onMouseLeave={(e) => { e.currentTarget.style.color = ''; }}
+             >
+               <div>Edward</div>
              </div>
           </button>
         </div>
