@@ -5,7 +5,7 @@ import { GeminiModel, ModelConfig } from './types';
 export const DEFAULT_MODELS: ModelConfig[] = [
   {
     id: GeminiModel.Flash,
-    name: "Gemini 2.5 Flash",
+    name: "Gemini 3 Flash",
     description: "Great for everyday tasks",
     isReasoning: false,
   },
@@ -14,6 +14,13 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     name: "Gemini 3 Pro",
     description: "High-intelligence reasoning model",
     isReasoning: true,
+  },
+  {
+    id: GeminiModel.NanoBananaPro,
+    name: "Nano Banana Pro",
+    description: "Multimodal reasoning for text, images & documents",
+    isReasoning: true,
+    contextWindowSize: 65536,
   }
 ];
 

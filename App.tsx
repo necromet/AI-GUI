@@ -10,9 +10,28 @@ import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import DatabaseViewer from './components/DatabaseViewer';
 import Notification, { NotificationType } from './components/Notification';
+import ImageGenerationOptions, { ImageGenOptions } from './components/ImageGenerationOptions';
 
 // Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+// Helper to convert File to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        // Remove the data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      } else {
+        reject(new Error('Failed to convert file to base64'));
+      }
+    };
+    reader.onerror = error => reject(error);
+  });
+};
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -36,9 +55,16 @@ const App: React.FC = () => {
 
   // Notification state
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
+  const [attachedImages, setAttachedImages] = useState<Array<{ id: string; file: File; preview: string }>>([]);
+  const [imageGenOptions, setImageGenOptions] = useState<ImageGenOptions>({
+    enabled: false,
+    aspectRatio: '1:1',
+    numberOfImages: 1,
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize database and load conversations and models
   useEffect(() => {
@@ -106,11 +132,21 @@ const App: React.FC = () => {
     handleInputResize();
   }, [input]);
 
+  // Cleanup image previews on unmount
+  useEffect(() => {
+    return () => {
+      attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
+    };
+  }, [attachedImages]);
+
   const handleNewChat = () => {
     setMessages([]);
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
+    // Clear attachments
+    attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
+    setAttachedImages([]);
   };
 
   const loadConversations = async () => {
@@ -237,24 +273,55 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
+    if ((!input.trim() && attachedImages.length === 0) || isStreaming) return;
 
     const userText = input.trim();
+    const currentImages = [...attachedImages]; // Store current images
+    const currentImageGenOptions = { ...imageGenOptions }; // Store current image gen options
     setInput(''); 
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'; 
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    
+    // Clear attachments immediately
+    attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
+    setAttachedImages([]);
+    
+    // Reset image generation options after sending
+    if (imageGenOptions.enabled) {
+      setImageGenOptions({
+        enabled: false,
+        aspectRatio: '1:1',
+        numberOfImages: 1,
+      });
+    }
 
     // Ensure we have a conversation in the database
     const conversationId = await ensureConversation();
 
+    // Convert images to base64 for storage in message
+    let messageImages: Array<{ id: string; data: string; mimeType: string }> = [];
+    if (currentImages.length > 0) {
+      messageImages = await Promise.all(
+        currentImages.map(async (img) => {
+          const base64 = await fileToBase64(img.file);
+          return {
+            id: img.id,
+            data: base64,
+            mimeType: img.file.type
+          };
+        })
+      );
+    }
+
     const userMessage: Message = {
       id: generateId(),
       role: Role.User,
-      content: userText,
+      content: userText || '[Image attachment]',
       timestamp: Date.now(),
+      images: messageImages.length > 0 ? messageImages : undefined,
     };
 
     // Save user message to database
-    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText);
+    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText || '[Image attachment]');
     userMessage.dbMessageId = userDbMessageId;
 
     setMessages(prev => [...prev, userMessage]);
@@ -264,7 +331,9 @@ const App: React.FC = () => {
       id: aiMessageId,
       role: Role.Assistant,
       content: '',
-      isThinking: true,
+      isThinking: !currentImageGenOptions.enabled,
+      isGeneratingImage: currentImageGenOptions.enabled,
+      imageGenerationProgress: currentImageGenOptions.enabled ? 0 : undefined,
       timestamp: Date.now() + 1,
     };
     setMessages(prev => [...prev, aiMessagePlaceholder]);
@@ -272,36 +341,131 @@ const App: React.FC = () => {
 
     try {
         const history = messages.map(m => ({ role: m.role, content: m.content }));
-        history.push({ role: Role.User, content: userText });
+        history.push({ role: Role.User, content: userText || '[Image attachment]' });
 
         const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
+
+        // Use the already converted base64 images from the message
+        let imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
+        if (userMessage.images && userMessage.images.length > 0) {
+          imageParts = userMessage.images.map(img => ({
+            inlineData: {
+              data: img.data,
+              mimeType: img.mimeType
+            }
+          }));
+        }
 
         const streamResult = await generateResponseStream(
           selectedModelConfig.id, 
           userText, 
           history,
-          selectedModelConfig.systemInstruction
+          selectedModelConfig.systemInstruction,
+          imageParts,
+          currentImageGenOptions.enabled ? {
+            aspectRatio: currentImageGenOptions.aspectRatio,
+            numberOfImages: currentImageGenOptions.numberOfImages,
+          } : undefined
         );
 
         let fullText = '';
+        let fullThinkingText = '';
         let aiDbMessageId: number | null = null;
+        let generatedImages: Array<{ id: string; data: string; mimeType: string }> = [];
+        let imageGenProgress = 0;
         
         for await (const chunk of streamResult) {
-             const chunkText = chunk.text; 
-             if (chunkText) {
-                fullText += chunkText;
-                
-                setMessages(prev => prev.map(msg => {
-                    if (msg.id === aiMessageId) {
-                        return {
-                            ...msg,
-                            content: fullText,
-                            isThinking: false
-                        };
-                    }
-                    return msg;
-                }));
-             }
+            const chunkText = chunk.text;
+            
+            // Try to extract thinking content from various possible locations
+            const thinkingText = (chunk as any).thinkingContent || 
+                                (chunk as any).thought || 
+                                ((chunk as any).candidates?.[0]?.content?.parts?.find((p: any) => p.thought)?.thought);
+            
+            // Check for image generation progress
+            const imageGenStatus = (chunk as any).imageGenerationStatus || 
+                                  ((chunk as any).candidates?.[0]?.imageGenerationStatus);
+            
+            // Check for generated images in the response
+            const imageParts = (chunk as any).images || 
+                              ((chunk as any).candidates?.[0]?.content?.parts?.filter((p: any) => p.inlineData));
+            
+            if (imageGenStatus) {
+              const progress = imageGenStatus.progress || 0;
+              imageGenProgress = Math.min(100, progress);
+              
+              setMessages(prev => prev.map(msg => {
+                  if (msg.id === aiMessageId) {
+                      return {
+                          ...msg,
+                          isGeneratingImage: true,
+                          imageGenerationProgress: imageGenProgress,
+                          isThinking: false
+                      };
+                  }
+                  return msg;
+              }));
+            }
+            
+            if (imageParts && imageParts.length > 0) {
+              // Extract generated images
+              imageParts.forEach((part: any, index: number) => {
+                if (part.inlineData) {
+                  generatedImages.push({
+                    id: `generated-${Date.now()}-${index}`,
+                    data: part.inlineData.data,
+                    mimeType: part.inlineData.mimeType || 'image/png'
+                  });
+                }
+              });
+              
+              setMessages(prev => prev.map(msg => {
+                  if (msg.id === aiMessageId) {
+                      return {
+                          ...msg,
+                          images: generatedImages,
+                          isGeneratingImage: false,
+                          imageGenerationProgress: 100
+                      };
+                  }
+                  return msg;
+              }));
+            }
+            
+            if (thinkingText) {
+              fullThinkingText += thinkingText;
+              
+              setMessages(prev => prev.map(msg => {
+                  if (msg.id === aiMessageId) {
+                      return {
+                          ...msg,
+                          thinkingContent: fullThinkingText,
+                          isThinking: !imageGenProgress && !generatedImages.length,
+                          isGeneratingImage: imageGenProgress > 0 && generatedImages.length === 0,
+                          imageGenerationProgress: imageGenProgress
+                      };
+                  }
+                  return msg;
+              }));
+            }
+            
+            if (chunkText) {
+              fullText += chunkText;
+              
+              setMessages(prev => prev.map(msg => {
+                  if (msg.id === aiMessageId) {
+                      return {
+                          ...msg,
+                          content: fullText,
+                          thinkingContent: fullThinkingText,
+                          isThinking: false,
+                          isGeneratingImage: false,
+                          images: generatedImages.length > 0 ? generatedImages : msg.images
+                      };
+                  }
+                  return msg;
+              }));
+            }
         }
 
         // Save AI response to database
@@ -338,6 +502,61 @@ const App: React.FC = () => {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newImages: Array<{ id: string; file: File; preview: string }> = [];
+    
+    Array.from(files).forEach(file => {
+      // Check if it's an image
+      if (!file.type.startsWith('image/')) {
+        setNotification({
+          message: `"${file.name}" is not an image file. Only images are supported.`,
+          type: 'error'
+        });
+        return;
+      }
+
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setNotification({
+          message: `"${file.name}" is too large. Maximum size is 10MB.`,
+          type: 'error'
+        });
+        return;
+      }
+
+      const preview = URL.createObjectURL(file);
+      newImages.push({
+        id: generateId(),
+        file,
+        preview
+      });
+    });
+
+    setAttachedImages(prev => [...prev, ...newImages]);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (id: string) => {
+    setAttachedImages(prev => {
+      const image = prev.find(img => img.id === id);
+      if (image) {
+        URL.revokeObjectURL(image.preview);
+      }
+      return prev.filter(img => img.id !== id);
+    });
+  };
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleRegenerate = async (messageId: string) => {
@@ -381,13 +600,39 @@ const App: React.FC = () => {
         selectedModelConfig.id,
         userText,
         history,
-        selectedModelConfig.systemInstruction
+        selectedModelConfig.systemInstruction,
+        undefined,
+        imageGenOptions.enabled ? {
+          aspectRatio: imageGenOptions.aspectRatio,
+          numberOfImages: imageGenOptions.numberOfImages,
+        } : undefined
       );
 
       let fullText = '';
+      let fullThinkingText = '';
 
       for await (const chunk of streamResult) {
         const chunkText = chunk.text;
+        // Try to extract thinking content from various possible locations
+        const thinkingText = (chunk as any).thinkingContent || 
+                             (chunk as any).thought || 
+                             ((chunk as any).candidates?.[0]?.content?.parts?.find((p: any) => p.thought)?.thought);
+
+        if (thinkingText) {
+          fullThinkingText += thinkingText;
+          
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === aiMessageId) {
+              return {
+                ...msg,
+                thinkingContent: fullThinkingText,
+                isThinking: true
+              };
+            }
+            return msg;
+          }));
+        }
+        
         if (chunkText) {
           fullText += chunkText;
 
@@ -396,6 +641,7 @@ const App: React.FC = () => {
               return {
                 ...msg,
                 content: fullText,
+                thinkingContent: fullThinkingText,
                 isThinking: false
               };
             }
@@ -530,6 +776,37 @@ const App: React.FC = () => {
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
            <div className="max-w-4xl mx-auto w-full">
               <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 shadow-lg overflow-hidden transition-all duration-300" style={{ borderColor: theme === 'dark' && input ? `rgba(var(--neon-rgb), 0.5)` : undefined, boxShadow: theme === 'dark' && input ? `0 0 20px -5px rgba(var(--neon-rgb), 0.2)` : undefined }}>
+                 {/* Image Previews */}
+                 {attachedImages.length > 0 && (
+                   <div className="flex flex-wrap gap-2 px-4 pt-3">
+                     {attachedImages.map(image => (
+                       <div key={image.id} className="relative group">
+                         <img 
+                           src={image.preview} 
+                           alt={image.file.name}
+                           className="h-20 w-20 object-cover rounded-lg border border-gray-300 dark:border-white/20"
+                         />
+                         <button
+                           onClick={() => handleRemoveImage(image.id)}
+                           className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                           title="Remove image"
+                         >
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                           </svg>
+                         </button>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+                 
+                 {/* Image Generation Options */}
+                 <ImageGenerationOptions
+                   options={imageGenOptions}
+                   onOptionsChange={setImageGenOptions}
+                   disabled={isStreaming}
+                 />
+                 
                  {/* Textarea Container */}
                  <textarea
                     ref={textareaRef}
@@ -544,7 +821,22 @@ const App: React.FC = () => {
                  {/* Actions Row */}
                  <div className="flex items-center justify-between px-2 pb-2">
                     <div className="flex items-center gap-2">
-                       <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors" style={{ color: theme === 'dark' ? undefined : undefined }} onMouseEnter={(e) => theme === 'dark' && (e.currentTarget.style.color = 'var(--neon-color)')} onMouseLeave={(e) => theme === 'dark' && (e.currentTarget.style.color = '')}>
+                       <input
+                         ref={fileInputRef}
+                         type="file"
+                         accept="image/*"
+                         multiple
+                         onChange={handleFileSelect}
+                         className="hidden"
+                       />
+                       <button 
+                         onClick={handleAttachmentClick}
+                         disabled={isStreaming}
+                         className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                         style={{ color: theme === 'dark' ? undefined : undefined }} 
+                         onMouseEnter={(e) => theme === 'dark' && !isStreaming && (e.currentTarget.style.color = 'var(--neon-color)')} 
+                         onMouseLeave={(e) => theme === 'dark' && (e.currentTarget.style.color = '')}
+                       >
                           <Paperclip size={20} strokeWidth={1.5} />
                        </button>
                     </div>
@@ -559,7 +851,7 @@ const App: React.FC = () => {
               </div>
               <div className="text-center mt-3">
                 <p className="text-xs text-gray-500 dark:text-gray-600">
-                  Ember can make mistakes. Check important info.
+                  Ember can make mistakes. Check important informations.
                 </p>
               </div>
            </div>

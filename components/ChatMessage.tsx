@@ -141,11 +141,66 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
             )}
           </div>
           
-          {message.isThinking ? (
-            <div className="flex items-center gap-2 animate-pulse mt-1" style={{ color: 'var(--neon-color)' }}>
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-              <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
-              <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+          {/* Display images if present */}
+          {message.images && message.images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {message.images.map((image) => (
+                <div key={image.id} className="relative group/img">
+                  <img 
+                    src={`data:${image.mimeType};base64,${image.data}`}
+                    alt="Attached image"
+                    className="max-w-xs max-h-60 rounded-lg border border-gray-600 dark:border-white/20 hover:border-gray-400 dark:hover:border-white/40 transition-all cursor-pointer"
+                    onClick={(e) => {
+                      // Open image in new tab on click
+                      const win = window.open();
+                      if (win) {
+                        win.document.write(`<img src="data:${image.mimeType};base64,${image.data}" style="max-width:100%; height:auto;" />`);
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {message.isGeneratingImage ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                  <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                  <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                </div>
+                <span className="font-medium">Generating image{message.imageGenerationProgress !== undefined && `... ${message.imageGenerationProgress}%`}</span>
+              </div>
+              <div className="w-full max-w-md bg-gray-700/30 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full rounded-full transition-all duration-300" 
+                  style={{ 
+                    width: `${message.imageGenerationProgress || 0}%`,
+                    backgroundColor: 'var(--neon-color)',
+                    boxShadow: '0 0 10px var(--neon-color)'
+                  }}
+                />
+              </div>
+            </div>
+          ) : message.isThinking ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                  <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                  <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+                </div>
+                <span className="font-medium">Thinking...</span>
+              </div>
+              {message.thinkingContent && (
+                <div className="prose prose-invert max-w-none leading-7 text-base italic opacity-80 pl-4 border-l-2 mt-3" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)' }}>
+                  <ReactMarkdown>
+                    {message.thinkingContent}
+                  </ReactMarkdown>
+                </div>
+              )}
             </div>
           ) : (
             <div className="prose prose-invert max-w-none leading-8 break-words text-lg [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4">
@@ -235,7 +290,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               >
                 {message.content}
               </ReactMarkdown>
-              {!isUser && !message.isThinking && (
+              {!isUser && !message.isThinking && !message.isGeneratingImage && (
                 <div className="flex items-center gap-2 mt-2 pt-2 mb-10 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
                   <button 
                     onClick={handleCopyMessage}
