@@ -340,6 +340,103 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRegenerate = async (messageId: string) => {
+    // Find the message to regenerate
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1 || isStreaming) return;
+
+    // Get the previous user message
+    let userMessageIndex = messageIndex - 1;
+    while (userMessageIndex >= 0 && messages[userMessageIndex].role !== Role.User) {
+      userMessageIndex--;
+    }
+    
+    if (userMessageIndex < 0) return;
+
+    const userText = messages[userMessageIndex].content;
+
+    // Remove the old AI response
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+
+    // Create new thinking placeholder
+    const aiMessageId = generateId();
+    const aiMessagePlaceholder: Message = {
+      id: aiMessageId,
+      role: Role.Assistant,
+      content: '',
+      isThinking: true,
+      timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, aiMessagePlaceholder]);
+    setIsStreaming(true);
+
+    try {
+      const conversationId = await ensureConversation();
+      const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
+      history.push({ role: Role.User, content: userText });
+
+      const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
+
+      const streamResult = await generateResponseStream(
+        selectedModelConfig.id,
+        userText,
+        history,
+        selectedModelConfig.systemInstruction
+      );
+
+      let fullText = '';
+
+      for await (const chunk of streamResult) {
+        const chunkText = chunk.text;
+        if (chunkText) {
+          fullText += chunkText;
+
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === aiMessageId) {
+              return {
+                ...msg,
+                content: fullText,
+                isThinking: false
+              };
+            }
+            return msg;
+          }));
+        }
+      }
+
+      // Save regenerated response to database
+      if (fullText) {
+        await saveMessageToDb(conversationId, 'assistant', fullText);
+      }
+
+    } catch (error) {
+      console.error("Regeneration error:", error);
+      setMessages(prev => prev.map(msg => {
+        if (msg.id === aiMessageId) {
+          return {
+            ...msg,
+            content: "**Error:** Failed to regenerate response. Please try again.",
+            isThinking: false
+          };
+        }
+        return msg;
+      }));
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const handleFeedback = (messageId: string, feedback: 'good' | 'bad') => {
+    // Log feedback for now - can be extended to save to database
+    console.log(`Feedback for message ${messageId}: ${feedback}`);
+    
+    // Show notification
+    setNotification({
+      message: `Thank you for your ${feedback === 'good' ? 'positive' : ''} feedback!`,
+      type: 'success'
+    });
+  };
+
   return (
     <div className="flex h-screen bg-main dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300">
       {/* Mobile Overlay for Sidebar */}
@@ -417,7 +514,12 @@ const App: React.FC = () => {
            ) : (
              <div className="pb-40">
                 {messages.map((msg) => (
-                  <ChatMessage key={msg.id} message={msg} />
+                  <ChatMessage 
+                    key={msg.id} 
+                    message={msg}
+                    onRegenerate={handleRegenerate}
+                    onFeedback={handleFeedback}
+                  />
                 ))}
                 <div ref={messagesEndRef} />
              </div>
