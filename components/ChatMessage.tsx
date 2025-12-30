@@ -180,7 +180,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                       
                       return (
                         <>
-                          <div className="absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 bg-[#000000]/95 backdrop-blur-sm z-10" style={{ borderColor: 'rgba(var(--neon-rgb), 1)' }}>
+                          <div className="absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 bg-[#000000]/95 backdrop-blur-sm" style={{ borderColor: 'rgba(var(--neon-rgb), 1)' }}>
                             <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(var(--neon-rgb), 1)' }}>
                               {language}
                             </span>
