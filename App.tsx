@@ -11,6 +11,7 @@ import Settings from './components/Settings';
 import DatabaseViewer from './components/DatabaseViewer';
 import Notification, { NotificationType } from './components/Notification';
 import ImageGenerationOptions, { ImageGenOptions } from './components/ImageGenerationOptions';
+import GroundingOptions, { GroundingOptions as GroundingOpts } from './components/GroundingOptions';
 
 // Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -61,6 +62,9 @@ const App: React.FC = () => {
     enabled: false,
     aspectRatio: '1:1',
     imageSize: '1K',
+  });
+  const [groundingOptions, setGroundingOptions] = useState<GroundingOpts>({
+    enabled: false,
   });
 
   const handleImageGenOptionsChange = (options: ImageGenOptions) => {
@@ -403,6 +407,9 @@ const App: React.FC = () => {
           currentImageGenOptions.enabled ? {
             aspectRatio: currentImageGenOptions.aspectRatio,
             imageSize: currentImageGenOptions.imageSize,
+          } : undefined,
+          groundingOptions.enabled ? {
+            enabled: true,
           } : undefined
         );
 
@@ -410,7 +417,8 @@ const App: React.FC = () => {
           model: selectedModelConfig.id,
           imageGenEnabled: currentImageGenOptions.enabled,
           aspectRatio: currentImageGenOptions.aspectRatio,
-          imageSize: currentImageGenOptions.imageSize
+          imageSize: currentImageGenOptions.imageSize,
+          groundingEnabled: groundingOptions.enabled
         });
 
         let fullText = '';
@@ -419,6 +427,7 @@ const App: React.FC = () => {
         let generatedImages: Array<{ id: string; data: string; mimeType: string }> = [];
         let imageGenProgress = 0;
         let savedImagePaths: string[] = [];
+        let groundingMetadata: any = null;
         
         for await (const chunk of streamResult) {
             const chunkText = chunk.text;
@@ -435,6 +444,15 @@ const App: React.FC = () => {
             // Check for generated images in the response
             const imageParts = (chunk as any).images || 
                               ((chunk as any).candidates?.[0]?.content?.parts?.filter((p: any) => p.inlineData));
+            
+            // Extract grounding metadata if present
+            const chunkGroundingMetadata = (chunk as any).groundingMetadata ||
+                                          ((chunk as any).candidates?.[0]?.groundingMetadata);
+            
+            if (chunkGroundingMetadata) {
+              groundingMetadata = chunkGroundingMetadata;
+              console.log('Grounding metadata received:', groundingMetadata);
+            }
             
             if (imageGenStatus) {
               const progress = imageGenStatus.progress || 0;
@@ -530,7 +548,8 @@ const App: React.FC = () => {
                           thinkingContent: fullThinkingText,
                           isThinking: false,
                           isGeneratingImage: false,
-                          images: generatedImages.length > 0 ? generatedImages : msg.images
+                          images: generatedImages.length > 0 ? generatedImages : msg.images,
+                          groundingMetadata: groundingMetadata
                       };
                   }
                   return msg;
@@ -543,7 +562,8 @@ const App: React.FC = () => {
           fullText,
           generatedImagesCount: generatedImages.length,
           generatedImages: generatedImages,
-          savedImagePaths: savedImagePaths
+          savedImagePaths: savedImagePaths,
+          groundingMetadata: groundingMetadata
         });
         
         if (fullText || generatedImages.length > 0) {
@@ -837,7 +857,7 @@ const App: React.FC = () => {
                 </div>
              </div>
            ) : (
-             <div className="pb-40">
+             <div className="pb-10 mb-52">
                 {messages.map((msg) => (
                   <ChatMessage 
                     key={msg.id} 
@@ -879,12 +899,20 @@ const App: React.FC = () => {
                    </div>
                  )}
                  
-                 {/* Image Generation Options */}
-                 <ImageGenerationOptions
-                   options={imageGenOptions}
-                   onOptionsChange={handleImageGenOptionsChange}
-                   disabled={isStreaming}
-                 />
+              
+                  {/* Image Generation Options */}
+                  <ImageGenerationOptions
+                    options={imageGenOptions}
+                    onOptionsChange={handleImageGenOptionsChange}
+                    disabled={isStreaming}
+                  />
+                  
+                  {/* Grounding Options */}
+                  <GroundingOptions
+                    options={groundingOptions}
+                    onOptionsChange={setGroundingOptions}
+                    disabled={isStreaming}
+                  />
                  
                  {/* Textarea Container */}
                  <textarea

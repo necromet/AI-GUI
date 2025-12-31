@@ -15,6 +15,16 @@ export interface Message {
   messageOrder?: number; // Database message order
   dbMessageId?: number; // Database message ID
   images?: Array<{ id: string; data: string; mimeType: string }>; // Base64 image data
+  groundingMetadata?: GroundingMetadata; // Grounding metadata from web search
+}
+
+export interface GroundingMetadata {
+  webSearchQueries?: string[];
+  searchResults?: Array<{
+    url: string;
+    title?: string;
+    snippet?: string;
+  }>;
 }
 
 export interface ChatSession {

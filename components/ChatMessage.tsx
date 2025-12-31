@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Role, Message } from '../types';
 import { CHATGPT_LOGO, USER_AVATAR } from '../constants';
-import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, ExternalLink } from 'lucide-react';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -112,7 +112,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
   return (
     <div className={`group w-full text-gray-100 ${isUser ? 'bg-transparent' : 'bg-transparent'}`}>
-      <div className="text-xl gap-4 md:gap-6 md:max-w-4xl lg:max-w-[56rem] xl:max-w-[68rem] p-4 md:py-6 flex lg:px-0 m-auto">
+      <div className="text-xl gap-4 md:gap-6 md:max-w-4xl lg:max-w-[56rem] xl:max-w-[68rem] p-4 md:py-1 flex lg:px-0 m-auto">
         {/* Avatar Column */}
         <div className="flex-shrink-0 flex flex-col relative items-end">
           <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center ${isUser ? '' : 'shadow-[0_0_15px_rgba(0,243,255,0.2)]'}`}>
@@ -292,8 +292,57 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               >
                 {message.content}
               </ReactMarkdown>
+              
+              {/* Display grounding sources if present */}
+              {!isUser && message.groundingMetadata && (
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <div className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                    <ExternalLink size={12} />
+                    <span>Sources from Google Search:</span>
+                  </div>
+                  <div className="space-y-2">
+                    {message.groundingMetadata.searchResults?.map((result: any, idx: number) => (
+                      <a
+                        key={idx}
+                        href={result.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all group/link"
+                        style={{ borderColor: 'rgba(var(--neon-rgb), 0.2)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.5)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.2)'}
+                      >
+                        <div className="flex items-start gap-2">
+                          <ExternalLink size={14} className="mt-0.5 text-gray-400 group-hover/link:text-gray-300" />
+                          <div className="flex-1 min-w-0">
+                            {result.title && (
+                              <div className="text-sm font-medium text-gray-200 group-hover/link:text-white truncate">
+                                {result.title}
+                              </div>
+                            )}
+                            {result.snippet && (
+                              <div className="text-xs text-gray-400 mt-1 line-clamp-2">
+                                {result.snippet}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-500 mt-1 truncate">
+                              {result.url}
+                            </div>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                  {message.groundingMetadata.webSearchQueries && message.groundingMetadata.webSearchQueries.length > 0 && (
+                    <div className="mt-3 text-xs text-gray-500">
+                      Search queries: {message.groundingMetadata.webSearchQueries.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {!isUser && !message.isThinking && !message.isGeneratingImage && (
-                <div className="flex items-center gap-2 mt-2 pt-2 mb-10 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
+                <div className="flex items-center gap-2 mt-2 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
                   <button 
                     onClick={handleCopyMessage}
                     className="p-1.5 rounded hover:bg-white/5 transition-colors" 

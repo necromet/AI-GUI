@@ -10,13 +10,19 @@ export interface ImageGenConfig {
   imageSize?: '1K' | '2K' | '4K';
 }
 
+export interface GroundingConfig {
+  enabled: boolean;
+  dynamicRetrievalThreshold?: number;
+}
+
 export const generateResponseStream = async (
   modelId: string,
   prompt: string,
   history: { role: string; content: string }[],
   systemInstruction?: string,
   imageParts?: Array<{ inlineData: { data: string; mimeType: string } }>,
-  imageGenConfig?: ImageGenConfig
+  imageGenConfig?: ImageGenConfig,
+  groundingConfig?: GroundingConfig
 ) => {
   
   // Add thinking config for reasoning models
@@ -45,6 +51,26 @@ export const generateResponseStream = async (
       imageSize: imageGenConfig.imageSize || '1K',
     };
     console.log('Image generation config:', config.imageConfig);
+  }
+
+  // Add grounding with Google Search
+  if (groundingConfig?.enabled) {
+    config.tools = [
+      {
+        googleSearch: {},
+      },
+    ];
+    
+    // Optionally configure dynamic retrieval threshold (0.0 to 1.0)
+    if (groundingConfig.dynamicRetrievalThreshold !== undefined) {
+      config.toolConfig = {
+        functionCallingConfig: {
+          mode: 'AUTO',
+        },
+      };
+    }
+    
+    console.log('Grounding config enabled with Google Search');
   }
 
   console.log('Full config being sent to Gemini:', config);
