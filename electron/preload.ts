@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('electron', {
   executeQuery: (query: string) => ipcRenderer.invoke('db:execute-query', query),
   getAllTables: () => ipcRenderer.invoke('db:get-all-tables'),
   getTableSchema: (tableName: string) => ipcRenderer.invoke('db:get-table-schema', tableName),
+  
+  // Image operations
+  saveGeneratedImage: (imageData: string, mimeType: string) => ipcRenderer.invoke('save-generated-image', imageData, mimeType),
 });
 
 // Type definitions for the exposed API

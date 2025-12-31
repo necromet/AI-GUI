@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as fs from 'fs';
 import * as db from './database';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -150,3 +151,32 @@ ipcMain.handle('db:execute-query', async (_event, query: string) => {
 });
 ipcMain.handle('db:get-all-tables', async () => db.getAllTables());
 ipcMain.handle('db:get-table-schema', async (_event, tableName: string) => db.getTableSchema(tableName));
+
+// Image saving operation
+ipcMain.handle('save-generated-image', async (_event, imageData: string, mimeType: string) => {
+  try {
+    // Create generated_images folder in the project directory
+    const projectPath = isDev ? process.cwd() : path.dirname(app.getPath('exe'));
+    const imagesFolderPath = path.join(projectPath, 'generated_images');
+    
+    // Create folder if it doesn't exist
+    if (!fs.existsSync(imagesFolderPath)) {
+      fs.mkdirSync(imagesFolderPath, { recursive: true });
+    }
+    
+    // Determine file extension from mimeType
+    const extension = mimeType.split('/')[1] || 'png';
+    const timestamp = Date.now();
+    const filename = `image_${timestamp}.${extension}`;
+    const filePath = path.join(imagesFolderPath, filename);
+    
+    // Convert base64 to buffer and save
+    const buffer = Buffer.from(imageData, 'base64');
+    fs.writeFileSync(filePath, buffer);
+    
+    return { success: true, path: filePath, filename };
+  } catch (error: any) {
+    console.error('Error saving image:', error);
+    return { success: false, error: error.message };
+  }
+});

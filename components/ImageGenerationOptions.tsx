@@ -4,7 +4,7 @@ import { Image, X } from 'lucide-react';
 export interface ImageGenOptions {
   enabled: boolean;
   aspectRatio: string;
-  numberOfImages: number;
+  imageSize: '1K' | '2K' | '4K';
 }
 
 interface ImageGenerationOptionsProps {
@@ -14,12 +14,22 @@ interface ImageGenerationOptionsProps {
 }
 
 const ASPECT_RATIOS = [
-  { value: '1:1', label: 'Square (1:1)', width: 1024, height: 1024 },
-  { value: '16:9', label: 'Landscape (16:9)', width: 1792, height: 1024 },
-  { value: '9:16', label: 'Portrait (9:16)', width: 1024, height: 1792 },
-  { value: '21:9', label: 'Ultra Wide (21:9)', width: 2048, height: 1024 },
-  { value: '4:3', label: 'Classic (4:3)', width: 1536, height: 1024 },
-  { value: '3:4', label: 'Tall (3:4)', width: 1024, height: 1536 },
+  { value: '1:1', label: 'Square' },
+  { value: '16:9', label: 'Landscape' },
+  { value: '9:16', label: 'Portrait' },
+  { value: '21:9', label: 'Ultra Wide' },
+  { value: '4:3', label: 'Classic' },
+  { value: '3:4', label: 'Tall' },
+  { value: '3:2', label: 'Photo' },
+  { value: '2:3', label: 'Photo Tall' },
+  { value: '4:5', label: 'Social' },
+  { value: '5:4', label: 'Social Wide' },
+];
+
+const IMAGE_SIZES = [
+  { value: '1K', label: '1K', description: 'Standard' },
+  { value: '2K', label: '2K', description: 'High Quality' },
+  { value: '4K', label: '4K', description: 'Ultra HD' },
 ];
 
 const ImageGenerationOptions: React.FC<ImageGenerationOptionsProps> = ({ 
@@ -36,8 +46,8 @@ const ImageGenerationOptions: React.FC<ImageGenerationOptionsProps> = ({
     onOptionsChange({ ...options, aspectRatio });
   };
 
-  const handleNumberChange = (numberOfImages: number) => {
-    onOptionsChange({ ...options, numberOfImages });
+  const handleSizeChange = (imageSize: '1K' | '2K' | '4K') => {
+    onOptionsChange({ ...options, imageSize });
   };
 
   if (!options.enabled) {
@@ -82,12 +92,12 @@ const ImageGenerationOptions: React.FC<ImageGenerationOptionsProps> = ({
             <label className="block text-xs text-gray-600 dark:text-gray-400 mb-2">
               Aspect Ratio
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-5 gap-1.5">
               {ASPECT_RATIOS.map((ratio) => (
                 <button
                   key={ratio.value}
                   onClick={() => handleAspectRatioChange(ratio.value)}
-                  className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                  className={`px-2 py-1.5 text-[10px] rounded-lg border transition-all ${
                     options.aspectRatio === ratio.value
                       ? 'border-gray-900 dark:border-white bg-gray-900 dark:bg-white text-white dark:text-black font-medium'
                       : 'border-gray-200 dark:border-white/20 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-white/40 hover:bg-gray-100 dark:hover:bg-white/5'
@@ -103,35 +113,43 @@ const ImageGenerationOptions: React.FC<ImageGenerationOptionsProps> = ({
                       : undefined
                   }
                 >
-                  <div>{ratio.label.split(' ')[0]}</div>
-                  <div className="text-[10px] opacity-70">{ratio.value}</div>
+                  <div className="font-medium">{ratio.value}</div>
+                  <div className="text-[9px] opacity-70 truncate">{ratio.label}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Number of Images */}
+          {/* Image Size */}
           <div>
             <label className="block text-xs text-gray-600 dark:text-gray-400 mb-2">
-              Number of Images: {options.numberOfImages}
+              Image Size
             </label>
-            <input
-              type="range"
-              min="1"
-              max="4"
-              step="1"
-              value={options.numberOfImages}
-              onChange={(e) => handleNumberChange(parseInt(e.target.value))}
-              className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gray-200 dark:bg-white/10"
-              style={{
-                accentColor: 'var(--neon-color)',
-              }}
-            />
-            <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-500 mt-1">
-              <span>1</span>
-              <span>2</span>
-              <span>3</span>
-              <span>4</span>
+            <div className="grid grid-cols-3 gap-2">
+              {IMAGE_SIZES.map((size) => (
+                <button
+                  key={size.value}
+                  onClick={() => handleSizeChange(size.value as '1K' | '2K' | '4K')}
+                  className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                    options.imageSize === size.value
+                      ? 'border-gray-900 dark:border-white bg-gray-900 dark:bg-white text-white dark:text-black font-medium'
+                      : 'border-gray-200 dark:border-white/20 text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-white/40 hover:bg-gray-100 dark:hover:bg-white/5'
+                  }`}
+                  style={
+                    options.imageSize === size.value
+                      ? {
+                          boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.3)',
+                          borderColor: 'var(--neon-color)',
+                          backgroundColor: 'var(--neon-color)',
+                          color: '#000',
+                        }
+                      : undefined
+                  }
+                >
+                  <div className="font-medium">{size.label}</div>
+                  <div className="text-[10px] opacity-70">{size.description}</div>
+                </button>
+              ))}
             </div>
           </div>
 
