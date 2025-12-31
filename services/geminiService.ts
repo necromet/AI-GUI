@@ -7,7 +7,7 @@ const ai = new GoogleGenAI({ apiKey });
 
 export interface ImageGenConfig {
   aspectRatio?: string;
-  numberOfImages?: number;
+  imageSize?: '1K' | '2K' | '4K';
 }
 
 export const generateResponseStream = async (
@@ -26,7 +26,7 @@ export const generateResponseStream = async (
   if (modelId.includes('pro') || modelId.includes('reasoning')) {
     // Example: give it a budget if it's a reasoning model, but only for supported models
     if (modelId === GeminiModel.Pro || modelId === GeminiModel.NanoBananaPro) {
-       config.thinkingConfig = { thinkingBudget: 4096 }; 
+       config.thinkingConfig = { thinkingBudget: 1024 }; 
     }
   }
   
@@ -34,13 +34,20 @@ export const generateResponseStream = async (
     config.systemInstruction = systemInstruction;
   }
 
-  // Add image generation configuration if provided
-  if (imageGenConfig) {
-    config.imageGenerationConfig = {
+  // Add image generation configuration only for Nano Banana Pro model
+  if (imageGenConfig && modelId === GeminiModel.NanoBananaPro) {
+    // Set response modalities to include IMAGE for image generation
+    config.responseModalities = ['TEXT', 'IMAGE'];
+    
+    // Configure image settings
+    config.imageConfig = {
       aspectRatio: imageGenConfig.aspectRatio || '1:1',
-      numberOfImages: imageGenConfig.numberOfImages || 1,
+      imageSize: imageGenConfig.imageSize || '1K',
     };
+    console.log('Image generation config:', config.imageConfig);
   }
+
+  console.log('Full config being sent to Gemini:', config);
 
   const chat = ai.chats.create({
     model: modelId,

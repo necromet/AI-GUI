@@ -58,6 +58,8 @@ CREATE TABLE Messages (
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     -- Estimated token count for billing/context tracking purposes
     token_count INTEGER,
+    -- JSON string storing generated images from AI image generation models
+    generated_images TEXT,
     
     FOREIGN KEY (conversation_id) REFERENCES Conversations(conversation_id) ON DELETE CASCADE
 );

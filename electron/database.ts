@@ -90,9 +90,20 @@ function createTables() {
       message_order INTEGER NOT NULL,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       token_count INTEGER,
+      generated_images TEXT,
       FOREIGN KEY (conversation_id) REFERENCES Conversations(conversation_id) ON DELETE CASCADE
     )
   `);
+  
+  // Add generated_images column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE Messages ADD COLUMN generated_images TEXT`);
+  } catch (error: any) {
+    // Column already exists or other error - safe to ignore
+    if (!error.message.includes('duplicate column')) {
+      console.log('Note: generated_images column may already exist');
+    }
+  }
   
   // Create unique index for message order
   db.exec(`
@@ -267,17 +278,19 @@ export function addMessage(message: {
   content: string;
   message_order: number;
   token_count?: number;
+  generated_images?: string;
 }) {
   if (!db) throw new Error('Database not initialized');
   const result = db.prepare(`
-    INSERT INTO Messages (conversation_id, role, content, message_order, token_count)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO Messages (conversation_id, role, content, message_order, token_count, generated_images)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     message.conversation_id,
     message.role,
     message.content,
     message.message_order,
-    message.token_count || null
+    message.token_count || null,
+    message.generated_images || null
   );
   return result.lastInsertRowid;
 }

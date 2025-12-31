@@ -113,7 +113,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   return (
     <div className={`group w-full text-gray-100 ${isUser ? 'bg-transparent' : 'bg-transparent'}`}>
       <div className="text-xl gap-4 md:gap-6 md:max-w-4xl lg:max-w-[56rem] xl:max-w-[68rem] p-4 md:py-6 flex lg:px-0 m-auto">
-        
         {/* Avatar Column */}
         <div className="flex-shrink-0 flex flex-col relative items-end">
           <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center ${isUser ? '' : 'shadow-[0_0_15px_rgba(0,243,255,0.2)]'}`}>
@@ -140,7 +139,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                 <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))' }}>Ember</span>
             )}
           </div>
-          
+
           {/* Display images if present */}
           {message.images && message.images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
@@ -162,7 +161,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               ))}
             </div>
           )}
-          
+
+          {/* Show loading animation while generating image, then show 'Image has been generated!' when done */}
           {message.isGeneratingImage ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
@@ -184,6 +184,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                 />
               </div>
             </div>
+          ) : (message.images && message.images.length > 0 && !message.isGeneratingImage) ? (
+            <div className="font-semibold mb-4" style={{ color: 'var(--neon-color)' }}>Image has been generated!</div>
           ) : message.isThinking ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>

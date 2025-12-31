@@ -159,7 +159,8 @@ export const addMessage = async (
   role: 'user' | 'assistant' | 'system' | 'model',
   content: string,
   messageOrder: number,
-  tokenCount?: number
+  tokenCount?: number,
+  generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null
 ) => {
   if (isElectron()) {
     return await window.electron.addMessage({
@@ -167,12 +168,13 @@ export const addMessage = async (
       role,
       content,
       message_order: messageOrder,
-      token_count: tokenCount
+      token_count: tokenCount,
+      generated_images: generatedImages && generatedImages.length > 0 ? JSON.stringify(generatedImages) : null
     });
   }
   // Map 'model' role to 'assistant' for IndexedDB storage
   const idbRole = role === 'model' ? 'assistant' : role;
-  return await idbService.addMessage(conversationId, idbRole, content, messageOrder);
+  return await idbService.addMessage(conversationId, idbRole, content, messageOrder, tokenCount, generatedImages);
 };
 
 export const deleteMessage = async (messageId: number) => {

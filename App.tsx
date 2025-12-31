@@ -48,6 +48,7 @@ const App: React.FC = () => {
   });
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
+  const [previousModelId, setPreviousModelId] = useState<string | null>(null);
   
   // Database-backed conversation state
   const [conversations, setConversations] = useState<ChatSession[]>([]);
@@ -59,8 +60,26 @@ const App: React.FC = () => {
   const [imageGenOptions, setImageGenOptions] = useState<ImageGenOptions>({
     enabled: false,
     aspectRatio: '1:1',
-    numberOfImages: 1,
+    imageSize: '1K',
   });
+
+  const handleImageGenOptionsChange = (options: ImageGenOptions) => {
+    setImageGenOptions(options);
+    
+    if (options.enabled) {
+      // Automatically switch to Nano Banana Pro when image generation is enabled
+      if (currentModelId !== GeminiModel.NanoBananaPro) {
+        setPreviousModelId(currentModelId);
+        setCurrentModelId(GeminiModel.NanoBananaPro);
+      }
+    } else {
+      // Restore previous model when image generation is disabled
+      if (previousModelId && currentModelId === GeminiModel.NanoBananaPro) {
+        setCurrentModelId(previousModelId);
+        setPreviousModelId(null);
+      }
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -185,21 +204,40 @@ const App: React.FC = () => {
 
   const loadConversation = async (conversationId: number) => {
     const dbMessages = await db.getMessagesByConversation(conversationId);
-    const loadedMessages: Message[] = dbMessages.map(msg => ({
-      id: msg.message_id!.toString(),
-      role: msg.role === 'assistant' ? Role.Assistant : Role.User,
-      content: msg.content,
-      timestamp: new Date(msg.timestamp).getTime(),
-      messageOrder: msg.message_order,
-      dbMessageId: msg.message_id
-    }));
+    const loadedMessages: Message[] = dbMessages.map(msg => {
+      let images: Array<{ id: string; data: string; mimeType: string }> | undefined;
+      
+      // Parse generated_images JSON if it exists
+      if (msg.generated_images) {
+        try {
+          images = JSON.parse(msg.generated_images);
+        } catch (error) {
+          console.error('Error parsing generated_images:', error);
+        }
+      }
+      
+      return {
+        id: msg.message_id!.toString(),
+        role: msg.role === 'assistant' ? Role.Assistant : Role.User,
+        content: msg.content,
+        timestamp: new Date(msg.timestamp).getTime(),
+        messageOrder: msg.message_order,
+        dbMessageId: msg.message_id,
+        images
+      };
+    });
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
   };
 
-  const saveMessageToDb = async (conversationId: number, role: 'user' | 'assistant', content: string): Promise<number> => {
+  const saveMessageToDb = async (
+    conversationId: number, 
+    role: 'user' | 'assistant', 
+    content: string, 
+    generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null
+  ): Promise<number> => {
     const messageOrder = await db.getNextMessageOrder(conversationId);
-    return await db.addMessage(conversationId, role, content, messageOrder);
+    return await db.addMessage(conversationId, role, content, messageOrder, undefined, generatedImages);
   };
 
   const ensureConversation = async (): Promise<number> => {
@@ -290,7 +328,7 @@ const App: React.FC = () => {
       setImageGenOptions({
         enabled: false,
         aspectRatio: '1:1',
-        numberOfImages: 1,
+        imageSize: '1K',
       });
     }
 
@@ -364,15 +402,23 @@ const App: React.FC = () => {
           imageParts,
           currentImageGenOptions.enabled ? {
             aspectRatio: currentImageGenOptions.aspectRatio,
-            numberOfImages: currentImageGenOptions.numberOfImages,
+            imageSize: currentImageGenOptions.imageSize,
           } : undefined
         );
+
+        console.log('Generating with options:', {
+          model: selectedModelConfig.id,
+          imageGenEnabled: currentImageGenOptions.enabled,
+          aspectRatio: currentImageGenOptions.aspectRatio,
+          imageSize: currentImageGenOptions.imageSize
+        });
 
         let fullText = '';
         let fullThinkingText = '';
         let aiDbMessageId: number | null = null;
         let generatedImages: Array<{ id: string; data: string; mimeType: string }> = [];
         let imageGenProgress = 0;
+        let savedImagePaths: string[] = [];
         
         for await (const chunk of streamResult) {
             const chunkText = chunk.text;
@@ -408,16 +454,40 @@ const App: React.FC = () => {
             }
             
             if (imageParts && imageParts.length > 0) {
+              console.log('Received image parts from API:', imageParts);
               // Extract generated images
               imageParts.forEach((part: any, index: number) => {
                 if (part.inlineData) {
-                  generatedImages.push({
+                  const imageData = {
                     id: `generated-${Date.now()}-${index}`,
                     data: part.inlineData.data,
                     mimeType: part.inlineData.mimeType || 'image/png'
+                  };
+                  console.log(`Generated image ${index}:`, {
+                    id: imageData.id,
+                    mimeType: imageData.mimeType,
+                    dataLength: imageData.data.length
                   });
+                  generatedImages.push(imageData);
                 }
               });
+              
+              // Save images to disk
+              for (const image of generatedImages) {
+                try {
+                  if (window.electron?.saveGeneratedImage) {
+                    const result = await window.electron.saveGeneratedImage(image.data, image.mimeType);
+                    if (result.success) {
+                      console.log(`Image saved: ${result.filename} at ${result.path}`);
+                      savedImagePaths.push(result.path || result.filename);
+                    } else {
+                      console.error('Failed to save image:', result.error);
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error saving image:', error);
+                }
+              }
               
               setMessages(prev => prev.map(msg => {
                   if (msg.id === aiMessageId) {
@@ -469,8 +539,17 @@ const App: React.FC = () => {
         }
 
         // Save AI response to database
-        if (fullText) {
-          aiDbMessageId = await saveMessageToDb(conversationId, 'assistant', fullText);
+        console.log('Saving message to DB:', {
+          fullText,
+          generatedImagesCount: generatedImages.length,
+          generatedImages: generatedImages,
+          savedImagePaths: savedImagePaths
+        });
+        
+        if (fullText || generatedImages.length > 0) {
+          const contentToSave = fullText || (savedImagePaths.length > 0 ? savedImagePaths.join(', ') : '[Generated Image]');
+          aiDbMessageId = await saveMessageToDb(conversationId, 'assistant', contentToSave, generatedImages.length > 0 ? generatedImages : null);
+          console.log('Message saved with ID:', aiDbMessageId);
           
           // Update conversation title if it's the first exchange
           if (messages.length === 0) {
@@ -604,7 +683,7 @@ const App: React.FC = () => {
         undefined,
         imageGenOptions.enabled ? {
           aspectRatio: imageGenOptions.aspectRatio,
-          numberOfImages: imageGenOptions.numberOfImages,
+          imageSize: imageGenOptions.imageSize,
         } : undefined
       );
 
@@ -803,7 +882,7 @@ const App: React.FC = () => {
                  {/* Image Generation Options */}
                  <ImageGenerationOptions
                    options={imageGenOptions}
-                   onOptionsChange={setImageGenOptions}
+                   onOptionsChange={handleImageGenOptionsChange}
                    disabled={isStreaming}
                  />
                  

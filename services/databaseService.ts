@@ -2,7 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 // Database name and version
 const DB_NAME = 'ChatGPT_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // IndexedDB Schema
 interface ChatGPTDB extends DBSchema {
@@ -31,7 +31,7 @@ let dbInstance: IDBPDatabase<ChatGPTDB> | null = null;
 export const getDatabase = async (): Promise<IDBPDatabase<ChatGPTDB>> => {
   if (!dbInstance) {
     dbInstance = await openDB<ChatGPTDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion, newVersion) {
         // Create Models store
         if (!db.objectStoreNames.contains('models')) {
           const modelStore = db.createObjectStore('models', { 
@@ -58,6 +58,12 @@ export const getDatabase = async (): Promise<IDBPDatabase<ChatGPTDB>> => {
           });
           msgStore.createIndex('by-conversation', 'conversation_id');
           msgStore.createIndex('by-conversation-order', ['conversation_id', 'message_order'], { unique: true });
+        }
+
+        // Migration for version 2: Add support for generated_images
+        // Note: IndexedDB allows flexible schemas, so existing records will simply have undefined for the new field
+        if (oldVersion < 2) {
+          console.log('Migrating database to version 2 (adding generated_images support)');
         }
       },
     });
@@ -271,6 +277,7 @@ export interface DBMessage {
   message_order: number;
   timestamp: string;
   token_count: number | null;
+  generated_images?: string | null; // JSON string of array of {id, data, mimeType}
 }
 
 /**
@@ -281,7 +288,8 @@ export const addMessage = async (
   role: 'user' | 'assistant' | 'system', 
   content: string, 
   messageOrder: number,
-  tokenCount: number | null = null
+  tokenCount: number | null = null,
+  generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null
 ): Promise<number> => {
   const db = await getDatabase();
   const message: DBMessage = {
@@ -290,7 +298,8 @@ export const addMessage = async (
     content,
     message_order: messageOrder,
     timestamp: new Date().toISOString(),
-    token_count: tokenCount
+    token_count: tokenCount,
+    generated_images: generatedImages ? JSON.stringify(generatedImages) : null
   };
   
   // Update conversation's updated_at timestamp

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Sparkles, Zap, MessageSquare } from 'lucide-react';
+import { ChevronDown, Sparkles, Zap, MessageSquare, Flame } from 'lucide-react';
 import { GeminiModel, ModelConfig } from '../types';
 
 interface ModelSelectProps {
@@ -13,6 +13,19 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
   const ref = useRef<HTMLDivElement>(null);
 
   const selectedConfig = models.find(m => m.id === currentModel) || models[0];
+
+  const getModelIcon = (model: ModelConfig) => {
+    // Specific icon for Nano Banana Pro
+    if (model.id === GeminiModel.NanoBananaPro) {
+      return <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M40-440v-80h240v80H40Zm270-154-84-84 56-56 84 84-56 56Zm130-86v-240h80v240h-80Zm210 86-56-56 84-84 56 56-84 84Zm30 154v-80h240v80H680Zm-200 80q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35Zm198 134-84-84 56-56 84 84-56 56Zm-396 0-56-56 84-84 56 56-84 84ZM440-40v-240h80v240h-80Z"/></svg>;
+    }
+    // Specific icon for Gemini Pro
+    if (model.id === GeminiModel.Pro) {
+      return <Sparkles size={24} />;
+    }
+    // Default to Zap for Flash and other models
+    return <Zap size={24} />;
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -61,8 +74,21 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors group relative"
             >
-              <div className={`flex-shrink-0 ${currentModel === model.id ? '' : 'text-gray-500'} transition-colors`} style={{ color: currentModel === model.id ? 'var(--neon-color)' : undefined }}>
-                {model.isReasoning ? <Sparkles size={24} /> : <Zap size={24} />}
+              <div 
+                className={`flex-shrink-0 ${currentModel === model.id ? '' : 'text-gray-500'} transition-colors`} 
+                style={{ color: currentModel === model.id ? 'var(--neon-color)' : undefined }}
+                onMouseEnter={(e) => {
+                  if (currentModel !== model.id) {
+                    e.currentTarget.style.color = 'rgba(var(--neon-rgb), 0.5)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentModel !== model.id) {
+                    e.currentTarget.style.color = '';
+                  }
+                }}
+              >
+                {getModelIcon(model)}
               </div>
               <div className="relative z-10 flex-1">
                 <div className={`font-medium ${currentModel === model.id ? 'text-white' : 'text-gray-300'} group-hover:text-white transition-colors flex items-center gap-2`}>

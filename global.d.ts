@@ -32,9 +32,12 @@ interface ElectronAPI {
   
   // Database viewer
   getDatabaseStats: () => Promise<any>;
-  executeQuery: (query: string) => Promise<{ success: boolean; data?: any; error?: string }>;;
+  executeQuery: (query: string) => Promise<{ success: boolean; data?: any; error?: string }>;
   getAllTables: () => Promise<string[]>;
   getTableSchema: (tableName: string) => Promise<any[]>;
+  
+  // Image operations
+  saveGeneratedImage: (imageData: string, mimeType: string) => Promise<{ success: boolean; path?: string; filename?: string; error?: string }>;
 }
 
 interface Window {
