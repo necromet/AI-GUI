@@ -277,6 +277,8 @@ export interface DBMessage {
   message_order: number;
   timestamp: string;
   token_count: number | null;
+  prompt_tokens?: number | null;
+  candidates_tokens?: number | null;
   generated_images?: string | null; // JSON string of array of {id, data, mimeType}
 }
 
@@ -289,7 +291,9 @@ export const addMessage = async (
   content: string, 
   messageOrder: number,
   tokenCount: number | null = null,
-  generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null
+  generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null,
+  promptTokens?: number | null,
+  candidatesTokens?: number | null
 ): Promise<number> => {
   const db = await getDatabase();
   const message: DBMessage = {
@@ -299,6 +303,8 @@ export const addMessage = async (
     message_order: messageOrder,
     timestamp: new Date().toISOString(),
     token_count: tokenCount,
+    prompt_tokens: promptTokens || null,
+    candidates_tokens: candidatesTokens || null,
     generated_images: generatedImages ? JSON.stringify(generatedImages) : null
   };
   

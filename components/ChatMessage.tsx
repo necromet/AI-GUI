@@ -342,46 +342,65 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               )}
               
               {!isUser && !message.isThinking && !message.isGeneratingImage && (
-                <div className="flex items-center gap-2 mt-2 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
-                  <button 
-                    onClick={handleCopyMessage}
-                    className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                    title={copiedMessage ? "Copied!" : "Copy message"} 
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                    onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                  >
-                    {copiedMessage ? <Check size={16} /> : <Copy size={16} />}
-                  </button>
-                  <button 
-                    onClick={() => handleFeedback('good')}
-                    className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                    title="Good response" 
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                    onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                    style={{ color: feedback === 'good' ? 'var(--neon-color)' : '' }}
-                  >
-                    <ThumbsUp size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleFeedback('bad')}
-                    className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                    title="Bad response" 
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                    onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                    style={{ color: feedback === 'bad' ? 'var(--neon-color)' : '' }}
-                  >
-                    <ThumbsDown size={16} />
-                  </button>
-                  <button 
-                    onClick={handleRegenerate}
-                    className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                    title="Regenerate response" 
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                    onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                  >
-                    <RefreshCw size={16} />
-                  </button>
-                </div>
+                <>
+                  {/* Token usage information */}
+                  {message.usageMetadata && (
+                    <div className="text-xs text-white mt-2 flex items-center gap-3">
+                      <span title="Total tokens used">
+                        <span className="font-bold" style={{ color: 'var(--neon-color)' }}>
+                          {message.usageMetadata.totalTokens.toLocaleString()}
+                        </span>
+                        {' '}tokens
+                      </span>
+                      {message.usageMetadata.promptTokens > 0 && (
+                        <span title="Input tokens" className="font-semibold" style={{ color: 'var(--neon-color)' }}>
+                          ({message.usageMetadata.promptTokens.toLocaleString()} in
+                          {message.usageMetadata.candidatesTokens > 0 && `, ${message.usageMetadata.candidatesTokens.toLocaleString()} out`})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
+                    <button 
+                      onClick={handleCopyMessage}
+                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
+                      title={copiedMessage ? "Copied!" : "Copy message"} 
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
+                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                    >
+                      {copiedMessage ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                    <button 
+                      onClick={() => handleFeedback('good')}
+                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
+                      title="Good response" 
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
+                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                      style={{ color: feedback === 'good' ? 'var(--neon-color)' : '' }}
+                    >
+                      <ThumbsUp size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleFeedback('bad')}
+                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
+                      title="Bad response" 
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
+                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                      style={{ color: feedback === 'bad' ? 'var(--neon-color)' : '' }}
+                    >
+                      <ThumbsDown size={16} />
+                    </button>
+                    <button 
+                      onClick={handleRegenerate}
+                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
+                      title="Regenerate response" 
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
+                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

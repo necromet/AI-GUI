@@ -90,6 +90,8 @@ function createTables() {
       message_order INTEGER NOT NULL,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       token_count INTEGER,
+      prompt_tokens INTEGER,
+      candidates_tokens INTEGER,
       generated_images TEXT,
       FOREIGN KEY (conversation_id) REFERENCES Conversations(conversation_id) ON DELETE CASCADE
     )
@@ -102,6 +104,26 @@ function createTables() {
     // Column already exists or other error - safe to ignore
     if (!error.message.includes('duplicate column')) {
       console.log('Note: generated_images column may already exist');
+    }
+  }
+  
+  // Add prompt_tokens column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE Messages ADD COLUMN prompt_tokens INTEGER`);
+  } catch (error: any) {
+    // Column already exists or other error - safe to ignore
+    if (!error.message.includes('duplicate column')) {
+      console.log('Note: prompt_tokens column may already exist');
+    }
+  }
+  
+  // Add candidates_tokens column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE Messages ADD COLUMN candidates_tokens INTEGER`);
+  } catch (error: any) {
+    // Column already exists or other error - safe to ignore
+    if (!error.message.includes('duplicate column')) {
+      console.log('Note: candidates_tokens column may already exist');
     }
   }
   
@@ -278,18 +300,22 @@ export function addMessage(message: {
   content: string;
   message_order: number;
   token_count?: number;
+  prompt_tokens?: number;
+  candidates_tokens?: number;
   generated_images?: string;
 }) {
   if (!db) throw new Error('Database not initialized');
   const result = db.prepare(`
-    INSERT INTO Messages (conversation_id, role, content, message_order, token_count, generated_images)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO Messages (conversation_id, role, content, message_order, token_count, prompt_tokens, candidates_tokens, generated_images)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     message.conversation_id,
     message.role,
     message.content,
     message.message_order,
     message.token_count || null,
+    message.prompt_tokens || null,
+    message.candidates_tokens || null,
     message.generated_images || null
   );
   return result.lastInsertRowid;

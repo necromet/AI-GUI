@@ -4,23 +4,32 @@ import { GeminiModel, ModelConfig } from './types';
 
 export const DEFAULT_MODELS: ModelConfig[] = [
   {
+    id: GeminiModel.FlashLite,
+    name: "Gemini 2.5 Flash Lite",
+    description: "Lightweight model for basic tasks",
+    isReasoning: false,
+    contextWindowSize: 10000,
+  },
+  {
     id: GeminiModel.Flash,
     name: "Gemini 3 Flash",
     description: "Great for everyday tasks",
     isReasoning: false,
+    contextWindowSize: 10000,
   },
   {
     id: GeminiModel.Pro,
     name: "Gemini 3 Pro",
     description: "High-intelligence reasoning model",
     isReasoning: true,
+    contextWindowSize: 10000,
   },
   {
     id: GeminiModel.NanoBananaPro,
     name: "Nano Banana Pro",
     description: "Multimodal reasoning for text, images & documents",
     isReasoning: true,
-    contextWindowSize: 65536,
+    contextWindowSize: 32768,
   }
 ];
 

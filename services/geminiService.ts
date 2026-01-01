@@ -99,3 +99,41 @@ export const generateResponseStream = async (
 
   return result;
 };
+
+export const generateChatTitle = async (
+  userMessage: string,
+  assistantResponse: string
+): Promise<string> => {
+  try {
+    // Use Gemini 2.5 Flash Lite for generating concise chat titles
+    const chat = ai.chats.create({
+      model: 'gemini-2.5-flash-lite',
+      config: {
+        systemInstruction: 'You are a helpful assistant that generates concise, descriptive titles for conversations. Create a title that is 3-7 words long and captures the main topic of the conversation. Do not use quotes or punctuation except hyphens. Return only the title text.'
+      }
+    });
+
+    const prompt = `Based on this conversation, generate a short, descriptive title (3-7 words):\n\nUser: ${userMessage.substring(0, 200)}\n\nAssistant: ${assistantResponse.substring(0, 200)}`;
+    
+    const result = await chat.sendMessageStream({ message: prompt });
+    
+    let title = '';
+    for await (const chunk of result) {
+      title += chunk.text;
+    }
+    
+    // Clean up the title
+    title = title.trim().replace(/["']/g, '');
+    
+    // Fallback if title is too long or empty
+    if (!title || title.length > 100) {
+      return userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
+    }
+    
+    return title;
+  } catch (error) {
+    console.error('Error generating chat title:', error);
+    // Fallback to simple title generation
+    return userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
+  }
+};

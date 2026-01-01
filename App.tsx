@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelLeft, SquarePen, ArrowUp, Paperclip } from 'lucide-react';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
 import { Role, Message, GeminiModel, ModelConfig, ChatSession } from './types';
-import { generateResponseStream } from './services/geminiService';
+import { generateResponseStream, generateChatTitle } from './services/geminiService';
 import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
@@ -220,6 +220,16 @@ const App: React.FC = () => {
         }
       }
       
+      // Build usage metadata from token_count if available
+      let usageMetadata = undefined;
+      if (msg.token_count && msg.role === 'assistant') {
+        usageMetadata = {
+          promptTokens: (msg as any).prompt_tokens || 0,
+          candidatesTokens: (msg as any).candidates_tokens || 0,
+          totalTokens: msg.token_count
+        };
+      }
+      
       return {
         id: msg.message_id!.toString(),
         role: msg.role === 'assistant' ? Role.Assistant : Role.User,
@@ -227,7 +237,8 @@ const App: React.FC = () => {
         timestamp: new Date(msg.timestamp).getTime(),
         messageOrder: msg.message_order,
         dbMessageId: msg.message_id,
-        images
+        images,
+        usageMetadata
       };
     });
     setMessages(loadedMessages);
@@ -238,10 +249,13 @@ const App: React.FC = () => {
     conversationId: number, 
     role: 'user' | 'assistant', 
     content: string, 
-    generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null
+    generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null,
+    tokenCount?: number | null,
+    promptTokens?: number | null,
+    candidatesTokens?: number | null
   ): Promise<number> => {
     const messageOrder = await db.getNextMessageOrder(conversationId);
-    return await db.addMessage(conversationId, role, content, messageOrder, undefined, generatedImages);
+    return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, generatedImages, promptTokens, candidatesTokens);
   };
 
   const ensureConversation = async (): Promise<number> => {
@@ -428,6 +442,7 @@ const App: React.FC = () => {
         let imageGenProgress = 0;
         let savedImagePaths: string[] = [];
         let groundingMetadata: any = null;
+        let usageMetadata: any = null;
         
         for await (const chunk of streamResult) {
             const chunkText = chunk.text;
@@ -452,6 +467,18 @@ const App: React.FC = () => {
             if (chunkGroundingMetadata) {
               groundingMetadata = chunkGroundingMetadata;
               console.log('Grounding metadata received:', groundingMetadata);
+            }
+            
+            // Extract usage metadata if present
+            const chunkUsageMetadata = (chunk as any).usageMetadata;
+            
+            if (chunkUsageMetadata) {
+              usageMetadata = {
+                promptTokens: chunkUsageMetadata.promptTokenCount || 0,
+                candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
+                totalTokens: chunkUsageMetadata.totalTokenCount || 0
+              };
+              console.log('Usage metadata received:', usageMetadata);
             }
             
             if (imageGenStatus) {
@@ -549,7 +576,8 @@ const App: React.FC = () => {
                           isThinking: false,
                           isGeneratingImage: false,
                           images: generatedImages.length > 0 ? generatedImages : msg.images,
-                          groundingMetadata: groundingMetadata
+                          groundingMetadata: groundingMetadata,
+                          usageMetadata: usageMetadata
                       };
                   }
                   return msg;
@@ -563,19 +591,37 @@ const App: React.FC = () => {
           generatedImagesCount: generatedImages.length,
           generatedImages: generatedImages,
           savedImagePaths: savedImagePaths,
-          groundingMetadata: groundingMetadata
+          groundingMetadata: groundingMetadata,
+          usageMetadata: usageMetadata
         });
         
         if (fullText || generatedImages.length > 0) {
           const contentToSave = fullText || (savedImagePaths.length > 0 ? savedImagePaths.join(', ') : '[Generated Image]');
-          aiDbMessageId = await saveMessageToDb(conversationId, 'assistant', contentToSave, generatedImages.length > 0 ? generatedImages : null);
+          aiDbMessageId = await saveMessageToDb(
+            conversationId, 
+            'assistant', 
+            contentToSave, 
+            generatedImages.length > 0 ? generatedImages : null,
+            usageMetadata?.totalTokens || null,
+            usageMetadata?.promptTokens || null,
+            usageMetadata?.candidatesTokens || null
+          );
           console.log('Message saved with ID:', aiDbMessageId);
           
           // Update conversation title if it's the first exchange
           if (messages.length === 0) {
-            const title = userText.substring(0, 50) + (userText.length > 50 ? '...' : '');
-            await db.updateConversationTitle(conversationId, title);
-            await loadConversations();
+            try {
+              // Generate a descriptive title using Gemini 2.5 Flash Lite
+              const title = await generateChatTitle(userText, fullText);
+              await db.updateConversationTitle(conversationId, title);
+              await loadConversations();
+            } catch (error) {
+              console.error('Error generating title:', error);
+              // Fallback to simple title
+              const title = userText.substring(0, 50) + (userText.length > 50 ? '...' : '');
+              await db.updateConversationTitle(conversationId, title);
+              await loadConversations();
+            }
           }
         }
 

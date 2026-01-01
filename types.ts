@@ -16,6 +16,7 @@ export interface Message {
   dbMessageId?: number; // Database message ID
   images?: Array<{ id: string; data: string; mimeType: string }>; // Base64 image data
   groundingMetadata?: GroundingMetadata; // Grounding metadata from web search
+  usageMetadata?: UsageMetadata; // Token usage information
 }
 
 export interface GroundingMetadata {
@@ -25,6 +26,12 @@ export interface GroundingMetadata {
     title?: string;
     snippet?: string;
   }>;
+}
+
+export interface UsageMetadata {
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
 }
 
 export interface ChatSession {
@@ -37,9 +44,10 @@ export interface ChatSession {
 }
 
 export enum GeminiModel {
+  FlashLite = 'gemini-2.5-flash-lite',
   Flash = 'gemini-3-flash-preview',
   Pro = 'gemini-3-pro-preview', // Reasoning model
-  NanoBananaPro = 'gemini-3-pro-image-preview', // Multimodal reasoning model
+  NanoBananaPro = 'gemini-3-pro-image-preview' // Multimodal reasoning model
 }
 
 export interface ModelConfig {

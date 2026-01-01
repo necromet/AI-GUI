@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Table, Search, Play, Info, Trash2, RefreshCw } from 'lucide-react';
+import { Database, Table, Search, Play, Info, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface DatabaseStats {
   models: number;
@@ -19,6 +19,7 @@ const DatabaseViewer: React.FC = () => {
   const [queryResult, setQueryResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Check if running in Electron
   const isElectron = typeof window !== 'undefined' && window.electron !== undefined;
@@ -114,7 +115,8 @@ const DatabaseViewer: React.FC = () => {
   return (
     <div className="flex h-screen bg-main text-gray-100">
       {/* Sidebar - Tables List */}
-      <div className="w-64 bg-sidebar border-r border-gray-800 flex flex-col">
+      {isSidebarOpen && (
+        <div className="w-64 bg-sidebar border-r border-gray-800 flex flex-col">
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-2 mb-4">
             <Database className="w-5 h-5 neon-text" />
@@ -168,11 +170,20 @@ const DatabaseViewer: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Query Input */}
         <div className="p-4 border-b border-gray-800">
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="mb-2 p-2 bg-input hover:bg-hover rounded-lg transition-colors flex items-center gap-2"
+            title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <span className="text-sm">{isSidebarOpen ? "Hide" : "Show"} Sidebar</span>
+          </button>
           <div className="flex items-center gap-2 mb-2">
             <Search className="w-5 h-5 neon-text" />
             <h3 className="font-semibold">Custom Query</h3>
