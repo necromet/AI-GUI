@@ -13,6 +13,7 @@ dist
 dist-electron
 dist-ssr
 release
+chat.db
 *.local
 
 # Editor directories and files

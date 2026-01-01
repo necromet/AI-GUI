@@ -9,6 +9,7 @@ import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import DatabaseViewer from './components/DatabaseViewer';
+import TokenUsageStats from './components/TokenUsageStats';
 import Notification, { NotificationType } from './components/Notification';
 import ImageGenerationOptions, { ImageGenOptions } from './components/ImageGenerationOptions';
 import GroundingOptions, { GroundingOptions as GroundingOpts } from './components/GroundingOptions';
@@ -43,6 +44,7 @@ const App: React.FC = () => {
   // State for Settings and Models
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDatabaseViewerOpen, setIsDatabaseViewerOpen] = useState(false);
+  const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [neonColor, setNeonColor] = useState<string>(() => {
     return localStorage.getItem('neonColor') || 'red';
@@ -840,6 +842,7 @@ const App: React.FC = () => {
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenDatabase={() => setIsDatabaseViewerOpen(true)}
+        onOpenTokenStats={() => setIsTokenStatsOpen(true)}
         conversations={conversations}
         currentConversationId={currentConversationId}
         onSelectConversation={loadConversation}
@@ -1037,6 +1040,12 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Token Usage Stats Modal */}
+        <TokenUsageStats 
+          isOpen={isTokenStatsOpen}
+          onClose={() => setIsTokenStatsOpen(false)}
+        />
 
         {/* Notification Toast */}
         {notification && (

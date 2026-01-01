@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, Database } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, Database, BarChart3 } from 'lucide-react';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -8,6 +8,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onOpenSettings: () => void;
   onOpenDatabase?: () => void;
+  onOpenTokenStats?: () => void;
   conversations: ChatSession[];
   currentConversationId: number | null;
   onSelectConversation: (id: number) => Promise<void>;
@@ -20,6 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onNewChat, 
   onOpenSettings,
   onOpenDatabase,
+  onOpenTokenStats,
   conversations,
   currentConversationId,
   onSelectConversation,
@@ -167,6 +169,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             >
               <Database size={18} className="text-gray-400 group-hover:text-white" />
               <span className="font-medium">Database Viewer</span>
+            </button>
+          )}
+          
+          {onOpenTokenStats && (
+            <button 
+              onClick={onOpenTokenStats}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-100 hover:bg-hover transition-colors group"
+            >
+              <BarChart3 size={18} className="text-gray-400 group-hover:text-white" />
+              <span className="font-medium">Token Usage Stats</span>
             </button>
           )}
           

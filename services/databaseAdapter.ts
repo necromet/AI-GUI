@@ -220,3 +220,34 @@ export const getDatabase = async () => {
   }
   return await idbService.getDatabase();
 };
+
+// ===== Token Usage Statistics =====
+
+export const getOverallTokenStats = async () => {
+  if (isElectron()) {
+    return await window.electron.getOverallTokenStats();
+  }
+  return await idbService.getOverallTokenStats();
+};
+
+export const getTokenStatsByModel = async () => {
+  if (isElectron()) {
+    return await window.electron.getTokenStatsByModel();
+  }
+  return await idbService.getTokenStatsByModel();
+};
+
+export const getTokenStatsByDate = async (days: number = 30) => {
+  if (isElectron()) {
+    return await window.electron.getTokenStatsByDate(days);
+  }
+  return await idbService.getTokenStatsByDate(days);
+};
+
+export const getTokenStatsByConversation = async (limit: number = 20) => {
+  if (isElectron()) {
+    return await window.electron.getTokenStatsByConversation(limit);
+  }
+  return await idbService.getTokenStatsByConversation(limit);
+};
+

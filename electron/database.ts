@@ -383,4 +383,93 @@ export function getTableSchema(tableName: string) {
   return db.prepare(`PRAGMA table_info(${tableName})`).all();
 }
 
+// ===== Token Usage Statistics =====
+
+export function getOverallTokenStats() {
+  if (!db) throw new Error('Database not initialized');
+  
+  const stats = db.prepare(`
+    SELECT 
+      COALESCE(SUM(token_count), 0) as totalTokens,
+      COALESCE(SUM(prompt_tokens), 0) as promptTokens,
+      COALESCE(SUM(candidates_tokens), 0) as candidatesTokens,
+      COUNT(CASE WHEN token_count IS NOT NULL THEN 1 END) as messageCount
+    FROM Messages
+  `).get() as any;
+  
+  const conversationCount = db.prepare(`
+    SELECT COUNT(*) as count FROM Conversations
+  `).get() as any;
+  
+  return {
+    totalTokens: stats.totalTokens || 0,
+    promptTokens: stats.promptTokens || 0,
+    candidatesTokens: stats.candidatesTokens || 0,
+    messageCount: stats.messageCount || 0,
+    conversationCount: conversationCount.count || 0
+  };
+}
+
+export function getTokenStatsByModel() {
+  if (!db) throw new Error('Database not initialized');
+  
+  const stats = db.prepare(`
+    SELECT 
+      m.name as modelName,
+      COALESCE(SUM(msg.token_count), 0) as totalTokens,
+      COALESCE(SUM(msg.prompt_tokens), 0) as promptTokens,
+      COALESCE(SUM(msg.candidates_tokens), 0) as candidatesTokens,
+      COUNT(CASE WHEN msg.token_count IS NOT NULL THEN 1 END) as messageCount
+    FROM Models m
+    LEFT JOIN Conversations c ON m.model_id = c.model_id
+    LEFT JOIN Messages msg ON c.conversation_id = msg.conversation_id
+    GROUP BY m.model_id, m.name
+    HAVING totalTokens > 0
+    ORDER BY totalTokens DESC
+  `).all();
+  
+  return stats;
+}
+
+export function getTokenStatsByDate(days: number = 30) {
+  if (!db) throw new Error('Database not initialized');
+  
+  const stats = db.prepare(`
+    SELECT 
+      DATE(timestamp) as date,
+      COALESCE(SUM(token_count), 0) as totalTokens,
+      COALESCE(SUM(prompt_tokens), 0) as promptTokens,
+      COALESCE(SUM(candidates_tokens), 0) as candidatesTokens,
+      COUNT(CASE WHEN token_count IS NOT NULL THEN 1 END) as messageCount
+    FROM Messages
+    WHERE timestamp >= datetime('now', '-' || ? || ' days')
+    GROUP BY DATE(timestamp)
+    ORDER BY date ASC
+  `).all(days);
+  
+  return stats;
+}
+
+export function getTokenStatsByConversation(limit: number = 20) {
+  if (!db) throw new Error('Database not initialized');
+  
+  const stats = db.prepare(`
+    SELECT 
+      c.conversation_id as conversationId,
+      COALESCE(c.title, 'Untitled Conversation') as conversationTitle,
+      COALESCE(SUM(m.token_count), 0) as totalTokens,
+      COALESCE(SUM(m.prompt_tokens), 0) as promptTokens,
+      COALESCE(SUM(m.candidates_tokens), 0) as candidatesTokens,
+      COUNT(CASE WHEN m.token_count IS NOT NULL THEN 1 END) as messageCount,
+      c.updated_at as updatedAt
+    FROM Conversations c
+    LEFT JOIN Messages m ON c.conversation_id = m.conversation_id
+    GROUP BY c.conversation_id
+    HAVING totalTokens > 0
+    ORDER BY totalTokens DESC
+    LIMIT ?
+  `).all(limit);
+  
+  return stats;
+}
 

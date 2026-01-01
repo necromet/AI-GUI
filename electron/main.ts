@@ -152,6 +152,12 @@ ipcMain.handle('db:execute-query', async (_event, query: string) => {
 ipcMain.handle('db:get-all-tables', async () => db.getAllTables());
 ipcMain.handle('db:get-table-schema', async (_event, tableName: string) => db.getTableSchema(tableName));
 
+// Token usage statistics operations
+ipcMain.handle('db:get-overall-token-stats', async () => db.getOverallTokenStats());
+ipcMain.handle('db:get-token-stats-by-model', async () => db.getTokenStatsByModel());
+ipcMain.handle('db:get-token-stats-by-date', async (_event, days: number) => db.getTokenStatsByDate(days));
+ipcMain.handle('db:get-token-stats-by-conversation', async (_event, limit: number) => db.getTokenStatsByConversation(limit));
+
 // Image saving operation
 ipcMain.handle('save-generated-image', async (_event, imageData: string, mimeType: string) => {
   try {

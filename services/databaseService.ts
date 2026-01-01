@@ -368,3 +368,232 @@ export const closeDatabase = async (): Promise<void> => {
     dbInstance = null;
   }
 };
+
+// ===== Token Usage Statistics =====
+
+export interface TokenUsageStats {
+  totalTokens: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  messageCount: number;
+  conversationCount: number;
+}
+
+export interface TokenUsageByModel {
+  modelName: string;
+  totalTokens: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  messageCount: number;
+}
+
+export interface TokenUsageByDate {
+  date: string; // ISO date string (YYYY-MM-DD)
+  totalTokens: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  messageCount: number;
+}
+
+export interface TokenUsageByConversation {
+  conversationId: number;
+  conversationTitle: string;
+  totalTokens: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  messageCount: number;
+  updatedAt: string;
+}
+
+/**
+ * Get overall token usage statistics
+ */
+export const getOverallTokenStats = async (): Promise<TokenUsageStats> => {
+  const db = await getDatabase();
+  const messages = await db.getAll('messages');
+  
+  let totalTokens = 0;
+  let promptTokens = 0;
+  let candidatesTokens = 0;
+  let messageCount = 0;
+  
+  messages.forEach(msg => {
+    if (msg.token_count) {
+      totalTokens += msg.token_count;
+      messageCount++;
+    }
+    if (msg.prompt_tokens) {
+      promptTokens += msg.prompt_tokens;
+    }
+    if (msg.candidates_tokens) {
+      candidatesTokens += msg.candidates_tokens;
+    }
+  });
+  
+  const conversations = await db.getAll('conversations');
+  
+  return {
+    totalTokens,
+    promptTokens,
+    candidatesTokens,
+    messageCount,
+    conversationCount: conversations.length
+  };
+};
+
+/**
+ * Get token usage grouped by model
+ */
+export const getTokenStatsByModel = async (): Promise<TokenUsageByModel[]> => {
+  const db = await getDatabase();
+  const conversations = await db.getAll('conversations');
+  const messages = await db.getAll('messages');
+  const models = await db.getAll('models');
+  
+  // Create a map of conversation_id to model_id
+  const convToModel = new Map<number, number>();
+  conversations.forEach(conv => {
+    convToModel.set(conv.conversation_id!, conv.model_id);
+  });
+  
+  // Create a map of model_id to model name
+  const modelIdToName = new Map<number, string>();
+  models.forEach(model => {
+    modelIdToName.set(model.model_id!, model.name);
+  });
+  
+  // Aggregate token usage by model
+  const modelStats = new Map<string, TokenUsageByModel>();
+  
+  messages.forEach(msg => {
+    const modelId = convToModel.get(msg.conversation_id);
+    if (!modelId) return;
+    
+    const modelName = modelIdToName.get(modelId) || 'Unknown Model';
+    
+    if (!modelStats.has(modelName)) {
+      modelStats.set(modelName, {
+        modelName,
+        totalTokens: 0,
+        promptTokens: 0,
+        candidatesTokens: 0,
+        messageCount: 0
+      });
+    }
+    
+    const stats = modelStats.get(modelName)!;
+    if (msg.token_count) {
+      stats.totalTokens += msg.token_count;
+      stats.messageCount++;
+    }
+    if (msg.prompt_tokens) {
+      stats.promptTokens += msg.prompt_tokens;
+    }
+    if (msg.candidates_tokens) {
+      stats.candidatesTokens += msg.candidates_tokens;
+    }
+  });
+  
+  return Array.from(modelStats.values()).sort((a, b) => b.totalTokens - a.totalTokens);
+};
+
+/**
+ * Get token usage grouped by date
+ */
+export const getTokenStatsByDate = async (days: number = 30): Promise<TokenUsageByDate[]> => {
+  const db = await getDatabase();
+  const messages = await db.getAll('messages');
+  
+  const dateStats = new Map<string, TokenUsageByDate>();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  messages.forEach(msg => {
+    const msgDate = new Date(msg.timestamp);
+    if (msgDate < cutoffDate) return;
+    
+    const dateKey = msgDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    if (!dateStats.has(dateKey)) {
+      dateStats.set(dateKey, {
+        date: dateKey,
+        totalTokens: 0,
+        promptTokens: 0,
+        candidatesTokens: 0,
+        messageCount: 0
+      });
+    }
+    
+    const stats = dateStats.get(dateKey)!;
+    if (msg.token_count) {
+      stats.totalTokens += msg.token_count;
+      stats.messageCount++;
+    }
+    if (msg.prompt_tokens) {
+      stats.promptTokens += msg.prompt_tokens;
+    }
+    if (msg.candidates_tokens) {
+      stats.candidatesTokens += msg.candidates_tokens;
+    }
+  });
+  
+  return Array.from(dateStats.values()).sort((a, b) => a.date.localeCompare(b.date));
+};
+
+/**
+ * Get token usage grouped by conversation
+ */
+export const getTokenStatsByConversation = async (limit: number = 20): Promise<TokenUsageByConversation[]> => {
+  const db = await getDatabase();
+  const conversations = await db.getAll('conversations');
+  const messages = await db.getAll('messages');
+  
+  // Group messages by conversation
+  const convMessages = new Map<number, DBMessage[]>();
+  messages.forEach(msg => {
+    if (!convMessages.has(msg.conversation_id)) {
+      convMessages.set(msg.conversation_id, []);
+    }
+    convMessages.get(msg.conversation_id)!.push(msg);
+  });
+  
+  const convStats: TokenUsageByConversation[] = [];
+  
+  conversations.forEach(conv => {
+    const msgs = convMessages.get(conv.conversation_id!) || [];
+    
+    let totalTokens = 0;
+    let promptTokens = 0;
+    let candidatesTokens = 0;
+    let messageCount = 0;
+    
+    msgs.forEach(msg => {
+      if (msg.token_count) {
+        totalTokens += msg.token_count;
+        messageCount++;
+      }
+      if (msg.prompt_tokens) {
+        promptTokens += msg.prompt_tokens;
+      }
+      if (msg.candidates_tokens) {
+        candidatesTokens += msg.candidates_tokens;
+      }
+    });
+    
+    if (totalTokens > 0) {
+      convStats.push({
+        conversationId: conv.conversation_id!,
+        conversationTitle: conv.title || 'Untitled Conversation',
+        totalTokens,
+        promptTokens,
+        candidatesTokens,
+        messageCount,
+        updatedAt: conv.updated_at
+      });
+    }
+  });
+  
+  // Sort by total tokens descending and limit results
+  return convStats.sort((a, b) => b.totalTokens - a.totalTokens).slice(0, limit);
+};
+

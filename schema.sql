@@ -58,6 +58,9 @@ CREATE TABLE Messages (
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     -- Estimated token count for billing/context tracking purposes
     token_count INTEGER,
+    -- Detailed token counts for prompt and response
+    prompt_tokens INTEGER,
+    candidates_tokens INTEGER,
     -- JSON string storing generated images from AI image generation models
     generated_images TEXT,
     

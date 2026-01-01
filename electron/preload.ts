@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('electron', {
   getAllTables: () => ipcRenderer.invoke('db:get-all-tables'),
   getTableSchema: (tableName: string) => ipcRenderer.invoke('db:get-table-schema', tableName),
   
+  // Token usage statistics
+  getOverallTokenStats: () => ipcRenderer.invoke('db:get-overall-token-stats'),
+  getTokenStatsByModel: () => ipcRenderer.invoke('db:get-token-stats-by-model'),
+  getTokenStatsByDate: (days: number) => ipcRenderer.invoke('db:get-token-stats-by-date', days),
+  getTokenStatsByConversation: (limit: number) => ipcRenderer.invoke('db:get-token-stats-by-conversation', limit),
+  
   // Image operations
   saveGeneratedImage: (imageData: string, mimeType: string) => ipcRenderer.invoke('save-generated-image', imageData, mimeType),
 });
@@ -75,6 +81,12 @@ export interface ElectronAPI {
   executeQuery: (query: string) => Promise<{ success: boolean; data?: any; error?: string }>;
   getAllTables: () => Promise<string[]>;
   getTableSchema: (tableName: string) => Promise<any[]>;
+  
+  // Token usage statistics
+  getOverallTokenStats: () => Promise<any>;
+  getTokenStatsByModel: () => Promise<any[]>;
+  getTokenStatsByDate: (days: number) => Promise<any[]>;
+  getTokenStatsByConversation: (limit: number) => Promise<any[]>;
 }
 
 declare global {

@@ -36,6 +36,12 @@ interface ElectronAPI {
   getAllTables: () => Promise<string[]>;
   getTableSchema: (tableName: string) => Promise<any[]>;
   
+  // Token usage statistics
+  getOverallTokenStats: () => Promise<any>;
+  getTokenStatsByModel: () => Promise<any[]>;
+  getTokenStatsByDate: (days: number) => Promise<any[]>;
+  getTokenStatsByConversation: (limit: number) => Promise<any[]>;
+  
   // Image operations
   saveGeneratedImage: (imageData: string, mimeType: string) => Promise<{ success: boolean; path?: string; filename?: string; error?: string }>;
 }
