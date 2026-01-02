@@ -887,10 +887,8 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
            {messages.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
-                <div className="bg-white dark:bg-black border border-gray-200 p-6 rounded-full mb-6 shadow-lg transition-all w-20 h-20 flex items-center justify-center" style={{ borderColor: theme === 'dark' ? `rgba(var(--neon-rgb), 0.3)` : undefined, boxShadow: theme === 'dark' ? `0 0 30px -5px rgba(var(--neon-rgb), 0.6)` : undefined }}>
-                   <div className="scale-[2]">{CHATGPT_LOGO}</div>
-                </div>
-                <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
+                <div className="scale-[2]" style={{ color: 'var(--neon-color)'}}>{CHATGPT_LOGO}</div>
+                <h2 className="text-2xl md:text-3xl font-semibold mb-8 mt-10 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
                 
                 {/* Suggestion Chips */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mb-12">

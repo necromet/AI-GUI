@@ -23,6 +23,9 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
     if (model.id === GeminiModel.Pro) {
       return <Sparkles size={24} />;
     }
+    if (model.id === GeminiModel.FlashLite) {
+      return <Flame size={24} />;
+    }
     // Default to Zap for Flash and other models
     return <Zap size={24} />;
   };

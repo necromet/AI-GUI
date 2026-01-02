@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Flame } from 'lucide-react';
+import { User } from 'lucide-react';
 import { GeminiModel, ModelConfig } from './types';
 
 export const DEFAULT_MODELS: ModelConfig[] = [
@@ -34,7 +34,14 @@ export const DEFAULT_MODELS: ModelConfig[] = [
 ];
 
 export const CHATGPT_LOGO = (
-  <Flame className="w-6 h-6 drop-shadow-[0_0_8px_rgba(var(--neon-rgb),0.8)]" strokeWidth={2} fill="currentColor" style={{ color: 'var(--neon-color)' }} />
+  <img 
+    src="/assets/neural_brain.svg" 
+    className="w-6 h-6 drop-shadow-[0_0_8px_rgba(var(--neon-rgb),0)]" 
+    style={{ 
+      filter: 'brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(186deg) brightness(118%) contrast(119%)'
+    }} 
+    alt="AI Logo" 
+  />
 );
 
 export const USER_AVATAR = (
