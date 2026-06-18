@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Role, Message } from '../types';
 import { CHATGPT_LOGO, USER_AVATAR } from '../constants';
-import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, ExternalLink } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check } from 'lucide-react';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -73,6 +73,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [feedback, setFeedback] = useState<'good' | 'bad' | null>(null);
+  const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
   
   // Print out the real message
   console.log('Message:', message);
@@ -123,7 +124,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                 </svg>
               </div>
             ) : (
-              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)' }}>
+              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)', color: 'var(--neon-color)'}}>
                  {CHATGPT_LOGO}
               </div>
             )}
@@ -134,59 +135,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
         <div className="relative flex-1 overflow-hidden">
           <div className="font-semibold select-none mb-1 text-sm opacity-90 flex items-center gap-2">
             {isUser ? (
-                <span className="text-white">You</span>
+                <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))' }}>You</span>
             ) : (
                 <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))' }}>Ember</span>
             )}
           </div>
 
-          {/* Display images if present */}
-          {message.images && message.images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {message.images.map((image) => (
-                <div key={image.id} className="relative group/img">
-                  <img 
-                    src={`data:${image.mimeType};base64,${image.data}`}
-                    alt="Attached image"
-                    className="max-w-xs max-h-60 rounded-lg border border-gray-600 dark:border-white/20 hover:border-gray-400 dark:hover:border-white/40 transition-all cursor-pointer"
-                    onClick={(e) => {
-                      // Open image in new tab on click
-                      const win = window.open();
-                      if (win) {
-                        win.document.write(`<img src="data:${image.mimeType};base64,${image.data}" style="max-width:100%; height:auto;" />`);
-                      }
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Show loading animation while generating image, then show 'Image has been generated!' when done */}
-          {message.isGeneratingImage ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
-                <div className="flex items-center gap-1.5 animate-pulse">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                </div>
-                <span className="font-medium">Generating image{message.imageGenerationProgress !== undefined && `... ${message.imageGenerationProgress}%`}</span>
-              </div>
-              <div className="w-full max-w-md bg-gray-700/30 rounded-full h-2 overflow-hidden">
-                <div 
-                  className="h-full rounded-full transition-all duration-300" 
-                  style={{ 
-                    width: `${message.imageGenerationProgress || 0}%`,
-                    backgroundColor: 'var(--neon-color)',
-                    boxShadow: '0 0 10px var(--neon-color)'
-                  }}
-                />
-              </div>
-            </div>
-          ) : (message.images && message.images.length > 0 && !message.isGeneratingImage) ? (
-            <div className="font-semibold mb-4" style={{ color: 'var(--neon-color)' }}>Image has been generated!</div>
-          ) : message.isThinking ? (
+          {message.isThinking ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
                 <div className="flex items-center gap-1.5 animate-pulse">
@@ -206,6 +161,32 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
             </div>
           ) : (
             <div className="prose prose-invert max-w-none leading-8 break-words text-lg [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4">
+              {/* Collapsible thinking/reasoning section */}
+              {message.thinkingContent && !message.isThinking && (
+                <div className="mb-4">
+                  <button
+                    onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
+                    className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-gray-300 transition-colors w-full text-left"
+                  >
+                    <svg
+                      className={`w-3 h-3 transition-transform duration-200 ${isThinkingExpanded ? 'rotate-90' : ''}`}
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span style={{ color: 'rgba(var(--neon-rgb), 0.7)' }}>Reasoning</span>
+                  </button>
+                  {isThinkingExpanded && (
+                    <div className="mt-2 prose prose-invert max-w-none leading-7 text-base italic opacity-70 pl-4 border-l-2" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)' }}>
+                      <ReactMarkdown>
+                        {message.thinkingContent}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <ReactMarkdown
                 components={{
                   pre: ({ node, ...props }) => (
@@ -293,55 +274,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                 {message.content}
               </ReactMarkdown>
               
-              {/* Display grounding sources if present */}
-              {!isUser && message.groundingMetadata && (
-                <div className="mt-4 pt-4 border-t border-gray-700/50">
-                  <div className="text-xs text-gray-400 mb-2 flex items-center gap-1">
-                    <ExternalLink size={12} />
-                    <span>Sources from Google Search:</span>
-                  </div>
-                  <div className="space-y-2">
-                    {message.groundingMetadata.searchResults?.map((result: any, idx: number) => (
-                      <a
-                        key={idx}
-                        href={result.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all group/link"
-                        style={{ borderColor: 'rgba(var(--neon-rgb), 0.2)' }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.5)'}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.2)'}
-                      >
-                        <div className="flex items-start gap-2">
-                          <ExternalLink size={14} className="mt-0.5 text-gray-400 group-hover/link:text-gray-300" />
-                          <div className="flex-1 min-w-0">
-                            {result.title && (
-                              <div className="text-sm font-medium text-gray-200 group-hover/link:text-white truncate">
-                                {result.title}
-                              </div>
-                            )}
-                            {result.snippet && (
-                              <div className="text-xs text-gray-400 mt-1 line-clamp-2">
-                                {result.snippet}
-                              </div>
-                            )}
-                            <div className="text-xs text-gray-500 mt-1 truncate">
-                              {result.url}
-                            </div>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                  {message.groundingMetadata.webSearchQueries && message.groundingMetadata.webSearchQueries.length > 0 && (
-                    <div className="mt-3 text-xs text-gray-500">
-                      Search queries: {message.groundingMetadata.webSearchQueries.join(', ')}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {!isUser && !message.isThinking && !message.isGeneratingImage && (
+              {!isUser && !message.isThinking && (
                 <>
                   {/* Token usage information */}
                   {message.usageMetadata && (

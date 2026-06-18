@@ -7,25 +7,13 @@ export interface Message {
   id: string;
   role: Role;
   content: string;
-  isThinking?: boolean; // For model thinking state
-  thinkingContent?: string; // Thinking process content for reasoning models
-  isGeneratingImage?: boolean; // For image generation state
-  imageGenerationProgress?: number; // Progress percentage (0-100)
+  isThinking?: boolean;
+  thinkingContent?: string;
   timestamp: number;
-  messageOrder?: number; // Database message order
-  dbMessageId?: number; // Database message ID
-  images?: Array<{ id: string; data: string; mimeType: string }>; // Base64 image data
-  groundingMetadata?: GroundingMetadata; // Grounding metadata from web search
-  usageMetadata?: UsageMetadata; // Token usage information
-}
-
-export interface GroundingMetadata {
-  webSearchQueries?: string[];
-  searchResults?: Array<{
-    url: string;
-    title?: string;
-    snippet?: string;
-  }>;
+  messageOrder?: number;
+  dbMessageId?: number;
+  usageMetadata?: UsageMetadata;
+  audioUrl?: string;
 }
 
 export interface UsageMetadata {
@@ -43,11 +31,19 @@ export interface ChatSession {
   modelId?: number; // Database model ID
 }
 
-export enum GeminiModel {
-  FlashLite = 'gemini-2.5-flash-lite',
-  Flash = 'gemini-3-flash-preview',
-  Pro = 'gemini-3-pro-preview', // Reasoning model
-  NanoBananaPro = 'gemini-3-pro-image-preview' // Multimodal reasoning model
+export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
+
+export function getModelType(modelId: string): ModelType {
+  if (modelId === 'mimo-v2.5-tts') return 'tts';
+  if (modelId === 'mimo-v2.5-tts-voicedesign') return 'tts-voicedesign';
+  if (modelId === 'mimo-v2.5-tts-voiceclone') return 'tts-voiceclone';
+  if (modelId === 'mimo-v2.5-asr') return 'asr';
+  return 'chat';
+}
+
+export enum MiMoModel {
+  V2 = 'mimo-v2.5',
+  V2Pro = 'mimo-v2.5-pro',
 }
 
 export interface ModelConfig {
