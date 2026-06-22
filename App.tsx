@@ -266,10 +266,11 @@ const App: React.FC = () => {
         const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
         const streamResult = await generateResponseStream(
-          selectedModelConfig.id,
+          selectedModelConfig.apiModelId || selectedModelConfig.id,
           userText,
           history,
           selectedModelConfig.systemInstruction,
+          selectedModelConfig.provider,
         );
 
         let fullText = '';
@@ -326,7 +327,7 @@ const App: React.FC = () => {
           
           if (messages.length === 0) {
             try {
-              const title = await generateChatTitle(userText, fullText);
+              const title = await generateChatTitle(userText, fullText, selectedModelConfig.provider);
               await db.updateConversationTitle(conversationId, title);
               await loadConversations();
             } catch (error) {
@@ -389,10 +390,11 @@ const App: React.FC = () => {
       const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
       const streamResult = await generateResponseStream(
-        selectedModelConfig.id,
+        selectedModelConfig.apiModelId || selectedModelConfig.id,
         userText,
         history,
         selectedModelConfig.systemInstruction,
+        selectedModelConfig.provider,
       );
 
       let fullText = '';

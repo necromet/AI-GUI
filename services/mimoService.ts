@@ -1,5 +1,14 @@
 const apiKey = process.env.MIMO_API_KEY || '';
 const baseUrl = '/mimo-api';
+const directApiKey = process.env.MIMO_DIRECT_API_KEY || '';
+const directBaseUrl = '/mimo-direct-api';
+
+function getProviderConfig(provider?: string): { key: string; base: string } {
+  if (provider === 'mimo-direct') {
+    return { key: directApiKey, base: directBaseUrl };
+  }
+  return { key: apiKey, base: baseUrl };
+}
 
 interface MiMoStreamChunk {
   text: string;
@@ -54,7 +63,9 @@ export const generateResponseStream = async (
   prompt: string,
   history: { role: string; content: string }[],
   systemInstruction?: string,
+  provider?: string,
 ) => {
+  const { key, base } = getProviderConfig(provider);
   const messages: Array<{ role: string; content: string }> = [];
 
   if (systemInstruction) {
@@ -68,11 +79,11 @@ export const generateResponseStream = async (
     });
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify({
       model: modelId,
@@ -92,13 +103,15 @@ export const generateResponseStream = async (
 export const generateChatTitle = async (
   userMessage: string,
   assistantResponse: string,
+  provider?: string,
 ): Promise<string> => {
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const { key, base } = getProviderConfig(provider);
+    const response = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${key}`,
       },
       body: JSON.stringify({
         model: 'mimo-v2.5-pro',
@@ -150,7 +163,9 @@ export async function generateSpeech(params: {
   text: string;
   voice?: string;
   style?: string;
+  provider?: string;
 }): Promise<string> {
+  const { key, base } = getProviderConfig(params.provider);
   const messages: Array<{ role: string; content: string }> = [];
 
   if (params.style) {
@@ -172,11 +187,11 @@ export async function generateSpeech(params: {
     body.audio.voice = params.voice;
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify(body),
   });
@@ -204,15 +219,17 @@ export async function generateSpeech(params: {
 export async function transcribeAudio(params: {
   model: string;
   audioFile: File;
+  provider?: string;
 }): Promise<string> {
+  const { key, base } = getProviderConfig(params.provider);
   const formData = new FormData();
   formData.append('model', params.model);
   formData.append('file', params.audioFile);
 
-  const response = await fetch(`${baseUrl}/audio/transcriptions`, {
+  const response = await fetch(`${base}/audio/transcriptions`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${key}`,
     },
     body: formData,
   });

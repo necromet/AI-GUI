@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
             target: 'https://token-plan-sgp.xiaomimimo.com/v1',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/mimo-api/, ''),
+          },
+          '/mimo-direct-api': {
+            target: 'https://api.xiaomimimo.com/v1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/mimo-direct-api/, ''),
           }
         }
       },
@@ -23,7 +28,9 @@ export default defineConfig(({ mode }) => {
       ],
       define: {
         'process.env.MIMO_API_KEY': JSON.stringify(env.MIMO_API_KEY),
-        'process.env.MIMO_BASE_URL': JSON.stringify(env.MIMO_BASE_URL)
+        'process.env.MIMO_BASE_URL': JSON.stringify(env.MIMO_BASE_URL),
+        'process.env.MIMO_DIRECT_API_KEY': JSON.stringify(env.MIMO_DIRECT_API_KEY),
+        'process.env.MIMO_DIRECT_BASE_URL': JSON.stringify(env.MIMO_DIRECT_BASE_URL)
       },
       resolve: {
         alias: {

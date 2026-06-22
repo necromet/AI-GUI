@@ -57,4 +57,5 @@ export interface ModelConfig {
   contextWindowSize?: number; // Database context window size
   apiKey?: string; // API key for custom models
   provider?: string; // Provider for custom models
+  apiModelId?: string; // Actual model ID sent to the API (if different from id)
 }
