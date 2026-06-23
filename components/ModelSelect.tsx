@@ -1,113 +1,105 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Sparkles, Zap, MessageSquare, Flame } from 'lucide-react';
-import { GeminiModel, ModelConfig } from '../types';
+import { ChevronDown, MessageSquare, Sparkles } from 'lucide-react';
+import { ModelConfig } from '../types';
 
 interface ModelSelectProps {
   currentModel: string;
   models: ModelConfig[];
   onSelect: (modelId: string) => void;
+  theme?: 'dark' | 'light';
 }
 
-const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelect }) => {
+const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelect, theme = 'dark' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const selectedConfig = models.find(m => m.id === currentModel) || models[0];
 
-  const getModelIcon = (model: ModelConfig) => {
-    // Specific icon for Nano Banana Pro
-    if (model.id === GeminiModel.NanoBananaPro) {
-      return <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M40-440v-80h240v80H40Zm270-154-84-84 56-56 84 84-56 56Zm130-86v-240h80v240h-80Zm210 86-56-56 84-84 56 56-84 84Zm30 154v-80h240v80H680Zm-200 80q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35Zm198 134-84-84 56-56 84 84-56 56Zm-396 0-56-56 84-84 56 56-84 84ZM440-40v-240h80v240h-80Z"/></svg>;
-    }
-    // Specific icon for Gemini Pro
-    if (model.id === GeminiModel.Pro) {
-      return <Sparkles size={24} />;
-    }
-    if (model.id === GeminiModel.FlashLite) {
-      return <Flame size={24} />;
-    }
-    // Default to Zap for Flash and other models
-    return <Zap size={24} />;
-  };
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      if (ref.current && !ref.current.contains(event.target as Node)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isDark = theme === 'dark';
+
   return (
     <div className="relative inline-block text-left" ref={ref}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-200 hover:bg-white/5 transition-all group"
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = 'var(--neon-color)';
-          const span = e.currentTarget.querySelector('span');
-          if (span) (span as HTMLElement).style.filter = 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = '';
-          const span = e.currentTarget.querySelector('span');
-          if (span) (span as HTMLElement).style.filter = '';
-        }}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl text-lg font-semibold text-gray-900 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-all duration-200 group"
       >
-        <span className="transition-all">{selectedConfig.name}</span>
-        <ChevronDown 
-          size={16} 
+        <span className="transition-all duration-200 group-hover:drop-shadow-[0_0_6px_rgba(var(--neon-rgb),0.4)]" style={{ color: 'inherit' }}>
+          {selectedConfig.name}
+        </span>
+        <ChevronDown
+          size={16}
           className={`text-gray-500 transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`}
           style={{ color: isOpen ? 'var(--neon-color)' : undefined }}
-          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'}
-          onMouseLeave={(e) => !isOpen && (e.currentTarget.style.color = '')}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-80 rounded-xl bg-[#0a0a0a] border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden py-1 backdrop-blur-xl">
-          {models.map((model) => (
+        <div
+          className="absolute left-0 top-full mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden py-1 animate-dropdown-in bg-white dark:bg-[#080808] border border-gray-200 dark:border-white/[0.06]"
+          style={{
+            backdropFilter: 'blur(20px)',
+            boxShadow: isDark
+              ? '0 20px 60px -15px rgba(0,0,0,0.8), 0 0 40px -10px rgba(var(--neon-rgb), 0.05)'
+              : '0 20px 60px -15px rgba(0,0,0,0.15), 0 0 40px -10px rgba(var(--neon-rgb), 0.03)',
+          }}
+        >
+          {models.map((model, index) => (
             <button
               key={model.id}
-              onClick={() => {
-                onSelect(model.id);
-                setIsOpen(false);
+              onClick={() => { onSelect(model.id); setIsOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-200 group relative"
+              style={{
+                background: currentModel === model.id ? (isDark ? 'rgba(var(--neon-rgb), 0.06)' : 'rgba(var(--neon-rgb), 0.06)') : 'transparent',
               }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors group relative"
+              onMouseEnter={(e) => {
+                if (currentModel !== model.id) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = currentModel === model.id ? 'rgba(var(--neon-rgb), 0.06)' : 'transparent';
+              }}
             >
-              <div 
-                className={`flex-shrink-0 ${currentModel === model.id ? '' : 'text-gray-500'} transition-colors`} 
-                style={{ color: currentModel === model.id ? 'var(--neon-color)' : undefined }}
-                onMouseEnter={(e) => {
-                  if (currentModel !== model.id) {
-                    e.currentTarget.style.color = 'rgba(var(--neon-rgb), 0.5)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentModel !== model.id) {
-                    e.currentTarget.style.color = '';
-                  }
+              {/* Icon */}
+              <div
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-200"
+                style={{
+                  background: currentModel === model.id ? 'rgba(var(--neon-rgb), 0.1)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'),
+                  color: currentModel === model.id ? 'var(--neon-color)' : (isDark ? '#666' : '#999'),
                 }}
               >
-                {getModelIcon(model)}
+                <Sparkles size={16} />
               </div>
-              <div className="relative z-10 flex-1">
-                <div className={`font-medium ${currentModel === model.id ? 'text-white' : 'text-gray-300'} group-hover:text-white transition-colors flex items-center gap-2`}>
-                    {model.name}
-                    {model.systemInstruction && (
-                      <MessageSquare size={12} className="text-neon-blue" />
-                    )}
+
+              {/* Info */}
+              <div className="relative z-10 flex-1 min-w-0">
+                <div className={`font-medium text-sm ${currentModel === model.id ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'} group-hover:text-gray-900 dark:group-hover:text-white transition-colors flex items-center gap-2`}>
+                  {model.name}
+                  {model.isCustom && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.2)' }}>
+                      CUSTOM
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{model.description}</div>
+                <div className="text-xs text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors truncate">{model.description}</div>
               </div>
+
+              {/* Active indicator */}
               {currentModel === model.id && (
-                 <div className="ml-auto w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 10px var(--neon-color)' }}></div>
+                <div className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 8px var(--neon-color)' }} />
               )}
-              
-              {/* Hover glow effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: `linear-gradient(to right, rgba(var(--neon-rgb), 0.1), transparent)` }} />
+
+              {/* Hover gradient */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                style={{ background: isDark ? 'linear-gradient(to right, rgba(var(--neon-rgb), 0.04), transparent)' : 'linear-gradient(to right, rgba(var(--neon-rgb), 0.03), transparent)' }}
+              />
             </button>
           ))}
         </div>

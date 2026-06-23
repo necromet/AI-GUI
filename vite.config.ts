@@ -1,64 +1,36 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import electron from 'vite-plugin-electron';
-import renderer from 'vite-plugin-electron-renderer';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
-    const isDev = mode === 'development';
     
     return {
       base: './',
       server: {
         port: 5173,
         host: 'localhost',
+        proxy: {
+          '/mimo-api': {
+            target: 'https://token-plan-sgp.xiaomimimo.com/v1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/mimo-api/, ''),
+          },
+          '/mimo-direct-api': {
+            target: 'https://api.xiaomimimo.com/v1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/mimo-direct-api/, ''),
+          }
+        }
       },
       plugins: [
         react(),
-        electron([
-          {
-            entry: 'electron/main.ts',
-            onstart(options) {
-              options.startup();
-            },
-            vite: {
-              build: {
-                outDir: 'dist-electron',
-                rollupOptions: {
-                  external: ['electron', 'better-sqlite3'],
-                },
-              },
-            },
-          },
-          {
-            entry: 'electron/preload.ts',
-            onstart(options) {
-              options.reload();
-            },
-            vite: {
-              build: {
-                outDir: 'dist-electron',
-                rollupOptions: {
-                  external: ['electron'],
-                  output: {
-                    format: 'cjs',
-                    entryFileNames: '[name].js',
-                  },
-                },
-                lib: {
-                  entry: 'electron/preload.ts',
-                  formats: ['cjs'],
-                },
-              },
-            },
-          },
-        ]),
-        renderer(),
       ],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.MIMO_API_KEY': JSON.stringify(env.MIMO_API_KEY),
+        'process.env.MIMO_BASE_URL': JSON.stringify(env.MIMO_BASE_URL),
+        'process.env.MIMO_DIRECT_API_KEY': JSON.stringify(env.MIMO_DIRECT_API_KEY),
+        'process.env.MIMO_DIRECT_BASE_URL': JSON.stringify(env.MIMO_DIRECT_BASE_URL)
       },
       resolve: {
         alias: {

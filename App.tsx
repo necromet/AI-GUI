@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PanelLeft, SquarePen, ArrowUp, Paperclip } from 'lucide-react';
+import { PanelLeft, SquarePen, ArrowUp, Square } from 'lucide-react';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
-import { Role, Message, GeminiModel, ModelConfig, ChatSession } from './types';
-import { generateResponseStream, generateChatTitle } from './services/geminiService';
+import { Role, Message, ModelConfig, ChatSession, getModelType } from './types';
+import { generateResponseStream, generateChatTitle } from './services/mimoService';
 import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
@@ -10,92 +10,61 @@ import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import DatabaseViewer from './components/DatabaseViewer';
 import TokenUsageStats from './components/TokenUsageStats';
+import PasswordScreen from './components/PasswordScreen';
 import Notification, { NotificationType } from './components/Notification';
-import ImageGenerationOptions, { ImageGenOptions } from './components/ImageGenerationOptions';
-import GroundingOptions, { GroundingOptions as GroundingOpts } from './components/GroundingOptions';
+import TTSPanel from './components/TTSPanel';
+import VoiceDesignPanel from './components/VoiceDesignPanel';
+import VoiceClonePanel from './components/VoiceClonePanel';
+import ASRPanel from './components/ASRPanel';
 
-// Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
-// Helper to convert File to base64
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        // Remove the data URL prefix (e.g., "data:image/png;base64,")
-        const base64 = reader.result.split(',')[1];
-        resolve(base64);
-      } else {
-        reject(new Error('Failed to convert file to base64'));
-      }
-    };
-    reader.onerror = error => reject(error);
-  });
-};
+export const FONT_SIZE_MAP: Record<string, number> = { xs: 14, sm: 15, base: 16, lg: 18, xl: 20 };
 
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_session');
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   
-  // State for Settings and Models
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDatabaseViewerOpen, setIsDatabaseViewerOpen] = useState(false);
   const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [fontSize, setFontSize] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_fontSize') || 'sm';
+  });
   const [neonColor, setNeonColor] = useState<string>(() => {
     return localStorage.getItem('neonColor') || 'red';
   });
+  const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
+    const stored = localStorage.getItem('maxOutputTokens');
+    if (stored) {
+      const val = parseInt(stored, 10);
+      return isNaN(val) || val <= 0 ? undefined : val;
+    }
+    return undefined;
+  });
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
-  const [previousModelId, setPreviousModelId] = useState<string | null>(null);
   
-  // Database-backed conversation state
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
-
-  // Notification state
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
-  const [attachedImages, setAttachedImages] = useState<Array<{ id: string; file: File; preview: string }>>([]);
-  const [imageGenOptions, setImageGenOptions] = useState<ImageGenOptions>({
-    enabled: false,
-    aspectRatio: '1:1',
-    imageSize: '1K',
-  });
-  const [groundingOptions, setGroundingOptions] = useState<GroundingOpts>({
-    enabled: false,
-  });
-
-  const handleImageGenOptionsChange = (options: ImageGenOptions) => {
-    setImageGenOptions(options);
-    
-    if (options.enabled) {
-      // Automatically switch to Nano Banana Pro when image generation is enabled
-      if (currentModelId !== GeminiModel.NanoBananaPro) {
-        setPreviousModelId(currentModelId);
-        setCurrentModelId(GeminiModel.NanoBananaPro);
-      }
-    } else {
-      // Restore previous model when image generation is disabled
-      if (previousModelId && currentModelId === GeminiModel.NanoBananaPro) {
-        setCurrentModelId(previousModelId);
-        setPreviousModelId(null);
-      }
-    }
-  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Initialize database and load conversations and models
+  const modelType = getModelType(currentModelId);
+
   useEffect(() => {
     const initDb = async () => {
       try {
-        await db.getDatabase(); // Initialize database
+        await db.getDatabase();
         await loadConversations();
         await loadModels();
       } catch (error) {
@@ -105,7 +74,6 @@ const App: React.FC = () => {
     initDb();
   }, []);
 
-  // Theme Effect
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'dark') {
@@ -115,7 +83,6 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Neon Color Effect
   useEffect(() => {
     const root = document.documentElement;
     const colorMap: Record<string, { rgb: string; tailwind: string }> = {
@@ -138,6 +105,18 @@ const App: React.FC = () => {
     localStorage.setItem('neonColor', neonColor);
   }, [neonColor]);
 
+  useEffect(() => {
+    localStorage.setItem('edward:labs_fontSize', fontSize);
+  }, [fontSize]);
+
+  useEffect(() => {
+    if (maxOutputTokens) {
+      localStorage.setItem('maxOutputTokens', maxOutputTokens.toString());
+    } else {
+      localStorage.removeItem('maxOutputTokens');
+    }
+  }, [maxOutputTokens]);
+
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -157,21 +136,11 @@ const App: React.FC = () => {
     handleInputResize();
   }, [input]);
 
-  // Cleanup image previews on unmount
-  useEffect(() => {
-    return () => {
-      attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
-    };
-  }, [attachedImages]);
-
   const handleNewChat = () => {
     setMessages([]);
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
-    // Clear attachments
-    attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
-    setAttachedImages([]);
   };
 
   const loadConversations = async () => {
@@ -203,26 +172,12 @@ const App: React.FC = () => {
         apiKey: m.api_key || undefined,
         provider: m.provider || undefined
       }));
-    
-    // Merge default models with custom models from database
     setModels([...DEFAULT_MODELS, ...customModels]);
   };
 
   const loadConversation = async (conversationId: number) => {
     const dbMessages = await db.getMessagesByConversation(conversationId);
     const loadedMessages: Message[] = dbMessages.map(msg => {
-      let images: Array<{ id: string; data: string; mimeType: string }> | undefined;
-      
-      // Parse generated_images JSON if it exists
-      if (msg.generated_images) {
-        try {
-          images = JSON.parse(msg.generated_images);
-        } catch (error) {
-          console.error('Error parsing generated_images:', error);
-        }
-      }
-      
-      // Build usage metadata from token_count if available
       let usageMetadata = undefined;
       if (msg.token_count && msg.role === 'assistant') {
         usageMetadata = {
@@ -231,7 +186,6 @@ const App: React.FC = () => {
           totalTokens: msg.token_count
         };
       }
-      
       return {
         id: msg.message_id!.toString(),
         role: msg.role === 'assistant' ? Role.Assistant : Role.User,
@@ -239,7 +193,6 @@ const App: React.FC = () => {
         timestamp: new Date(msg.timestamp).getTime(),
         messageOrder: msg.message_order,
         dbMessageId: msg.message_id,
-        images,
         usageMetadata
       };
     });
@@ -251,21 +204,17 @@ const App: React.FC = () => {
     conversationId: number, 
     role: 'user' | 'assistant', 
     content: string, 
-    generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null,
     tokenCount?: number | null,
     promptTokens?: number | null,
     candidatesTokens?: number | null
   ): Promise<number> => {
     const messageOrder = await db.getNextMessageOrder(conversationId);
-    return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, generatedImages, promptTokens, candidatesTokens);
+    return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, null, promptTokens, candidatesTokens);
   };
 
   const ensureConversation = async (): Promise<number> => {
-    if (currentConversationId) {
-      return currentConversationId;
-    }
+    if (currentConversationId) return currentConversationId;
     
-    // Get or create model in database
     let dbModel = await db.getModelByName(currentModelId);
     if (!dbModel) {
       const selectedModel = models.find(m => m.id === currentModelId);
@@ -277,7 +226,6 @@ const App: React.FC = () => {
       dbModel = await db.getModelById(modelId);
     }
     
-    // Create new conversation
     const newConversationId = await db.createConversation(dbModel!.model_id!, null);
     setCurrentConversationId(newConversationId);
     await loadConversations();
@@ -286,7 +234,6 @@ const App: React.FC = () => {
 
   const handleAddModel = async (newModel: ModelConfig) => {
     try {
-      // Save custom model to database
       const dbModelId = await db.addModel(
         newModel.id,
         newModel.description,
@@ -294,94 +241,41 @@ const App: React.FC = () => {
         newModel.apiKey || null,
         newModel.provider || null,
         newModel.systemInstruction || null,
-        true // isCustom
+        true
       );
-      
-      // Add dbModelId to the model config
-      const modelWithDbId = { ...newModel, dbModelId };
-      setModels([...models, modelWithDbId]);
-      
-      // Show success notification
-      setNotification({
-        message: `Model "${newModel.name}" added successfully!`,
-        type: 'success'
-      });
+      setModels([...models, { ...newModel, dbModelId }]);
+      setNotification({ message: `Model "${newModel.name}" added!`, type: 'success' });
     } catch (error) {
       console.error('Error adding model:', error);
-      // Show error notification
-      setNotification({
-        message: `Failed to add model "${newModel.name}". Please try again.`,
-        type: 'error'
-      });
+      setNotification({ message: `Failed to add model "${newModel.name}".`, type: 'error' });
     }
   };
 
   const handleDeleteModel = async (id: string) => {
     const model = models.find(m => m.id === id);
-    
-    // Deactivate in database if it has a dbModelId
-    if (model?.dbModelId) {
-      await db.deactivateModel(model.dbModelId);
-    }
-    
+    if (model?.dbModelId) await db.deactivateModel(model.dbModelId);
     setModels(models.filter(m => m.id !== id));
-    if (currentModelId === id) {
-      setCurrentModelId(models[0].id);
-    }
+    if (currentModelId === id) setCurrentModelId(models[0].id);
   };
 
   const handleSendMessage = async () => {
-    if ((!input.trim() && attachedImages.length === 0) || isStreaming) return;
+    if (!input.trim() || isStreaming) return;
 
     const userText = input.trim();
-    const currentImages = [...attachedImages]; // Store current images
-    const currentImageGenOptions = { ...imageGenOptions }; // Store current image gen options
     setInput(''); 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    
-    // Clear attachments immediately
-    attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
-    setAttachedImages([]);
-    
-    // Reset image generation options after sending
-    if (imageGenOptions.enabled) {
-      setImageGenOptions({
-        enabled: false,
-        aspectRatio: '1:1',
-        imageSize: '1K',
-      });
-    }
 
-    // Ensure we have a conversation in the database
     const conversationId = await ensureConversation();
-
-    // Convert images to base64 for storage in message
-    let messageImages: Array<{ id: string; data: string; mimeType: string }> = [];
-    if (currentImages.length > 0) {
-      messageImages = await Promise.all(
-        currentImages.map(async (img) => {
-          const base64 = await fileToBase64(img.file);
-          return {
-            id: img.id,
-            data: base64,
-            mimeType: img.file.type
-          };
-        })
-      );
-    }
 
     const userMessage: Message = {
       id: generateId(),
       role: Role.User,
-      content: userText || '[Image attachment]',
+      content: userText,
       timestamp: Date.now(),
-      images: messageImages.length > 0 ? messageImages : undefined,
     };
 
-    // Save user message to database
-    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText || '[Image attachment]');
+    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText);
     userMessage.dbMessageId = userDbMessageId;
-
     setMessages(prev => [...prev, userMessage]);
 
     const aiMessageId = generateId();
@@ -389,178 +283,54 @@ const App: React.FC = () => {
       id: aiMessageId,
       role: Role.Assistant,
       content: '',
-      isThinking: !currentImageGenOptions.enabled,
-      isGeneratingImage: currentImageGenOptions.enabled,
-      imageGenerationProgress: currentImageGenOptions.enabled ? 0 : undefined,
+      isThinking: true,
       timestamp: Date.now() + 1,
     };
     setMessages(prev => [...prev, aiMessagePlaceholder]);
     setIsStreaming(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
         const history = messages.map(m => ({ role: m.role, content: m.content }));
-        history.push({ role: Role.User, content: userText || '[Image attachment]' });
+        history.push({ role: Role.User, content: userText });
 
         const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
-        // Use the already converted base64 images from the message
-        let imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
-        if (userMessage.images && userMessage.images.length > 0) {
-          imageParts = userMessage.images.map(img => ({
-            inlineData: {
-              data: img.data,
-              mimeType: img.mimeType
-            }
-          }));
-        }
-
         const streamResult = await generateResponseStream(
-          selectedModelConfig.id, 
-          userText, 
+          selectedModelConfig.apiModelId || selectedModelConfig.id,
+          userText,
           history,
           selectedModelConfig.systemInstruction,
-          imageParts,
-          currentImageGenOptions.enabled ? {
-            aspectRatio: currentImageGenOptions.aspectRatio,
-            imageSize: currentImageGenOptions.imageSize,
-          } : undefined,
-          groundingOptions.enabled ? {
-            enabled: true,
-          } : undefined
+          selectedModelConfig.provider,
+          3,
+          selectedModelConfig.maxTokens || maxOutputTokens,
+          abortController.signal,
         );
-
-        console.log('Generating with options:', {
-          model: selectedModelConfig.id,
-          imageGenEnabled: currentImageGenOptions.enabled,
-          aspectRatio: currentImageGenOptions.aspectRatio,
-          imageSize: currentImageGenOptions.imageSize,
-          groundingEnabled: groundingOptions.enabled
-        });
 
         let fullText = '';
         let fullThinkingText = '';
-        let aiDbMessageId: number | null = null;
-        let generatedImages: Array<{ id: string; data: string; mimeType: string }> = [];
-        let imageGenProgress = 0;
-        let savedImagePaths: string[] = [];
-        let groundingMetadata: any = null;
         let usageMetadata: any = null;
         
         for await (const chunk of streamResult) {
             const chunkText = chunk.text;
+            const thinkingText = (chunk as any).thinkingText;
             
-            // Try to extract thinking content from various possible locations
-            const thinkingText = (chunk as any).thinkingContent || 
-                                (chunk as any).thought || 
-                                ((chunk as any).candidates?.[0]?.content?.parts?.find((p: any) => p.thought)?.thought);
-            
-            // Check for image generation progress
-            const imageGenStatus = (chunk as any).imageGenerationStatus || 
-                                  ((chunk as any).candidates?.[0]?.imageGenerationStatus);
-            
-            // Check for generated images in the response
-            const imageParts = (chunk as any).images || 
-                              ((chunk as any).candidates?.[0]?.content?.parts?.filter((p: any) => p.inlineData));
-            
-            // Extract grounding metadata if present
-            const chunkGroundingMetadata = (chunk as any).groundingMetadata ||
-                                          ((chunk as any).candidates?.[0]?.groundingMetadata);
-            
-            if (chunkGroundingMetadata) {
-              groundingMetadata = chunkGroundingMetadata;
-              console.log('Grounding metadata received:', groundingMetadata);
-            }
-            
-            // Extract usage metadata if present
             const chunkUsageMetadata = (chunk as any).usageMetadata;
-            
             if (chunkUsageMetadata) {
               usageMetadata = {
                 promptTokens: chunkUsageMetadata.promptTokenCount || 0,
                 candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
                 totalTokens: chunkUsageMetadata.totalTokenCount || 0
               };
-              console.log('Usage metadata received:', usageMetadata);
-            }
-            
-            if (imageGenStatus) {
-              const progress = imageGenStatus.progress || 0;
-              imageGenProgress = Math.min(100, progress);
-              
-              setMessages(prev => prev.map(msg => {
-                  if (msg.id === aiMessageId) {
-                      return {
-                          ...msg,
-                          isGeneratingImage: true,
-                          imageGenerationProgress: imageGenProgress,
-                          isThinking: false
-                      };
-                  }
-                  return msg;
-              }));
-            }
-            
-            if (imageParts && imageParts.length > 0) {
-              console.log('Received image parts from API:', imageParts);
-              // Extract generated images
-              imageParts.forEach((part: any, index: number) => {
-                if (part.inlineData) {
-                  const imageData = {
-                    id: `generated-${Date.now()}-${index}`,
-                    data: part.inlineData.data,
-                    mimeType: part.inlineData.mimeType || 'image/png'
-                  };
-                  console.log(`Generated image ${index}:`, {
-                    id: imageData.id,
-                    mimeType: imageData.mimeType,
-                    dataLength: imageData.data.length
-                  });
-                  generatedImages.push(imageData);
-                }
-              });
-              
-              // Save images to disk
-              for (const image of generatedImages) {
-                try {
-                  if (window.electron?.saveGeneratedImage) {
-                    const result = await window.electron.saveGeneratedImage(image.data, image.mimeType);
-                    if (result.success) {
-                      console.log(`Image saved: ${result.filename} at ${result.path}`);
-                      savedImagePaths.push(result.path || result.filename);
-                    } else {
-                      console.error('Failed to save image:', result.error);
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error saving image:', error);
-                }
-              }
-              
-              setMessages(prev => prev.map(msg => {
-                  if (msg.id === aiMessageId) {
-                      return {
-                          ...msg,
-                          images: generatedImages,
-                          isGeneratingImage: false,
-                          imageGenerationProgress: 100
-                      };
-                  }
-                  return msg;
-              }));
             }
             
             if (thinkingText) {
               fullThinkingText += thinkingText;
-              
               setMessages(prev => prev.map(msg => {
                   if (msg.id === aiMessageId) {
-                      return {
-                          ...msg,
-                          thinkingContent: fullThinkingText,
-                          isThinking: !imageGenProgress && !generatedImages.length,
-                          isGeneratingImage: imageGenProgress > 0 && generatedImages.length === 0,
-                          imageGenerationProgress: imageGenProgress
-                      };
+                      return { ...msg, thinkingContent: fullThinkingText, isThinking: true };
                   }
                   return msg;
               }));
@@ -568,7 +338,6 @@ const App: React.FC = () => {
             
             if (chunkText) {
               fullText += chunkText;
-              
               setMessages(prev => prev.map(msg => {
                   if (msg.id === aiMessageId) {
                       return {
@@ -576,9 +345,6 @@ const App: React.FC = () => {
                           content: fullText,
                           thinkingContent: fullThinkingText,
                           isThinking: false,
-                          isGeneratingImage: false,
-                          images: generatedImages.length > 0 ? generatedImages : msg.images,
-                          groundingMetadata: groundingMetadata,
                           usageMetadata: usageMetadata
                       };
                   }
@@ -587,39 +353,20 @@ const App: React.FC = () => {
             }
         }
 
-        // Save AI response to database
-        console.log('Saving message to DB:', {
-          fullText,
-          generatedImagesCount: generatedImages.length,
-          generatedImages: generatedImages,
-          savedImagePaths: savedImagePaths,
-          groundingMetadata: groundingMetadata,
-          usageMetadata: usageMetadata
-        });
-        
-        if (fullText || generatedImages.length > 0) {
-          const contentToSave = fullText || (savedImagePaths.length > 0 ? savedImagePaths.join(', ') : '[Generated Image]');
-          aiDbMessageId = await saveMessageToDb(
-            conversationId, 
-            'assistant', 
-            contentToSave, 
-            generatedImages.length > 0 ? generatedImages : null,
+        if (fullText) {
+          await saveMessageToDb(
+            conversationId, 'assistant', fullText,
             usageMetadata?.totalTokens || null,
             usageMetadata?.promptTokens || null,
             usageMetadata?.candidatesTokens || null
           );
-          console.log('Message saved with ID:', aiDbMessageId);
           
-          // Update conversation title if it's the first exchange
           if (messages.length === 0) {
             try {
-              // Generate a descriptive title using Gemini 2.5 Flash Lite
-              const title = await generateChatTitle(userText, fullText);
+              const title = await generateChatTitle(userText, fullText, selectedModelConfig.provider);
               await db.updateConversationTitle(conversationId, title);
               await loadConversations();
             } catch (error) {
-              console.error('Error generating title:', error);
-              // Fallback to simple title
               const title = userText.substring(0, 50) + (userText.length > 50 ? '...' : '');
               await db.updateConversationTitle(conversationId, title);
               await loadConversations();
@@ -628,18 +375,29 @@ const App: React.FC = () => {
         }
 
     } catch (error) {
-        console.error("Generation error:", error);
-        setMessages(prev => prev.map(msg => {
-            if (msg.id === aiMessageId) {
-                return {
-                    ...msg,
-                    content: "**Error:** Failed to generate response. Please try again.",
-                    isThinking: false
-                };
-            }
-            return msg;
-        }));
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          setMessages(prev => prev.map(msg => {
+              if (msg.id === aiMessageId) {
+                  return { ...msg, isThinking: false };
+              }
+              return msg;
+          }));
+        } else {
+          console.error("Generation error:", error);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          const isQuota = errorMsg.toLowerCase().includes('quota');
+          const displayMsg = isQuota
+            ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+            : `**Error:** ${errorMsg}`;
+          setMessages(prev => prev.map(msg => {
+              if (msg.id === aiMessageId) {
+                  return { ...msg, content: displayMsg, isThinking: false };
+              }
+              return msg;
+          }));
+        }
     } finally {
+        abortControllerRef.current = null;
         setIsStreaming(false);
     }
   };
@@ -651,80 +409,25 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newImages: Array<{ id: string; file: File; preview: string }> = [];
-    
-    Array.from(files).forEach(file => {
-      // Check if it's an image
-      if (!file.type.startsWith('image/')) {
-        setNotification({
-          message: `"${file.name}" is not an image file. Only images are supported.`,
-          type: 'error'
-        });
-        return;
-      }
-
-      // Check file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setNotification({
-          message: `"${file.name}" is too large. Maximum size is 10MB.`,
-          type: 'error'
-        });
-        return;
-      }
-
-      const preview = URL.createObjectURL(file);
-      newImages.push({
-        id: generateId(),
-        file,
-        preview
-      });
-    });
-
-    setAttachedImages(prev => [...prev, ...newImages]);
-    
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
-  const handleRemoveImage = (id: string) => {
-    setAttachedImages(prev => {
-      const image = prev.find(img => img.id === id);
-      if (image) {
-        URL.revokeObjectURL(image.preview);
-      }
-      return prev.filter(img => img.id !== id);
-    });
-  };
-
-  const handleAttachmentClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleRegenerate = async (messageId: string) => {
-    // Find the message to regenerate
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1 || isStreaming) return;
 
-    // Get the previous user message
     let userMessageIndex = messageIndex - 1;
     while (userMessageIndex >= 0 && messages[userMessageIndex].role !== Role.User) {
       userMessageIndex--;
     }
-    
     if (userMessageIndex < 0) return;
 
     const userText = messages[userMessageIndex].content;
-
-    // Remove the old AI response
     setMessages(prev => prev.filter(m => m.id !== messageId));
 
-    // Create new thinking placeholder
     const aiMessageId = generateId();
     const aiMessagePlaceholder: Message = {
       id: aiMessageId,
@@ -736,6 +439,9 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, aiMessagePlaceholder]);
     setIsStreaming(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const conversationId = await ensureConversation();
       const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
@@ -744,15 +450,14 @@ const App: React.FC = () => {
       const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
       const streamResult = await generateResponseStream(
-        selectedModelConfig.id,
+        selectedModelConfig.apiModelId || selectedModelConfig.id,
         userText,
         history,
         selectedModelConfig.systemInstruction,
-        undefined,
-        imageGenOptions.enabled ? {
-          aspectRatio: imageGenOptions.aspectRatio,
-          imageSize: imageGenOptions.imageSize,
-        } : undefined
+        selectedModelConfig.provider,
+        3,
+        selectedModelConfig.maxTokens || maxOutputTokens,
+        abortController.signal,
       );
 
       let fullText = '';
@@ -760,21 +465,13 @@ const App: React.FC = () => {
 
       for await (const chunk of streamResult) {
         const chunkText = chunk.text;
-        // Try to extract thinking content from various possible locations
-        const thinkingText = (chunk as any).thinkingContent || 
-                             (chunk as any).thought || 
-                             ((chunk as any).candidates?.[0]?.content?.parts?.find((p: any) => p.thought)?.thought);
+        const thinkingText = (chunk as any).thinkingText;
 
         if (thinkingText) {
           fullThinkingText += thinkingText;
-          
           setMessages(prev => prev.map(msg => {
             if (msg.id === aiMessageId) {
-              return {
-                ...msg,
-                thinkingContent: fullThinkingText,
-                isThinking: true
-              };
+              return { ...msg, thinkingContent: fullThinkingText, isThinking: true };
             }
             return msg;
           }));
@@ -782,60 +479,63 @@ const App: React.FC = () => {
         
         if (chunkText) {
           fullText += chunkText;
-
           setMessages(prev => prev.map(msg => {
             if (msg.id === aiMessageId) {
-              return {
-                ...msg,
-                content: fullText,
-                thinkingContent: fullThinkingText,
-                isThinking: false
-              };
+              return { ...msg, content: fullText, thinkingContent: fullThinkingText, isThinking: false };
             }
             return msg;
           }));
         }
       }
 
-      // Save regenerated response to database
       if (fullText) {
         await saveMessageToDb(conversationId, 'assistant', fullText);
       }
 
     } catch (error) {
-      console.error("Regeneration error:", error);
-      setMessages(prev => prev.map(msg => {
-        if (msg.id === aiMessageId) {
-          return {
-            ...msg,
-            content: "**Error:** Failed to regenerate response. Please try again.",
-            isThinking: false
-          };
-        }
-        return msg;
-      }));
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === aiMessageId) {
+            return { ...msg, isThinking: false };
+          }
+          return msg;
+        }));
+      } else {
+        console.error("Regeneration error:", error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        const isQuota = errorMsg.toLowerCase().includes('quota');
+        const displayMsg = isQuota
+          ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+          : `**Error:** ${errorMsg}`;
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === aiMessageId) {
+            return { ...msg, content: displayMsg, isThinking: false };
+          }
+          return msg;
+        }));
+      }
     } finally {
-      setIsStreaming(false);
+        abortControllerRef.current = null;
+        setIsStreaming(false);
     }
   };
 
   const handleFeedback = (messageId: string, feedback: 'good' | 'bad') => {
-    // Log feedback for now - can be extended to save to database
     console.log(`Feedback for message ${messageId}: ${feedback}`);
-    
-    // Show notification
     setNotification({
       message: `Thank you for your ${feedback === 'good' ? 'positive' : ''} feedback!`,
       type: 'success'
     });
   };
 
+  if (!isAuthenticated) {
+    return <PasswordScreen onSuccess={() => setIsAuthenticated(true)} />;
+  }
+
   return (
-    <div className="flex h-screen bg-main dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300">
-      {/* Mobile Overlay for Sidebar */}
+    <div className="flex h-screen bg-white dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300" style={{ '--app-font-size': `${FONT_SIZE_MAP[fontSize] || 15}px` } as React.CSSProperties}>
       <div className={`md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsSidebarOpen(false)} />
 
-      {/* Sidebar */}
       <Sidebar 
         isOpen={isSidebarOpen} 
         onToggle={() => setIsSidebarOpen(false)}
@@ -848,70 +548,59 @@ const App: React.FC = () => {
         onSelectConversation={loadConversation}
         onDeleteConversation={async (id) => {
           await db.deleteConversation(id);
-          if (currentConversationId === id) {
-            handleNewChat();
-          }
+          if (currentConversationId === id) handleNewChat();
           await loadConversations();
         }}
+        theme={theme}
+        onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       />
 
-      <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
-        {/* Top Bar */}
-        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10 bg-white/80 dark:bg-main/80 backdrop-blur transition-colors">
+       <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
+        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10 bg-white/80 dark:bg-main/80 backdrop-blur-md transition-colors">
            {!isSidebarOpen && (
-              <button 
-                onClick={() => setIsSidebarOpen(true)} 
-                className="p-2 mr-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white rounded-lg transition-colors"
-              >
-                <PanelLeft size={24} />
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] hover:text-gray-900 dark:hover:text-white rounded-xl transition-all duration-200">
+                <PanelLeft size={22} />
               </button>
            )}
            <div className="flex items-center gap-2 md:hidden">
-             <span className="font-semibold text-gray-800 dark:text-gray-200">Work Ship</span>
+             <span className="font-semibold text-gray-800 dark:text-gray-200">edward:labs</span>
            </div>
            <div className="hidden md:flex items-center gap-3">
-             <ModelSelect 
-               currentModel={currentModelId} 
-               models={models}
-               onSelect={setCurrentModelId} 
-             />
+             <ModelSelect currentModel={currentModelId} models={models} onSelect={setCurrentModelId} theme={theme} />
            </div>
            <div className="ml-auto flex items-center gap-2">
-               <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400">
-                  <SquarePen size={20} />
+               <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors">
+                  <SquarePen size={18} />
                </button>
            </div>
         </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
+        <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
            {messages.length === 0 ? (
-             <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
-                <div className="scale-[2]" style={{ color: 'var(--neon-color)'}}>{CHATGPT_LOGO}</div>
-                <h2 className="text-2xl md:text-3xl font-semibold mb-8 mt-10 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
-                
-                {/* Suggestion Chips */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mb-12">
-                   {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                     <button 
-                        key={i}
-                        onClick={() => { setInput(suggestion); if(textareaRef.current) textareaRef.current.focus(); }}
-                        className="group border border-gray-200 dark:border-white/10 rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/5 dark:hover:border-neon-purple/40 hover:shadow-md dark:hover:shadow-[0_0_15px_-5px_rgba(188,19,254,0.3)] transition-all duration-300 bg-white dark:bg-transparent"
-                     >
-                       <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors">{suggestion}</span>
-                     </button>
-                   ))}
+             <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                <div className="relative mb-10">
+                  <div className="scale-[2]" style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 12px rgba(var(--neon-rgb), 0.4))' }}>{CHATGPT_LOGO}</div>
                 </div>
+                <h2 className="text-2xl md:text-3xl font-semibold mb-8 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-gray-200 dark:to-gray-400 bg-clip-text text-transparent">How can I help you today?</h2>
+
+                {modelType === 'chat' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+                     {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
+                       <button
+                          key={i}
+                          onClick={() => { setInput(suggestion); if(textareaRef.current) textareaRef.current.focus(); }}
+                           className="group border border-gray-300 dark:border-white/[0.06] rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-300 bg-transparent"
+                        >
+                           <span className="text-sm text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{suggestion}</span>
+                        </button>
+                     ))}
+                  </div>
+                )}
              </div>
            ) : (
              <div className="pb-10 mb-52">
                 {messages.map((msg) => (
-                  <ChatMessage 
-                    key={msg.id} 
-                    message={msg}
-                    onRegenerate={handleRegenerate}
-                    onFeedback={handleFeedback}
-                  />
+                  <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} />
                 ))}
                 <div ref={messagesEndRef} />
              </div>
@@ -921,97 +610,105 @@ const App: React.FC = () => {
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
            <div className="max-w-4xl mx-auto w-full">
-              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 shadow-lg overflow-hidden transition-all duration-300" style={{ borderColor: theme === 'dark' && input ? `rgba(var(--neon-rgb), 0.5)` : undefined, boxShadow: theme === 'dark' && input ? `0 0 20px -5px rgba(var(--neon-rgb), 0.2)` : undefined }}>
-                 {/* Image Previews */}
-                 {attachedImages.length > 0 && (
-                   <div className="flex flex-wrap gap-2 px-4 pt-3">
-                     {attachedImages.map(image => (
-                       <div key={image.id} className="relative group">
-                         <img 
-                           src={image.preview} 
-                           alt={image.file.name}
-                           className="h-20 w-20 object-cover rounded-lg border border-gray-300 dark:border-white/20"
-                         />
-                         <button
-                           onClick={() => handleRemoveImage(image.id)}
-                           className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                           title="Remove image"
-                         >
-                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                           </svg>
-                         </button>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-                 
-              
-                  {/* Image Generation Options */}
-                  <ImageGenerationOptions
-                    options={imageGenOptions}
-                    onOptionsChange={handleImageGenOptionsChange}
-                    disabled={isStreaming}
-                  />
-                  
-                  {/* Grounding Options */}
-                  <GroundingOptions
-                    options={groundingOptions}
-                    onOptionsChange={setGroundingOptions}
-                    disabled={isStreaming}
-                  />
-                 
-                 {/* Textarea Container */}
-                 <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Message Ember..."
-                    rows={1}
-                    className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden"
-                 />
-                 
-                 {/* Actions Row */}
-                 <div className="flex items-center justify-between px-2 pb-2">
-                    <div className="flex items-center gap-2">
-                       <input
-                         ref={fileInputRef}
-                         type="file"
-                         accept="image/*"
-                         multiple
-                         onChange={handleFileSelect}
-                         className="hidden"
+              <div
+                className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
+                style={{
+                  background: theme === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(245, 245, 245, 0.9)',
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${input ? 'rgba(var(--neon-rgb), 0.3)' : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.12)'}`,
+                  boxShadow: input ? `0 0 30px -8px rgba(var(--neon-rgb), 0.15)` : theme === 'dark' ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.06)',
+                }}
+              >
+                 {modelType === 'chat' ? (
+                   <>
+                     <textarea
+                       ref={textareaRef}
+                       value={input}
+                       onChange={(e) => setInput(e.target.value)}
+                       onKeyDown={handleKeyDown}
+                         placeholder="Message edward:labs..."
+                         rows={1}
+                         className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
                        />
-                       <button 
-                         onClick={handleAttachmentClick}
-                         disabled={isStreaming}
-                         className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-                         style={{ color: theme === 'dark' ? undefined : undefined }} 
-                         onMouseEnter={(e) => theme === 'dark' && !isStreaming && (e.currentTarget.style.color = 'var(--neon-color)')} 
-                         onMouseLeave={(e) => theme === 'dark' && (e.currentTarget.style.color = '')}
-                       >
-                          <Paperclip size={20} strokeWidth={1.5} />
-                       </button>
-                    </div>
-                    <button 
-                      onClick={handleSendMessage}
-                      disabled={!input.trim() || isStreaming}
-                      className={`p-2 rounded-full transition-all duration-200 ${input.trim() ? 'bg-black dark:bg-white text-white dark:text-black shadow-[0_0_10px_rgba(0,0,0,0.2)] dark:shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-[#1a1a1a] cursor-not-allowed'}`}
-                    >
-                      <ArrowUp size={20} strokeWidth={2.5} />
-                    </button>
-                 </div>
+                        <div className="flex items-center justify-end px-2 pb-2">
+                          {isStreaming ? (
+                            <button
+                              onClick={handleStopGeneration}
+                              className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
+                              title="Stop generating"
+                            >
+                              <Square size={16} strokeWidth={2.5} fill="currentColor" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleSendMessage}
+                              disabled={!input.trim()}
+                              className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                              style={{
+                                background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
+                                boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
+                              }}
+                            >
+                              <ArrowUp size={18} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : modelType === 'tts' ? (
+                     <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'tts-voicedesign' ? (
+                     <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'tts-voiceclone' ? (
+                     <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'asr' ? (
+                     <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : (
+                     <>
+                       <textarea
+                         ref={textareaRef}
+                         value={input}
+                         onChange={(e) => setInput(e.target.value)}
+                         onKeyDown={handleKeyDown}
+                         placeholder="Message edward:labs..."
+                        rows={1}
+                        className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
+                      />
+                      <div className="flex items-center justify-end px-2 pb-2">
+                        {isStreaming ? (
+                          <button
+                            onClick={handleStopGeneration}
+                            className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
+                            title="Stop generating"
+                          >
+                            <Square size={16} strokeWidth={2.5} fill="currentColor" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleSendMessage}
+                            disabled={!input.trim()}
+                            className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                            style={{
+                              background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                              color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
+                              boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
+                            }}
+                          >
+                            <ArrowUp size={18} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                   </>
+                 )}
               </div>
               <div className="text-center mt-3">
-                <p className="text-xs text-gray-500 dark:text-gray-600">
-                  Ember can make mistakes. Check important informations.
+                <p className="text-[11px] text-gray-500/60">
+                  MiMo can make mistakes. Check important information.
                 </p>
               </div>
            </div>
         </div>
 
-        {/* Settings Modal */}
         <Settings 
           isOpen={isSettingsOpen} 
           onClose={() => setIsSettingsOpen(false)}
@@ -1022,36 +719,25 @@ const App: React.FC = () => {
           models={models}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          maxOutputTokens={maxOutputTokens}
+          onChangeMaxOutputTokens={setMaxOutputTokens}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
         />
 
-        {/* Database Viewer Modal */}
         {isDatabaseViewerOpen && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
             <div className="relative w-full h-full">
-              <button
-                onClick={() => setIsDatabaseViewerOpen(false)}
-                className="absolute top-4 right-4 z-50 px-4 py-2 bg-input hover:bg-hover neon-border rounded-lg text-white transition-colors"
-              >
-                Close
-              </button>
+              <button onClick={() => setIsDatabaseViewerOpen(false)} className="absolute top-4 right-4 z-50 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105" style={{ background: 'rgba(var(--neon-rgb), 0.1)', border: '1px solid rgba(var(--neon-rgb), 0.2)', color: 'var(--neon-color)' }}>Close</button>
               <DatabaseViewer />
             </div>
           </div>
         )}
 
-        {/* Token Usage Stats Modal */}
-        <TokenUsageStats 
-          isOpen={isTokenStatsOpen}
-          onClose={() => setIsTokenStatsOpen(false)}
-        />
+        <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 
-        {/* Notification Toast */}
         {notification && (
-          <Notification
-            message={notification.message}
-            type={notification.type}
-            onClose={() => setNotification(null)}
-          />
+          <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />
         )}
 
       </main>

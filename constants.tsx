@@ -1,47 +1,78 @@
 import React from 'react';
-import { User } from 'lucide-react';
-import { GeminiModel, ModelConfig } from './types';
+import { TestTubeDiagonal, User } from 'lucide-react';
+import { MiMoModel, ModelConfig } from './types';
 
 export const DEFAULT_MODELS: ModelConfig[] = [
   {
-    id: GeminiModel.FlashLite,
-    name: "Gemini 2.5 Flash Lite",
-    description: "Lightweight model for basic tasks",
+    id: MiMoModel.V2,
+    name: "MiMo V2.5",
+    description: "Fast general-purpose model",
     isReasoning: false,
-    contextWindowSize: 10000,
+    contextWindowSize: 32768,
+    provider: 'mimo',
   },
   {
-    id: GeminiModel.Flash,
-    name: "Gemini 3 Flash",
-    description: "Great for everyday tasks",
-    isReasoning: false,
-    contextWindowSize: 10000,
-  },
-  {
-    id: GeminiModel.Pro,
-    name: "Gemini 3 Pro",
-    description: "High-intelligence reasoning model",
-    isReasoning: true,
-    contextWindowSize: 10000,
-  },
-  {
-    id: GeminiModel.NanoBananaPro,
-    name: "Nano Banana Pro",
-    description: "Multimodal reasoning for text, images & documents",
+    id: MiMoModel.V2Pro,
+    name: "MiMo V2.5 Pro",
+    description: "Reasoning model with thinking",
     isReasoning: true,
     contextWindowSize: 32768,
-  }
+    provider: 'mimo',
+  },
+  {
+    id: 'mimo-v2.5-direct',
+    name: "MiMo V2.5 (API Key)",
+    description: "Fast general-purpose model (API key)",
+    isReasoning: false,
+    contextWindowSize: 32768,
+    provider: 'mimo-direct',
+    apiModelId: MiMoModel.V2,
+  },
+  {
+    id: 'mimo-v2.5-pro-direct',
+    name: "MiMo V2.5 Pro (API Key)",
+    description: "Reasoning model with thinking (API key)",
+    isReasoning: true,
+    contextWindowSize: 32768,
+    provider: 'mimo-direct',
+    apiModelId: MiMoModel.V2Pro,
+  },
+  {
+    id: 'mimo-v2.5-asr',
+    name: "MiMo V2.5 ASR",
+    description: "Automatic speech recognition",
+    isReasoning: false,
+    contextWindowSize: 32768,
+    provider: 'mimo',
+  },
+  {
+    id: 'mimo-v2.5-tts',
+    name: "MiMo V2.5 TTS",
+    description: "Text-to-speech synthesis",
+    isReasoning: false,
+    contextWindowSize: 32768,
+    provider: 'mimo',
+  },
+  {
+    id: 'mimo-v2.5-tts-voiceclone',
+    name: "MiMo V2.5 TTS VoiceClone",
+    description: "Clone a voice for text-to-speech",
+    isReasoning: false,
+    contextWindowSize: 32768,
+    provider: 'mimo',
+  },
+  {
+    id: 'mimo-v2.5-tts-voicedesign',
+    name: "MiMo V2.5 TTS VoiceDesign",
+    description: "Design a custom voice for TTS",
+    isReasoning: false,
+    contextWindowSize: 32768,
+    provider: 'mimo',
+  },
 ];
 
 export const CHATGPT_LOGO = (
-  <img 
-    src="/assets/neural_brain.svg" 
-    className="w-6 h-6 drop-shadow-[0_0_8px_rgba(var(--neon-rgb),0)]" 
-    style={{ 
-      filter: 'brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(186deg) brightness(118%) contrast(119%)'
-    }} 
-    alt="AI Logo" 
-  />
+  <TestTubeDiagonal size={24} />
 );
 
 export const USER_AVATAR = (

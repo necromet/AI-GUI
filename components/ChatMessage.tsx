@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Role, Message } from '../types';
-import { CHATGPT_LOGO, USER_AVATAR } from '../constants';
-import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, ExternalLink } from 'lucide-react';
-import type { Components } from 'react-markdown';
+import { CHATGPT_LOGO } from '../constants';
+import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// Catppuccin Mocha theme for syntax highlighting
-const catppuccinMocha = {
+const catppuccinMocha: Record<string, React.CSSProperties> = {
   'code[class*="language-"]': {
     color: '#cdd6f4',
     background: '#1e1e2e',
     textShadow: 'none',
     fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
-    fontSize: '1.05rem',
+    fontSize: 'var(--app-font-size, 15px)',
     lineHeight: '1.5',
   },
   'pre[class*="language-"]': {
@@ -22,7 +20,7 @@ const catppuccinMocha = {
     background: '#1e1e2e',
     textShadow: 'none',
     fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
-    fontSize: '1.05rem',
+    fontSize: 'var(--app-font-size, 15px)',
     lineHeight: '1.5',
     padding: '1rem',
     margin: '0',
@@ -33,7 +31,7 @@ const catppuccinMocha = {
   'doctype': { color: '#6c7086' },
   'cdata': { color: '#6c7086' },
   'punctuation': { color: '#bac2de' },
-  'namespace': { opacity: '0.7' },
+  'namespace': { opacity: 0.7 },
   'property': { color: '#89b4fa' },
   'tag': { color: '#f38ba8' },
   'constant': { color: '#fab387' },
@@ -73,9 +71,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [feedback, setFeedback] = useState<'good' | 'bad' | null>(null);
-  
-  // Print out the real message
-  console.log('Message:', message);
+  const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
 
   const handleCopyCode = async (code: string, language: string) => {
     try {
@@ -99,128 +95,119 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
   const handleFeedback = (type: 'good' | 'bad') => {
     setFeedback(type);
-    if (onFeedback) {
-      onFeedback(message.id, type);
-    }
-  };
-
-  const handleRegenerate = () => {
-    if (onRegenerate) {
-      onRegenerate(message.id);
-    }
+    if (onFeedback) onFeedback(message.id, type);
   };
 
   return (
-    <div className={`group w-full text-gray-100 ${isUser ? 'bg-transparent' : 'bg-transparent'}`}>
+    <div className={`group w-full text-gray-900 dark:text-gray-100 animate-message-in`}>
       <div className="text-xl gap-4 md:gap-6 md:max-w-4xl lg:max-w-[56rem] xl:max-w-[68rem] p-4 md:py-1 flex lg:px-0 m-auto">
-        {/* Avatar Column */}
+        {/* Avatar */}
         <div className="flex-shrink-0 flex flex-col relative items-end">
-          <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center ${isUser ? '' : 'shadow-[0_0_15px_rgba(0,243,255,0.2)]'}`}>
+          <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center`}>
             {isUser ? (
-              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)' }}>
+              <div
+                className="bg-gray-100 dark:bg-black border rounded-full w-full h-full flex items-center justify-center p-1 transition-shadow duration-300"
+                style={{
+                  borderColor: 'rgba(var(--neon-rgb), 0.25)',
+                  boxShadow: '0 0 12px rgba(var(--neon-rgb), 0.3)',
+                }}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" style={{ filter: 'drop-shadow(0 0 3px var(--neon-color))' }}>
                   <path d="m223-120-89-481q-37 7-65.5-17T40-680q0-33 23.5-56.5T120-760q33 0 56.5 23.5T200-680q0 14-4 26t-12 22q22 13 44.5 21.5T276-602q44 0 81.5-22t58.5-60l25-46q-19-11-30-29t-11-41q0-33 23.5-56.5T480-880q33 0 56.5 23.5T560-800q0 23-11 41t-30 29l25 46q21 38 58.5 60t81.5 22q25 0 47.5-8t44.5-21q-8-10-12-22.5t-4-26.5q0-33 23.5-56.5T840-760q33 0 56.5 23.5T920-680q0 38-28.5 62T826-601l-89 481H223Zm67-80h380l60-326q-11 2-23 3.5t-23 1.5q-63 0-117-30t-87-84q-33 54-87 84t-117 30q-11 0-23-1.5t-23-3.5l60 326Zm190 0Z" fill="var(--neon-color)" />
                 </svg>
               </div>
             ) : (
-              <div className="bg-black border rounded-full w-full h-full flex items-center justify-center p-1" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)', boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.4)' }}>
-                 {CHATGPT_LOGO}
+              <div
+                className="bg-gray-100 dark:bg-black border rounded-full w-full h-full flex items-center justify-center p-1 transition-shadow duration-300"
+                style={{
+                  borderColor: 'rgba(var(--neon-rgb), 0.25)',
+                  boxShadow: '0 0 12px rgba(var(--neon-rgb), 0.3)',
+                  color: 'var(--neon-color)',
+                }}
+              >
+                {CHATGPT_LOGO}
               </div>
             )}
           </div>
         </div>
 
-        {/* Content Column */}
+        {/* Content */}
         <div className="relative flex-1 overflow-hidden">
-          <div className="font-semibold select-none mb-1 text-sm opacity-90 flex items-center gap-2">
+          <div className="font-semibold select-none mb-1.5 text-sm opacity-90 flex items-center gap-2">
             {isUser ? (
-                <span className="text-white">You</span>
+              <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 4px rgba(var(--neon-rgb), 0.4))' }}>You</span>
             ) : (
-                <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 5px rgba(var(--neon-rgb), 0.5))' }}>Ember</span>
+              <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 4px rgba(var(--neon-rgb), 0.4))' }}>Ember</span>
             )}
           </div>
 
-          {/* Display images if present */}
-          {message.images && message.images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {message.images.map((image) => (
-                <div key={image.id} className="relative group/img">
-                  <img 
-                    src={`data:${image.mimeType};base64,${image.data}`}
-                    alt="Attached image"
-                    className="max-w-xs max-h-60 rounded-lg border border-gray-600 dark:border-white/20 hover:border-gray-400 dark:hover:border-white/40 transition-all cursor-pointer"
-                    onClick={(e) => {
-                      // Open image in new tab on click
-                      const win = window.open();
-                      if (win) {
-                        win.document.write(`<img src="data:${image.mimeType};base64,${image.data}" style="max-width:100%; height:auto;" />`);
-                      }
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Show loading animation while generating image, then show 'Image has been generated!' when done */}
-          {message.isGeneratingImage ? (
+          {message.isThinking ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
-                <div className="flex items-center gap-1.5 animate-pulse">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                </div>
-                <span className="font-medium">Generating image{message.imageGenerationProgress !== undefined && `... ${message.imageGenerationProgress}%`}</span>
-              </div>
-              <div className="w-full max-w-md bg-gray-700/30 rounded-full h-2 overflow-hidden">
-                <div 
-                  className="h-full rounded-full transition-all duration-300" 
-                  style={{ 
-                    width: `${message.imageGenerationProgress || 0}%`,
-                    backgroundColor: 'var(--neon-color)',
-                    boxShadow: '0 0 10px var(--neon-color)'
-                  }}
-                />
-              </div>
-            </div>
-          ) : (message.images && message.images.length > 0 && !message.isGeneratingImage) ? (
-            <div className="font-semibold mb-4" style={{ color: 'var(--neon-color)' }}>Image has been generated!</div>
-          ) : message.isThinking ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--neon-color)' }}>
-                <div className="flex items-center gap-1.5 animate-pulse">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-200" style={{ backgroundColor: 'var(--neon-color)', opacity: 0.7, boxShadow: '0 0 5px var(--neon-color)' }}></div>
-                  <div className="w-2 h-2 rounded-full animation-delay-400" style={{ backgroundColor: 'var(--neon-color)', boxShadow: '0 0 5px var(--neon-color)' }}></div>
+              <div className="flex items-center gap-2.5 text-sm" style={{ color: 'var(--neon-color)' }}>
+                <div className="flex items-center gap-1.5">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        backgroundColor: 'var(--neon-color)',
+                        boxShadow: '0 0 6px var(--neon-color)',
+                        animation: `pulse-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
+                      }}
+                    />
+                  ))}
                 </div>
                 <span className="font-medium">Thinking...</span>
               </div>
               {message.thinkingContent && (
-                <div className="prose prose-invert max-w-none leading-7 text-base italic opacity-80 pl-4 border-l-2 mt-3" style={{ borderColor: 'rgba(var(--neon-rgb), 0.3)' }}>
-                  <ReactMarkdown>
-                    {message.thinkingContent}
-                  </ReactMarkdown>
+                <div
+                  className="prose dark:prose-invert max-w-none leading-7 text-base italic opacity-70 pl-4 border-l-2 mt-3"
+                  style={{ borderColor: 'rgba(var(--neon-rgb), 0.25)' }}
+                >
+                  <ReactMarkdown>{message.thinkingContent}</ReactMarkdown>
                 </div>
               )}
             </div>
           ) : (
-            <div className="prose prose-invert max-w-none leading-8 break-words text-lg [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4">
+            <div className="prose dark:prose-invert max-w-none leading-8 break-words [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4">
+              {/* Collapsible reasoning section */}
+              {message.thinkingContent && !message.isThinking && (
+                <div className="mb-4">
+                  <button
+                    onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
+                    className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors w-full text-left group"
+                  >
+                    <svg
+                      className={`w-3 h-3 transition-transform duration-200 ${isThinkingExpanded ? 'rotate-90' : ''}`}
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span style={{ color: 'rgba(var(--neon-rgb), 0.6)' }}>Reasoning</span>
+                  </button>
+                  {isThinkingExpanded && (
+                    <div className="mt-2 prose dark:prose-invert max-w-none leading-7 text-base italic opacity-60 pl-4 border-l-2" style={{ borderColor: 'rgba(var(--neon-rgb), 0.2)' }}>
+                      <ReactMarkdown>{message.thinkingContent}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <ReactMarkdown
                 components={{
                   pre: ({ node, ...props }) => (
-                    <div 
-                      className="relative my-6 mt-10 rounded-lg overflow-hidden" 
-                      style={{ 
-                        border: '1px solid var(--neon-color)',
-                        boxShadow: '0 0 10px rgba(var(--neon-rgb), 0.3), 0 0 20px rgba(var(--neon-rgb), 0.15)',
-                        transition: 'all 0.3s ease'
+                    <div
+                      className="relative my-6 mt-10 rounded-lg overflow-hidden transition-all duration-300"
+                      style={{
+                        border: '1px solid rgba(var(--neon-rgb), 0.4)',
+                        boxShadow: '0 0 15px rgba(var(--neon-rgb), 0.15), 0 0 30px rgba(var(--neon-rgb), 0.05)',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = '0 0 15px rgba(var(--neon-rgb), 0.4), 0 0 30px rgba(var(--neon-rgb), 0.2)';
+                        e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--neon-rgb), 0.25), 0 0 40px rgba(var(--neon-rgb), 0.1)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = '0 0 10px rgba(var(--neon-rgb), 0.3), 0 0 20px rgba(var(--neon-rgb), 0.15)';
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(var(--neon-rgb), 0.15), 0 0 30px rgba(var(--neon-rgb), 0.05)';
                       }}
                     >
                       <pre {...props} className="neon-code-block-container" />
@@ -230,29 +217,26 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     const match = /language-(\w+)/.exec(className || '');
                     const language = match ? match[1] : '';
                     const inline = !match;
-                    
+
                     if (!inline && language) {
                       const codeString = String(children).replace(/\n$/, '');
                       const isCopied = copiedCode === language;
-                      
+
                       return (
                         <>
-                          <div className="absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 bg-[#000000]/95 backdrop-blur-sm" style={{ borderColor: 'rgba(var(--neon-rgb), 1)' }}>
-                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(var(--neon-rgb), 1)' }}>
+                          <div className="absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 bg-[#000000]/95 backdrop-blur-sm">
+                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--neon-color)' }}>
                               {language}
                             </span>
                             <button
                               onClick={() => handleCopyCode(codeString, language)}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition-all"
-                              style={{ borderColor: isCopied ? 'rgba(var(--neon-rgb), 0.5)' : undefined }}
-                              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.5)'}
-                              onMouseLeave={(e) => !isCopied && (e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)')}
+                              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] rounded-lg transition-all duration-200"
                               title="Copy code"
                             >
                               {isCopied ? (
                                 <>
-                                  <Check size={13} />
-                                  <span>Copied</span>
+                                  <Check size={13} style={{ color: 'var(--neon-color)' }} />
+                                  <span style={{ color: 'var(--neon-color)' }}>Copied</span>
                                 </>
                               ) : (
                                 <>
@@ -270,7 +254,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                               padding: '1rem',
                               paddingTop: '1.5rem',
                               background: '#1e1e2e',
-                              fontSize: '1.05rem',
+                              fontSize: 'var(--app-font-size, 15px)',
                               borderRadius: '0.5rem',
                               fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
                             }}
@@ -285,67 +269,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         </>
                       );
                     }
-                    
+
                     return <code className={className} {...props}>{children}</code>;
                   },
                 }}
               >
                 {message.content}
               </ReactMarkdown>
-              
-              {/* Display grounding sources if present */}
-              {!isUser && message.groundingMetadata && (
-                <div className="mt-4 pt-4 border-t border-gray-700/50">
-                  <div className="text-xs text-gray-400 mb-2 flex items-center gap-1">
-                    <ExternalLink size={12} />
-                    <span>Sources from Google Search:</span>
-                  </div>
-                  <div className="space-y-2">
-                    {message.groundingMetadata.searchResults?.map((result: any, idx: number) => (
-                      <a
-                        key={idx}
-                        href={result.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all group/link"
-                        style={{ borderColor: 'rgba(var(--neon-rgb), 0.2)' }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.5)'}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.2)'}
-                      >
-                        <div className="flex items-start gap-2">
-                          <ExternalLink size={14} className="mt-0.5 text-gray-400 group-hover/link:text-gray-300" />
-                          <div className="flex-1 min-w-0">
-                            {result.title && (
-                              <div className="text-sm font-medium text-gray-200 group-hover/link:text-white truncate">
-                                {result.title}
-                              </div>
-                            )}
-                            {result.snippet && (
-                              <div className="text-xs text-gray-400 mt-1 line-clamp-2">
-                                {result.snippet}
-                              </div>
-                            )}
-                            <div className="text-xs text-gray-500 mt-1 truncate">
-                              {result.url}
-                            </div>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                  {message.groundingMetadata.webSearchQueries && message.groundingMetadata.webSearchQueries.length > 0 && (
-                    <div className="mt-3 text-xs text-gray-500">
-                      Search queries: {message.groundingMetadata.webSearchQueries.join(', ')}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {!isUser && !message.isThinking && !message.isGeneratingImage && (
+
+              {!isUser && !message.isThinking && (
                 <>
-                  {/* Token usage information */}
+                  {/* Token usage */}
                   {message.usageMetadata && (
-                    <div className="text-xs text-white mt-2 flex items-center gap-3">
+                    <div className="text-xs text-gray-600 dark:text-white mt-3 flex items-center gap-3 opacity-70">
                       <span title="Total tokens used">
                         <span className="font-bold" style={{ color: 'var(--neon-color)' }}>
                           {message.usageMetadata.totalTokens.toLocaleString()}
@@ -360,44 +296,38 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                       )}
                     </div>
                   )}
-                  <div className="flex items-center gap-2 mt-2 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity duration-200">
-                    <button 
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1 mt-3 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-all duration-300">
+                    <button
                       onClick={handleCopyMessage}
-                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                      title={copiedMessage ? "Copied!" : "Copy message"} 
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      title={copiedMessage ? "Copied!" : "Copy message"}
+                      style={{ color: copiedMessage ? 'var(--neon-color)' : undefined }}
                     >
-                      {copiedMessage ? <Check size={16} /> : <Copy size={16} />}
+                      {copiedMessage ? <Check size={15} /> : <Copy size={15} />}
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleFeedback('good')}
-                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                      title="Good response" 
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                      style={{ color: feedback === 'good' ? 'var(--neon-color)' : '' }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      title="Good response"
+                      style={{ color: feedback === 'good' ? 'var(--neon-color)' : undefined }}
                     >
-                      <ThumbsUp size={16} />
+                      <ThumbsUp size={15} />
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleFeedback('bad')}
-                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                      title="Bad response" 
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
-                      style={{ color: feedback === 'bad' ? 'var(--neon-color)' : '' }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      title="Bad response"
+                      style={{ color: feedback === 'bad' ? 'var(--neon-color)' : undefined }}
                     >
-                      <ThumbsDown size={16} />
+                      <ThumbsDown size={15} />
                     </button>
-                    <button 
-                      onClick={handleRegenerate}
-                      className="p-1.5 rounded hover:bg-white/5 transition-colors" 
-                      title="Regenerate response" 
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--neon-color)'} 
-                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                    <button
+                      onClick={() => onRegenerate?.(message.id)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      title="Regenerate response"
                     >
-                      <RefreshCw size={16} />
+                      <RefreshCw size={15} />
                     </button>
                   </div>
                 </>
