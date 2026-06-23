@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PanelLeft, SquarePen, ArrowUp } from 'lucide-react';
+import { PanelLeft, SquarePen, ArrowUp, Square } from 'lucide-react';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType } from './types';
 import { generateResponseStream, generateChatTitle } from './services/mimoService';
@@ -10,6 +10,7 @@ import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import DatabaseViewer from './components/DatabaseViewer';
 import TokenUsageStats from './components/TokenUsageStats';
+import PasswordScreen from './components/PasswordScreen';
 import Notification, { NotificationType } from './components/Notification';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
@@ -18,7 +19,12 @@ import ASRPanel from './components/ASRPanel';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
+export const FONT_SIZE_MAP: Record<string, number> = { xs: 14, sm: 15, base: 16, lg: 18, xl: 20 };
+
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_session');
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -28,8 +34,19 @@ const App: React.FC = () => {
   const [isDatabaseViewerOpen, setIsDatabaseViewerOpen] = useState(false);
   const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [fontSize, setFontSize] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_fontSize') || 'sm';
+  });
   const [neonColor, setNeonColor] = useState<string>(() => {
     return localStorage.getItem('neonColor') || 'red';
+  });
+  const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
+    const stored = localStorage.getItem('maxOutputTokens');
+    if (stored) {
+      const val = parseInt(stored, 10);
+      return isNaN(val) || val <= 0 ? undefined : val;
+    }
+    return undefined;
   });
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
@@ -40,6 +57,7 @@ const App: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const modelType = getModelType(currentModelId);
 
@@ -86,6 +104,18 @@ const App: React.FC = () => {
     root.style.setProperty('--neon-color', color.tailwind);
     localStorage.setItem('neonColor', neonColor);
   }, [neonColor]);
+
+  useEffect(() => {
+    localStorage.setItem('edward:labs_fontSize', fontSize);
+  }, [fontSize]);
+
+  useEffect(() => {
+    if (maxOutputTokens) {
+      localStorage.setItem('maxOutputTokens', maxOutputTokens.toString());
+    } else {
+      localStorage.removeItem('maxOutputTokens');
+    }
+  }, [maxOutputTokens]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -259,6 +289,9 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, aiMessagePlaceholder]);
     setIsStreaming(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
         const history = messages.map(m => ({ role: m.role, content: m.content }));
         history.push({ role: Role.User, content: userText });
@@ -271,6 +304,9 @@ const App: React.FC = () => {
           history,
           selectedModelConfig.systemInstruction,
           selectedModelConfig.provider,
+          3,
+          selectedModelConfig.maxTokens || maxOutputTokens,
+          abortController.signal,
         );
 
         let fullText = '';
@@ -339,14 +375,29 @@ const App: React.FC = () => {
         }
 
     } catch (error) {
-        console.error("Generation error:", error);
-        setMessages(prev => prev.map(msg => {
-            if (msg.id === aiMessageId) {
-                return { ...msg, content: "**Error:** Failed to generate response. Please try again.", isThinking: false };
-            }
-            return msg;
-        }));
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          setMessages(prev => prev.map(msg => {
+              if (msg.id === aiMessageId) {
+                  return { ...msg, isThinking: false };
+              }
+              return msg;
+          }));
+        } else {
+          console.error("Generation error:", error);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          const isQuota = errorMsg.toLowerCase().includes('quota');
+          const displayMsg = isQuota
+            ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+            : `**Error:** ${errorMsg}`;
+          setMessages(prev => prev.map(msg => {
+              if (msg.id === aiMessageId) {
+                  return { ...msg, content: displayMsg, isThinking: false };
+              }
+              return msg;
+          }));
+        }
     } finally {
+        abortControllerRef.current = null;
         setIsStreaming(false);
     }
   };
@@ -355,6 +406,12 @@ const App: React.FC = () => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -382,6 +439,9 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, aiMessagePlaceholder]);
     setIsStreaming(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const conversationId = await ensureConversation();
       const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
@@ -395,6 +455,9 @@ const App: React.FC = () => {
         history,
         selectedModelConfig.systemInstruction,
         selectedModelConfig.provider,
+        3,
+        selectedModelConfig.maxTokens || maxOutputTokens,
+        abortController.signal,
       );
 
       let fullText = '';
@@ -430,15 +493,30 @@ const App: React.FC = () => {
       }
 
     } catch (error) {
-      console.error("Regeneration error:", error);
-      setMessages(prev => prev.map(msg => {
-        if (msg.id === aiMessageId) {
-          return { ...msg, content: "**Error:** Failed to regenerate response. Please try again.", isThinking: false };
-        }
-        return msg;
-      }));
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === aiMessageId) {
+            return { ...msg, isThinking: false };
+          }
+          return msg;
+        }));
+      } else {
+        console.error("Regeneration error:", error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        const isQuota = errorMsg.toLowerCase().includes('quota');
+        const displayMsg = isQuota
+          ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+          : `**Error:** ${errorMsg}`;
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === aiMessageId) {
+            return { ...msg, content: displayMsg, isThinking: false };
+          }
+          return msg;
+        }));
+      }
     } finally {
-      setIsStreaming(false);
+        abortControllerRef.current = null;
+        setIsStreaming(false);
     }
   };
 
@@ -450,8 +528,12 @@ const App: React.FC = () => {
     });
   };
 
+  if (!isAuthenticated) {
+    return <PasswordScreen onSuccess={() => setIsAuthenticated(true)} />;
+  }
+
   return (
-    <div className="flex h-screen bg-main dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300">
+    <div className="flex h-screen bg-white dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300" style={{ '--app-font-size': `${FONT_SIZE_MAP[fontSize] || 15}px` } as React.CSSProperties}>
       <div className={`md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsSidebarOpen(false)} />
 
       <Sidebar 
@@ -469,43 +551,47 @@ const App: React.FC = () => {
           if (currentConversationId === id) handleNewChat();
           await loadConversations();
         }}
+        theme={theme}
+        onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       />
 
-      <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
-        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10 bg-white/80 dark:bg-main/80 backdrop-blur transition-colors">
+       <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
+        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10 bg-white/80 dark:bg-main/80 backdrop-blur-md transition-colors">
            {!isSidebarOpen && (
-              <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white rounded-lg transition-colors">
-                <PanelLeft size={24} />
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] hover:text-gray-900 dark:hover:text-white rounded-xl transition-all duration-200">
+                <PanelLeft size={22} />
               </button>
            )}
            <div className="flex items-center gap-2 md:hidden">
-             <span className="font-semibold text-gray-800 dark:text-gray-200">MiMoGPT</span>
+             <span className="font-semibold text-gray-800 dark:text-gray-200">edward:labs</span>
            </div>
            <div className="hidden md:flex items-center gap-3">
-             <ModelSelect currentModel={currentModelId} models={models} onSelect={setCurrentModelId} />
+             <ModelSelect currentModel={currentModelId} models={models} onSelect={setCurrentModelId} theme={theme} />
            </div>
            <div className="ml-auto flex items-center gap-2">
-               <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400">
-                  <SquarePen size={20} />
+               <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors">
+                  <SquarePen size={18} />
                </button>
            </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto relative scroll-smooth custom-scrollbar" id="scroll-container">
+        <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
            {messages.length === 0 ? (
-             <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-100 transition-opacity duration-500 pb-48">
-                <div className="scale-[2]" style={{ color: 'var(--neon-color)'}}>{CHATGPT_LOGO}</div>
-                <h2 className="text-2xl md:text-3xl font-semibold mb-8 mt-10 text-gray-800 dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-400 dark:bg-clip-text dark:text-transparent transition-colors">How can I help you today?</h2>
-                
+             <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                <div className="relative mb-10">
+                  <div className="scale-[2]" style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 12px rgba(var(--neon-rgb), 0.4))' }}>{CHATGPT_LOGO}</div>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-semibold mb-8 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-gray-200 dark:to-gray-400 bg-clip-text text-transparent">How can I help you today?</h2>
+
                 {modelType === 'chat' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mb-12">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
                      {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                       <button 
+                       <button
                           key={i}
                           onClick={() => { setInput(suggestion); if(textareaRef.current) textareaRef.current.focus(); }}
-                          className="group border border-gray-200 dark:border-white/10 rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/5 hover:shadow-md transition-all duration-300 bg-white dark:bg-transparent"
+                           className="group border border-gray-300 dark:border-white/[0.06] rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-300 bg-transparent"
                         >
-                          <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors">{suggestion}</span>
+                           <span className="text-sm text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{suggestion}</span>
                         </button>
                      ))}
                   </div>
@@ -524,8 +610,15 @@ const App: React.FC = () => {
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
            <div className="max-w-4xl mx-auto w-full">
-              <div className="relative flex flex-col bg-gray-50 dark:bg-input rounded-[26px] border border-gray-200 dark:border-white/10 focus-within:border-gray-300 shadow-lg overflow-hidden transition-all duration-300" style={{ borderColor: theme === 'dark' && input ? `rgba(var(--neon-rgb), 0.5)` : undefined, boxShadow: theme === 'dark' && input ? `0 0 20px -5px rgba(var(--neon-rgb), 0.2)` : undefined }}>
-                 
+              <div
+                className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
+                style={{
+                  background: theme === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(245, 245, 245, 0.9)',
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${input ? 'rgba(var(--neon-rgb), 0.3)' : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.12)'}`,
+                  boxShadow: input ? `0 0 30px -8px rgba(var(--neon-rgb), 0.15)` : theme === 'dark' ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.06)',
+                }}
+              >
                  {modelType === 'chat' ? (
                    <>
                      <textarea
@@ -533,53 +626,83 @@ const App: React.FC = () => {
                        value={input}
                        onChange={(e) => setInput(e.target.value)}
                        onKeyDown={handleKeyDown}
-                       placeholder="Message MiMo..."
-                       rows={1}
-                       className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden"
-                     />
-                     <div className="flex items-center justify-end px-2 pb-2">
-                       <button 
-                         onClick={handleSendMessage}
-                         disabled={!input.trim() || isStreaming}
-                         className={`p-2 rounded-full transition-all duration-200 ${input.trim() ? 'bg-black dark:bg-white text-white dark:text-black shadow-[0_0_10px_rgba(0,0,0,0.2)] dark:shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-[#1a1a1a] cursor-not-allowed'}`}
-                       >
-                         <ArrowUp size={20} strokeWidth={2.5} />
-                       </button>
-                     </div>
-                   </>
-                 ) : modelType === 'tts' ? (
-                   <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} />
-                 ) : modelType === 'tts-voicedesign' ? (
-                   <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} />
-                 ) : modelType === 'tts-voiceclone' ? (
-                   <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} />
-                 ) : modelType === 'asr' ? (
-                   <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} />
-                 ) : (
-                   <>
-                     <textarea
-                       ref={textareaRef}
-                       value={input}
-                       onChange={(e) => setInput(e.target.value)}
-                       onKeyDown={handleKeyDown}
-                       placeholder="Message MiMo..."
-                       rows={1}
-                       className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-500 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden"
-                     />
-                     <div className="flex items-center justify-end px-2 pb-2">
-                       <button 
-                         onClick={handleSendMessage}
-                         disabled={!input.trim() || isStreaming}
-                         className={`p-2 rounded-full transition-all duration-200 ${input.trim() ? 'bg-black dark:bg-white text-white dark:text-black' : 'bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-[#1a1a1a] cursor-not-allowed'}`}
-                       >
-                         <ArrowUp size={20} strokeWidth={2.5} />
-                       </button>
-                     </div>
+                         placeholder="Message edward:labs..."
+                         rows={1}
+                         className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
+                       />
+                        <div className="flex items-center justify-end px-2 pb-2">
+                          {isStreaming ? (
+                            <button
+                              onClick={handleStopGeneration}
+                              className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
+                              title="Stop generating"
+                            >
+                              <Square size={16} strokeWidth={2.5} fill="currentColor" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleSendMessage}
+                              disabled={!input.trim()}
+                              className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                              style={{
+                                background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
+                                boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
+                              }}
+                            >
+                              <ArrowUp size={18} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : modelType === 'tts' ? (
+                     <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'tts-voicedesign' ? (
+                     <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'tts-voiceclone' ? (
+                     <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : modelType === 'asr' ? (
+                     <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
+                   ) : (
+                     <>
+                       <textarea
+                         ref={textareaRef}
+                         value={input}
+                         onChange={(e) => setInput(e.target.value)}
+                         onKeyDown={handleKeyDown}
+                         placeholder="Message edward:labs..."
+                        rows={1}
+                        className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
+                      />
+                      <div className="flex items-center justify-end px-2 pb-2">
+                        {isStreaming ? (
+                          <button
+                            onClick={handleStopGeneration}
+                            className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
+                            title="Stop generating"
+                          >
+                            <Square size={16} strokeWidth={2.5} fill="currentColor" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleSendMessage}
+                            disabled={!input.trim()}
+                            className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                            style={{
+                              background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                              color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
+                              boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
+                            }}
+                          >
+                            <ArrowUp size={18} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
                    </>
                  )}
               </div>
               <div className="text-center mt-3">
-                <p className="text-xs text-gray-500 dark:text-gray-600">
+                <p className="text-[11px] text-gray-500/60">
                   MiMo can make mistakes. Check important information.
                 </p>
               </div>
@@ -596,18 +719,22 @@ const App: React.FC = () => {
           models={models}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          maxOutputTokens={maxOutputTokens}
+          onChangeMaxOutputTokens={setMaxOutputTokens}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
         />
 
         {isDatabaseViewerOpen && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
             <div className="relative w-full h-full">
-              <button onClick={() => setIsDatabaseViewerOpen(false)} className="absolute top-4 right-4 z-50 px-4 py-2 bg-input hover:bg-hover neon-border rounded-lg text-white transition-colors">Close</button>
+              <button onClick={() => setIsDatabaseViewerOpen(false)} className="absolute top-4 right-4 z-50 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105" style={{ background: 'rgba(var(--neon-rgb), 0.1)', border: '1px solid rgba(var(--neon-rgb), 0.2)', color: 'var(--neon-color)' }}>Close</button>
               <DatabaseViewer />
             </div>
           </div>
         )}
 
-        <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} />
+        <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 
         {notification && (
           <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />

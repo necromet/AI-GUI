@@ -58,4 +58,5 @@ export interface ModelConfig {
   apiKey?: string; // API key for custom models
   provider?: string; // Provider for custom models
   apiModelId?: string; // Actual model ID sent to the API (if different from id)
+  maxTokens?: number; // Maximum tokens for model output
 }

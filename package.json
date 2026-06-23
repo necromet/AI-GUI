@@ -1,5 +1,5 @@
 {
-  "name": "mimogpt",
+  "name": "edwardlabs",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "name": "Your Name",
     "email": "your.email@example.com"
   },
-  "description": "MiMoGPT - AI Chat Application",
+  "description": "edwardlabs - AI Chat Application",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -15,12 +15,15 @@
   },
   "dependencies": {
     "@types/react-syntax-highlighter": "^15.5.13",
+    "clsx": "^2.1.1",
     "idb": "^8.0.3",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.0"
+    "react-syntax-highlighter": "^16.1.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

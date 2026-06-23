@@ -15,7 +15,25 @@ interface MiMoStreamChunk {
   thinkingText?: string;
 }
 
-async function* parseSSEStream(response: Response): AsyncGenerator<MiMoStreamChunk> {
+function isQuotaError(errorText: string): boolean {
+  try {
+    const parsed = JSON.parse(errorText);
+    return parsed?.error?.type === 'limitation' || parsed?.error?.code === '429';
+  } catch {
+    return false;
+  }
+}
+
+function getRetryAfterMs(response: Response): number {
+  const retryAfter = response.headers.get('Retry-After');
+  if (retryAfter) {
+    const seconds = parseInt(retryAfter, 10);
+    if (!isNaN(seconds)) return seconds * 1000;
+  }
+  return 5000;
+}
+
+async function* parseSSEStream(response: Response, signal?: AbortSignal): AsyncGenerator<MiMoStreamChunk> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 
@@ -23,6 +41,11 @@ async function* parseSSEStream(response: Response): AsyncGenerator<MiMoStreamChu
   let buffer = '';
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel();
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -64,6 +87,9 @@ export const generateResponseStream = async (
   history: { role: string; content: string }[],
   systemInstruction?: string,
   provider?: string,
+  retries = 3,
+  maxTokens?: number,
+  signal?: AbortSignal,
 ) => {
   const { key, base } = getProviderConfig(provider);
   const messages: Array<{ role: string; content: string }> = [];
@@ -79,25 +105,54 @@ export const generateResponseStream = async (
     });
   }
 
-  const response = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
-    },
-    body: JSON.stringify({
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    const body: any = {
       model: modelId,
       messages,
       stream: true,
-    }),
-  });
+    };
+    if (maxTokens && maxTokens > 0) {
+      body.max_tokens = maxTokens;
+    }
 
-  if (!response.ok) {
+    const response = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (response.ok) {
+      return parseSSEStream(response, signal);
+    }
+
     const errorText = await response.text();
+
+    if (response.status === 429) {
+      if (isQuotaError(errorText)) {
+        throw new Error('API quota exhausted. Please wait for your quota to reset or use a different API key.');
+      }
+      if (attempt < retries) {
+        const delay = getRetryAfterMs(response) * (attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        lastError = new Error(`Rate limited (attempt ${attempt + 1}/${retries + 1}), retrying...`);
+        continue;
+      }
+    }
+
     throw new Error(`MiMo API error ${response.status}: ${errorText}`);
   }
 
-  return parseSSEStream(response);
+  throw lastError || new Error('Max retries exceeded');
 };
 
 export const generateChatTitle = async (
@@ -114,7 +169,7 @@ export const generateChatTitle = async (
         'Authorization': `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: 'mimo-v2.5-pro',
+        model: 'mimo-v2.5',
         messages: [
           {
             role: 'system',

@@ -4,9 +4,10 @@ import { generateSpeech, BUILT_IN_VOICES } from '../services/mimoService';
 
 interface TTSPanelProps {
   onNotification: (msg: string, type: 'success' | 'error') => void;
+  theme?: 'dark' | 'light';
 }
 
-const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification }) => {
+const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark' }) => {
   const [text, setText] = useState('');
   const [voice, setVoice] = useState('mimo_default');
   const [style, setStyle] = useState('');
@@ -35,11 +36,15 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification }) => {
     }
   };
 
+  const canGenerate = text.trim().length > 0;
+
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
-        <Volume2 size={18} style={{ color: 'var(--neon-color)' }} />
-        <span className="text-sm font-medium text-gray-300">Text-to-Speech</span>
+    <div className="flex flex-col gap-3.5 p-4">
+      <div className="flex items-center gap-2.5">
+        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(var(--neon-rgb), 0.08)' }}>
+          <Volume2 size={15} style={{ color: 'var(--neon-color)' }} />
+        </div>
+        <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">Text-to-Speech</span>
       </div>
 
       <textarea
@@ -47,16 +52,16 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification }) => {
         onChange={(e) => setText(e.target.value)}
         placeholder="Enter text to synthesize..."
         rows={3}
-        className="w-full bg-transparent text-gray-100 placeholder-gray-500 px-3 py-2 resize-none outline-none border border-white/10 rounded-lg focus:border-white/30 transition-colors text-sm"
+        className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-3.5 py-2.5 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
       />
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">Voice</label>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Voice</label>
           <select
             value={voice}
             onChange={(e) => setVoice(e.target.value)}
-            className="w-full bg-[#1a1a1a] text-gray-200 text-sm px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-white/30"
+            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl outline-none transition-all duration-200 border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
           >
             {BUILT_IN_VOICES.map((v) => (
               <option key={v} value={v}>{v}</option>
@@ -64,40 +69,41 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification }) => {
           </select>
         </div>
         <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">Style (optional)</label>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Style (optional)</label>
           <input
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             placeholder="e.g. Cheerful, slow"
-            className="w-full bg-[#1a1a1a] text-gray-200 text-sm px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-white/30"
+            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl outline-none transition-all duration-200 border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
           />
         </div>
       </div>
 
       <button
         onClick={handleGenerate}
-        disabled={!text.trim() || isGenerating}
-        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={!canGenerate || isGenerating}
+        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
         style={{
-          backgroundColor: text.trim() ? 'var(--neon-color)' : undefined,
-          color: text.trim() ? '#000' : undefined,
+          background: canGenerate ? 'var(--neon-color)' : (theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'),
+          color: canGenerate ? '#000' : (theme === 'dark' ? '#555' : '#999'),
+          boxShadow: canGenerate ? '0 0 20px rgba(var(--neon-rgb), 0.3)' : 'none',
         }}
       >
         {isGenerating ? (
           <>
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 size={15} className="animate-spin" />
             Generating...
           </>
         ) : (
           <>
-            <Volume2 size={16} />
+            <Volume2 size={15} />
             Generate Speech
           </>
         )}
       </button>
 
       {audioUrl && (
-        <audio ref={audioRef} src={audioUrl} controls className="w-full mt-1 rounded-lg" />
+        <audio ref={audioRef} src={audioUrl} controls className="w-full mt-1 rounded-xl" />
       )}
     </div>
   );

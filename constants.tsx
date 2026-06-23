@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, User } from 'lucide-react';
+import { TestTubeDiagonal, User } from 'lucide-react';
 import { MiMoModel, ModelConfig } from './types';
 
 export const DEFAULT_MODELS: ModelConfig[] = [
@@ -72,7 +72,7 @@ export const DEFAULT_MODELS: ModelConfig[] = [
 ];
 
 export const CHATGPT_LOGO = (
-  <Flame size={24} />
+  <TestTubeDiagonal size={24} />
 );
 
 export const USER_AVATAR = (

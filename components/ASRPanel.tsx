@@ -4,13 +4,15 @@ import { transcribeAudio } from '../services/mimoService';
 
 interface ASRPanelProps {
   onNotification: (msg: string, type: 'success' | 'error') => void;
+  theme?: 'dark' | 'light';
 }
 
-const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification }) => {
+const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark' }) => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [transcription, setTranscription] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -18,6 +20,19 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification }) => {
     if (!file) return;
     if (!file.type.startsWith('audio/')) {
       onNotification('Please select an audio file', 'error');
+      return;
+    }
+    setAudioFile(file);
+    setAudioPreview(URL.createObjectURL(file));
+    setTranscription('');
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('audio/')) {
+      onNotification('Please drop an audio file', 'error');
       return;
     }
     setAudioFile(file);
@@ -51,15 +66,19 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification }) => {
     }
   };
 
+  const borderColor = isDragOver ? 'rgba(var(--neon-rgb), 0.4)' : (theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.15)');
+
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
-        <FileText size={18} style={{ color: 'var(--neon-color)' }} />
-        <span className="text-sm font-medium text-gray-300">Speech Recognition</span>
+    <div className="flex flex-col gap-3.5 p-4">
+      <div className="flex items-center gap-2.5">
+        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(var(--neon-rgb), 0.08)' }}>
+          <FileText size={15} style={{ color: 'var(--neon-color)' }} />
+        </div>
+        <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">Speech Recognition</span>
       </div>
 
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Audio File</label>
+        <label className="block text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Audio File</label>
         <input
           ref={fileInputRef}
           type="file"
@@ -70,42 +89,50 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification }) => {
         {!audioFile ? (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-gray-200 border border-dashed border-white/20 hover:border-white/40 rounded-lg transition-colors w-full justify-center"
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            className="flex items-center gap-2 px-4 py-4 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-xl transition-all duration-200 w-full justify-center"
+            style={{
+              border: `2px dashed ${borderColor}`,
+              background: isDragOver ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
+            }}
           >
             <Upload size={16} />
-            Upload audio to transcribe
+            {isDragOver ? 'Drop audio here' : 'Upload audio to transcribe'}
           </button>
         ) : (
-          <div className="flex items-center gap-2 p-2 border border-white/10 rounded-lg bg-white/5">
-            <Mic size={16} className="text-gray-400 flex-shrink-0" />
-            <span className="text-sm text-gray-300 truncate flex-1">{audioFile.name}</span>
-            <button onClick={handleRemoveFile} className="p-1 hover:bg-white/10 rounded">
-              <X size={14} className="text-gray-500" />
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.06]">
+            <Mic size={14} style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
+            <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{audioFile.name}</span>
+            <button onClick={handleRemoveFile} className="p-1 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-red-400">
+              <X size={14} />
             </button>
           </div>
         )}
         {audioPreview && (
-          <audio src={audioPreview} controls className="w-full mt-2 rounded-lg" />
+          <audio src={audioPreview} controls className="w-full mt-2 rounded-xl" />
         )}
       </div>
 
       <button
         onClick={handleTranscribe}
         disabled={!audioFile || isTranscribing}
-        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
         style={{
-          backgroundColor: audioFile ? 'var(--neon-color)' : undefined,
-          color: audioFile ? '#000' : undefined,
+          background: audioFile ? 'var(--neon-color)' : (theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'),
+          color: audioFile ? '#000' : (theme === 'dark' ? '#555' : '#999'),
+          boxShadow: audioFile ? '0 0 20px rgba(var(--neon-rgb), 0.3)' : 'none',
         }}
       >
         {isTranscribing ? (
           <>
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 size={15} className="animate-spin" />
             Transcribing...
           </>
         ) : (
           <>
-            <FileText size={16} />
+            <FileText size={15} />
             Transcribe
           </>
         )}
@@ -113,8 +140,8 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification }) => {
 
       {transcription && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Transcription</label>
-          <div className="p-3 border border-white/10 rounded-lg bg-white/5 text-sm text-gray-200 whitespace-pre-wrap">
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Transcription</label>
+          <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] text-sm text-gray-900 dark:text-gray-200 whitespace-pre-wrap leading-relaxed border border-gray-300 dark:border-white/[0.06]">
             {transcription}
           </div>
         </div>
