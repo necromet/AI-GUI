@@ -93,9 +93,19 @@ function createTables() {
       prompt_tokens INTEGER,
       candidates_tokens INTEGER,
       generated_images TEXT,
+      search_annotations TEXT,
       FOREIGN KEY (conversation_id) REFERENCES Conversations(conversation_id) ON DELETE CASCADE
     )
   `);
+  
+  // Add search_annotations column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE Messages ADD COLUMN search_annotations TEXT`);
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column')) {
+      console.log('Note: search_annotations column may already exist');
+    }
+  }
   
   // Add generated_images column if it doesn't exist (for existing databases)
   try {
@@ -124,6 +134,15 @@ function createTables() {
     // Column already exists or other error - safe to ignore
     if (!error.message.includes('duplicate column')) {
       console.log('Note: candidates_tokens column may already exist');
+    }
+  }
+  
+  // Add attachments column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE Messages ADD COLUMN attachments TEXT`);
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column')) {
+      console.log('Note: attachments column may already exist');
     }
   }
   
@@ -303,11 +322,13 @@ export function addMessage(message: {
   prompt_tokens?: number;
   candidates_tokens?: number;
   generated_images?: string;
+  search_annotations?: string;
+  attachments?: string;
 }) {
   if (!db) throw new Error('Database not initialized');
   const result = db.prepare(`
-    INSERT INTO Messages (conversation_id, role, content, message_order, token_count, prompt_tokens, candidates_tokens, generated_images)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO Messages (conversation_id, role, content, message_order, token_count, prompt_tokens, candidates_tokens, generated_images, search_annotations, attachments)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     message.conversation_id,
     message.role,
@@ -316,7 +337,9 @@ export function addMessage(message: {
     message.token_count || null,
     message.prompt_tokens || null,
     message.candidates_tokens || null,
-    message.generated_images || null
+    message.generated_images || null,
+    message.search_annotations || null,
+    message.attachments || null
   );
   return result.lastInsertRowid;
 }

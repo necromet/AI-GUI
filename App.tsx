@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PanelLeft, SquarePen, ArrowUp, Square } from 'lucide-react';
+import { PanelLeft, SquarePen } from 'lucide-react';
+import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
-import { Role, Message, ModelConfig, ChatSession, getModelType } from './types';
+import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment } from './types';
 import { generateResponseStream, generateChatTitle } from './services/mimoService';
 import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
@@ -18,6 +19,21 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+const fileToAttachment = (file: File): Promise<Attachment> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      resolve({
+        data: e.target?.result as string,
+        mimeType: file.type,
+        name: file.name,
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 export const FONT_SIZE_MAP: Record<string, number> = { xs: 14, sm: 15, base: 16, lg: 18, xl: 20 };
 
@@ -49,17 +65,22 @@ const App: React.FC = () => {
     return undefined;
   });
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
-  const [currentModelId, setCurrentModelId] = useState<string>(DEFAULT_MODELS[0].id);
+  const [defaultModelId, setDefaultModelId] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_defaultModel') || DEFAULT_MODELS[0].id;
+  });
+  const [currentModelId, setCurrentModelId] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_defaultModel') || DEFAULT_MODELS[0].id;
+  });
   
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const modelType = getModelType(currentModelId);
+  const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
   useEffect(() => {
     const initDb = async () => {
@@ -106,6 +127,7 @@ const App: React.FC = () => {
   }, [neonColor]);
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--app-font-size', `${FONT_SIZE_MAP[fontSize] || 15}px`);
     localStorage.setItem('edward:labs_fontSize', fontSize);
   }, [fontSize]);
 
@@ -125,22 +147,19 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const handleInputResize = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-    }
-  };
-
-  useEffect(() => {
-    handleInputResize();
-  }, [input]);
-
   const handleNewChat = () => {
     setMessages([]);
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
+  };
+
+  const handleSelectModel = (id: string) => {
+    const newModelType = getModelType(id);
+    if (newModelType !== 'chat') {
+      handleNewChat();
+    }
+    setCurrentModelId(id);
   };
 
   const loadConversations = async () => {
@@ -186,6 +205,24 @@ const App: React.FC = () => {
           totalTokens: msg.token_count
         };
       }
+      let annotations = undefined;
+      const rawAnnotations = (msg as any).search_annotations;
+      if (rawAnnotations && typeof rawAnnotations === 'string') {
+        try {
+          annotations = JSON.parse(rawAnnotations);
+        } catch {}
+      } else if (Array.isArray(rawAnnotations)) {
+        annotations = rawAnnotations;
+      }
+      let attachments = undefined;
+      const rawAttachments = (msg as any).attachments;
+      if (rawAttachments && typeof rawAttachments === 'string') {
+        try {
+          attachments = JSON.parse(rawAttachments);
+        } catch {}
+      } else if (Array.isArray(rawAttachments)) {
+        attachments = rawAttachments;
+      }
       return {
         id: msg.message_id!.toString(),
         role: msg.role === 'assistant' ? Role.Assistant : Role.User,
@@ -193,7 +230,9 @@ const App: React.FC = () => {
         timestamp: new Date(msg.timestamp).getTime(),
         messageOrder: msg.message_order,
         dbMessageId: msg.message_id,
-        usageMetadata
+        usageMetadata,
+        annotations,
+        attachments
       };
     });
     setMessages(loadedMessages);
@@ -206,10 +245,12 @@ const App: React.FC = () => {
     content: string, 
     tokenCount?: number | null,
     promptTokens?: number | null,
-    candidatesTokens?: number | null
+    candidatesTokens?: number | null,
+    searchAnnotations?: any[] | null,
+    attachmentsJson?: string | null
   ): Promise<number> => {
     const messageOrder = await db.getNextMessageOrder(conversationId);
-    return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, null, promptTokens, candidatesTokens);
+    return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, null, promptTokens, candidatesTokens, searchAnnotations, attachmentsJson);
   };
 
   const ensureConversation = async (): Promise<number> => {
@@ -258,25 +299,53 @@ const App: React.FC = () => {
     if (currentModelId === id) setCurrentModelId(models[0].id);
   };
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
+  const handleChangeDefaultModel = (id: string) => {
+    setDefaultModelId(id);
+    setCurrentModelId(id);
+    localStorage.setItem('edward:labs_defaultModel', id);
+  };
 
-    const userText = input.trim();
-    setInput(''); 
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+  const handleSendMessage = async (messageText?: string, options?: { files?: File[]; search?: boolean; think?: boolean }) => {
+    const userText = (messageText ?? input).trim();
+    const hasFiles = options?.files && options.files.length > 0;
+    if ((!userText && !hasFiles) || isStreaming) return;
+
+    setInput('');
 
     const conversationId = await ensureConversation();
+
+    let attachments: Attachment[] | undefined;
+    if (hasFiles) {
+      attachments = await Promise.all(options!.files!.map(fileToAttachment));
+    }
 
     const userMessage: Message = {
       id: generateId(),
       role: Role.User,
       content: userText,
       timestamp: Date.now(),
+      attachments,
     };
 
-    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText);
+    const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
+    const userDbMessageId = await saveMessageToDb(conversationId, 'user', userText, null, null, null, null, attachmentsJson);
     userMessage.dbMessageId = userDbMessageId;
     setMessages(prev => [...prev, userMessage]);
+
+    if (messages.length === 0) {
+      try {
+        const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
+        const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
+        const title = await generateChatTitle(titleText, '', selectedModelConfig.provider);
+        await db.updateConversationTitle(conversationId, title);
+        await loadConversations();
+      } catch (error) {
+        const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
+        const title = titleText.substring(0, 50) + (titleText.length > 50 ? '...' : '');
+        await db.updateConversationTitle(conversationId, title);
+        await loadConversations();
+      }
+    }
 
     const aiMessageId = generateId();
     const aiMessagePlaceholder: Message = {
@@ -293,8 +362,8 @@ const App: React.FC = () => {
     abortControllerRef.current = abortController;
 
     try {
-        const history = messages.map(m => ({ role: m.role, content: m.content }));
-        history.push({ role: Role.User, content: userText });
+        const history = messages.map(m => ({ role: m.role, content: m.content, attachments: m.attachments }));
+        history.push({ role: Role.User, content: userText, attachments });
 
         const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
 
@@ -307,11 +376,13 @@ const App: React.FC = () => {
           3,
           selectedModelConfig.maxTokens || maxOutputTokens,
           abortController.signal,
+          { search: options?.search, think: options?.think },
         );
 
         let fullText = '';
         let fullThinkingText = '';
         let usageMetadata: any = null;
+        let searchAnnotations: any[] = [];
         
         for await (const chunk of streamResult) {
             const chunkText = chunk.text;
@@ -324,6 +395,16 @@ const App: React.FC = () => {
                 candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
                 totalTokens: chunkUsageMetadata.totalTokenCount || 0
               };
+            }
+
+            if ((chunk as any).annotations) {
+              searchAnnotations.push(...(chunk as any).annotations);
+              setMessages(prev => prev.map(msg => {
+                  if (msg.id === aiMessageId) {
+                      return { ...msg, annotations: [...searchAnnotations] };
+                  }
+                  return msg;
+              }));
             }
             
             if (thinkingText) {
@@ -345,7 +426,8 @@ const App: React.FC = () => {
                           content: fullText,
                           thinkingContent: fullThinkingText,
                           isThinking: false,
-                          usageMetadata: usageMetadata
+                          usageMetadata: usageMetadata,
+                          annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined,
                       };
                   }
                   return msg;
@@ -358,20 +440,9 @@ const App: React.FC = () => {
             conversationId, 'assistant', fullText,
             usageMetadata?.totalTokens || null,
             usageMetadata?.promptTokens || null,
-            usageMetadata?.candidatesTokens || null
+            usageMetadata?.candidatesTokens || null,
+            searchAnnotations.length > 0 ? searchAnnotations : null
           );
-          
-          if (messages.length === 0) {
-            try {
-              const title = await generateChatTitle(userText, fullText, selectedModelConfig.provider);
-              await db.updateConversationTitle(conversationId, title);
-              await loadConversations();
-            } catch (error) {
-              const title = userText.substring(0, 50) + (userText.length > 50 ? '...' : '');
-              await db.updateConversationTitle(conversationId, title);
-              await loadConversations();
-            }
-          }
         }
 
     } catch (error) {
@@ -386,26 +457,29 @@ const App: React.FC = () => {
           console.error("Generation error:", error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           const isQuota = errorMsg.toLowerCase().includes('quota');
-          const displayMsg = isQuota
-            ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
-            : `**Error:** ${errorMsg}`;
-          setMessages(prev => prev.map(msg => {
-              if (msg.id === aiMessageId) {
-                  return { ...msg, content: displayMsg, isThinking: false };
-              }
-              return msg;
-          }));
+          const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
+          const isThinkingDisabled = errorMsg.includes('thinking');
+          if (isWebSearchDisabled) {
+            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+            setNotification({ message: 'Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.', type: 'error' });
+          } else if (isThinkingDisabled && options?.think) {
+            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+            setNotification({ message: 'Deep Thinking is not available for this model or account.', type: 'error' });
+          } else {
+            const displayMsg = isQuota
+              ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+              : `**Error:** ${errorMsg}`;
+            setMessages(prev => prev.map(msg => {
+                if (msg.id === aiMessageId) {
+                    return { ...msg, content: displayMsg, isThinking: false };
+                }
+                return msg;
+            }));
+          }
         }
     } finally {
         abortControllerRef.current = null;
         setIsStreaming(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
     }
   };
 
@@ -462,10 +536,31 @@ const App: React.FC = () => {
 
       let fullText = '';
       let fullThinkingText = '';
+      let usageMetadata: any = null;
+      let searchAnnotations: any[] = [];
 
       for await (const chunk of streamResult) {
         const chunkText = chunk.text;
         const thinkingText = (chunk as any).thinkingText;
+
+        const chunkUsageMetadata = (chunk as any).usageMetadata;
+        if (chunkUsageMetadata) {
+          usageMetadata = {
+            promptTokens: chunkUsageMetadata.promptTokenCount || 0,
+            candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
+            totalTokens: chunkUsageMetadata.totalTokenCount || 0
+          };
+        }
+
+        if ((chunk as any).annotations) {
+          searchAnnotations.push(...(chunk as any).annotations);
+          setMessages(prev => prev.map(msg => {
+              if (msg.id === aiMessageId) {
+                  return { ...msg, annotations: [...searchAnnotations] };
+              }
+              return msg;
+          }));
+        }
 
         if (thinkingText) {
           fullThinkingText += thinkingText;
@@ -481,7 +576,7 @@ const App: React.FC = () => {
           fullText += chunkText;
           setMessages(prev => prev.map(msg => {
             if (msg.id === aiMessageId) {
-              return { ...msg, content: fullText, thinkingContent: fullThinkingText, isThinking: false };
+              return { ...msg, content: fullText, thinkingContent: fullThinkingText, isThinking: false, usageMetadata, annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined };
             }
             return msg;
           }));
@@ -489,7 +584,13 @@ const App: React.FC = () => {
       }
 
       if (fullText) {
-        await saveMessageToDb(conversationId, 'assistant', fullText);
+        await saveMessageToDb(
+          conversationId, 'assistant', fullText,
+          usageMetadata?.totalTokens || null,
+          usageMetadata?.promptTokens || null,
+          usageMetadata?.candidatesTokens || null,
+          searchAnnotations.length > 0 ? searchAnnotations : null
+        );
       }
 
     } catch (error) {
@@ -504,15 +605,21 @@ const App: React.FC = () => {
         console.error("Regeneration error:", error);
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         const isQuota = errorMsg.toLowerCase().includes('quota');
-        const displayMsg = isQuota
-          ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
-          : `**Error:** ${errorMsg}`;
-        setMessages(prev => prev.map(msg => {
-          if (msg.id === aiMessageId) {
-            return { ...msg, content: displayMsg, isThinking: false };
-          }
-          return msg;
-        }));
+        const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
+        if (isWebSearchDisabled) {
+          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+          setNotification({ message: 'Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.', type: 'error' });
+        } else {
+          const displayMsg = isQuota
+            ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
+            : `**Error:** ${errorMsg}`;
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === aiMessageId) {
+              return { ...msg, content: displayMsg, isThinking: false };
+            }
+            return msg;
+          }));
+        }
       }
     } finally {
         abortControllerRef.current = null;
@@ -566,7 +673,7 @@ const App: React.FC = () => {
              <span className="font-semibold text-gray-800 dark:text-gray-200">edward:labs</span>
            </div>
            <div className="hidden md:flex items-center gap-3">
-             <ModelSelect currentModel={currentModelId} models={models} onSelect={setCurrentModelId} theme={theme} />
+             <ModelSelect currentModel={currentModelId} models={models} onSelect={handleSelectModel} theme={theme} />
            </div>
            <div className="ml-auto flex items-center gap-2">
                <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors">
@@ -576,138 +683,70 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
-           {messages.length === 0 ? (
-             <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                <div className="relative mb-10">
-                  <div className="scale-[2]" style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 12px rgba(var(--neon-rgb), 0.4))' }}>{CHATGPT_LOGO}</div>
-                </div>
-                <h2 className="text-2xl md:text-3xl font-semibold mb-8 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-gray-200 dark:to-gray-400 bg-clip-text text-transparent">How can I help you today?</h2>
+           {modelType === 'chat' ? (
+             <>
+               {messages.length === 0 ? (
+                 <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                    <div className="relative mb-10">
+                      <div className="scale-[2]" style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 12px rgba(var(--neon-rgb), 0.4))' }}>{CHATGPT_LOGO}</div>
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-semibold mb-8 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-gray-200 dark:to-gray-400 bg-clip-text text-transparent">How can I help you today?</h2>
 
-                {modelType === 'chat' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                     {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                       <button
-                          key={i}
-                          onClick={() => { setInput(suggestion); if(textareaRef.current) textareaRef.current.focus(); }}
-                           className="group border border-gray-300 dark:border-white/[0.06] rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-300 bg-transparent"
-                        >
-                           <span className="text-sm text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{suggestion}</span>
-                        </button>
-                     ))}
-                  </div>
-                )}
-             </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+                       {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setInput(suggestion)}
+                             className="group border border-gray-300 dark:border-white/[0.06] rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-300 bg-transparent"
+                          >
+                             <span className="text-sm text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{suggestion}</span>
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+               ) : (
+                 <div className="pb-10 mb-52">
+                    {messages.map((msg) => (
+                      <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} />
+                    ))}
+                    <div ref={messagesEndRef} />
+                 </div>
+               )}
+             </>
            ) : (
-             <div className="pb-10 mb-52">
-                {messages.map((msg) => (
-                  <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} />
-                ))}
-                <div ref={messagesEndRef} />
+             <div className="h-full flex items-center justify-center p-6">
+               {modelType === 'tts' ? (
+                 <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+               ) : modelType === 'tts-voicedesign' ? (
+                 <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+               ) : modelType === 'tts-voiceclone' ? (
+                 <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+               ) : modelType === 'asr' ? (
+                 <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+               ) : null}
              </div>
            )}
         </div>
 
-        {/* Input Area */}
-        <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
-           <div className="max-w-4xl mx-auto w-full">
-              <div
-                className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
-                style={{
-                  background: theme === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(245, 245, 245, 0.9)',
-                  backdropFilter: 'blur(12px)',
-                  border: `1px solid ${input ? 'rgba(var(--neon-rgb), 0.3)' : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.12)'}`,
-                  boxShadow: input ? `0 0 30px -8px rgba(var(--neon-rgb), 0.15)` : theme === 'dark' ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.06)',
-                }}
-              >
-                 {modelType === 'chat' ? (
-                   <>
-                     <textarea
-                       ref={textareaRef}
-                       value={input}
-                       onChange={(e) => setInput(e.target.value)}
-                       onKeyDown={handleKeyDown}
-                         placeholder="Message edward:labs..."
-                         rows={1}
-                         className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
-                       />
-                        <div className="flex items-center justify-end px-2 pb-2">
-                          {isStreaming ? (
-                            <button
-                              onClick={handleStopGeneration}
-                              className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
-                              title="Stop generating"
-                            >
-                              <Square size={16} strokeWidth={2.5} fill="currentColor" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={handleSendMessage}
-                              disabled={!input.trim()}
-                              className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
-                              style={{
-                                background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                                color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
-                                boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
-                              }}
-                            >
-                              <ArrowUp size={18} strokeWidth={2.5} />
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    ) : modelType === 'tts' ? (
-                     <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
-                   ) : modelType === 'tts-voicedesign' ? (
-                     <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
-                   ) : modelType === 'tts-voiceclone' ? (
-                     <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
-                   ) : modelType === 'asr' ? (
-                     <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} />
-                   ) : (
-                     <>
-                       <textarea
-                         ref={textareaRef}
-                         value={input}
-                         onChange={(e) => setInput(e.target.value)}
-                         onKeyDown={handleKeyDown}
-                         placeholder="Message edward:labs..."
-                        rows={1}
-                        className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3.5 pr-12 resize-none outline-none max-h-[50px] overflow-y-auto scrollbar-hidden text-sm"
-                      />
-                      <div className="flex items-center justify-end px-2 pb-2">
-                        {isStreaming ? (
-                          <button
-                            onClick={handleStopGeneration}
-                            className="p-2 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-200 hover:scale-105"
-                            title="Stop generating"
-                          >
-                            <Square size={16} strokeWidth={2.5} fill="currentColor" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handleSendMessage}
-                            disabled={!input.trim()}
-                            className="p-2 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
-                            style={{
-                              background: input.trim() ? 'var(--neon-color)' : theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                              color: input.trim() ? '#000' : theme === 'dark' ? '#555' : '#999',
-                              boxShadow: input.trim() ? '0 0 15px rgba(var(--neon-rgb), 0.3)' : 'none',
-                            }}
-                          >
-                            <ArrowUp size={18} strokeWidth={2.5} />
-                          </button>
-                        )}
-                      </div>
-                   </>
-                 )}
-              </div>
-              <div className="text-center mt-3">
-                <p className="text-[11px] text-gray-500/60">
-                  MiMo can make mistakes. Check important information.
-                </p>
-              </div>
-           </div>
-        </div>
+        {/* Input Area — chat mode only */}
+        {modelType === 'chat' && (
+          <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
+             <div className="max-w-4xl mx-auto w-full">
+                <PromptInputBox
+                  onSend={handleSendMessage}
+                  isLoading={isStreaming}
+                  onStop={handleStopGeneration}
+                  placeholder="Message edward:labs..."
+                  theme={theme}
+                />
+                <div className="text-center mt-3">
+                  <p className="text-[11px] text-gray-500/60">
+                    MiMo can make mistakes. Check important information.
+                  </p>
+                </div>
+             </div>
+          </div>
+        )}
 
         <Settings 
           isOpen={isSettingsOpen} 
@@ -719,6 +758,8 @@ const App: React.FC = () => {
           models={models}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          defaultModelId={defaultModelId}
+          onChangeDefaultModel={handleChangeDefaultModel}
           maxOutputTokens={maxOutputTokens}
           onChangeMaxOutputTokens={setMaxOutputTokens}
           fontSize={fontSize}

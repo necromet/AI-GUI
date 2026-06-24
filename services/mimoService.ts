@@ -1,3 +1,5 @@
+import { Attachment } from '../types';
+
 const apiKey = process.env.MIMO_API_KEY || '';
 const baseUrl = '/mimo-api';
 const directApiKey = process.env.MIMO_DIRECT_API_KEY || '';
@@ -13,6 +15,7 @@ function getProviderConfig(provider?: string): { key: string; base: string } {
 interface MiMoStreamChunk {
   text: string;
   thinkingText?: string;
+  annotations?: any[];
 }
 
 function isQuotaError(errorText: string): boolean {
@@ -39,6 +42,7 @@ async function* parseSSEStream(response: Response, signal?: AbortSignal): AsyncG
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let allAnnotations: any[] = [];
 
   while (true) {
     if (signal?.aborted) {
@@ -58,11 +62,31 @@ async function* parseSSEStream(response: Response, signal?: AbortSignal): AsyncG
       if (!trimmed || !trimmed.startsWith('data:')) continue;
 
       const data = trimmed.slice(5).trim();
-      if (data === '[DONE]') return;
+      if (data === '[DONE]') {
+        if (allAnnotations.length > 0) {
+          yield { text: '', annotations: allAnnotations };
+        }
+        return;
+      }
 
       try {
         const parsed = JSON.parse(data);
-        const delta = parsed.choices?.[0]?.delta;
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+
+        const annotationSources = [
+          delta?.annotations,
+          choice?.message?.annotations,
+          choice?.annotations,
+          parsed.annotations,
+        ];
+        for (const anns of annotationSources) {
+          if (Array.isArray(anns) && anns.length > 0) {
+            allAnnotations.push(...anns);
+            break;
+          }
+        }
+
         if (!delta) continue;
 
         const content = delta.content;
@@ -84,25 +108,35 @@ async function* parseSSEStream(response: Response, signal?: AbortSignal): AsyncG
 export const generateResponseStream = async (
   modelId: string,
   prompt: string,
-  history: { role: string; content: string }[],
+  history: { role: string; content: string; attachments?: Attachment[] }[],
   systemInstruction?: string,
   provider?: string,
   retries = 3,
   maxTokens?: number,
   signal?: AbortSignal,
+  options?: { search?: boolean; think?: boolean },
 ) => {
   const { key, base } = getProviderConfig(provider);
-  const messages: Array<{ role: string; content: string }> = [];
+  const messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [];
 
   if (systemInstruction) {
     messages.push({ role: 'system', content: systemInstruction });
   }
 
   for (const msg of history) {
-    messages.push({
-      role: msg.role === 'model' ? 'assistant' : msg.role,
-      content: msg.content,
-    });
+    const role = msg.role === 'model' ? 'assistant' : msg.role;
+    if (msg.attachments && msg.attachments.length > 0) {
+      const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+      if (msg.content) {
+        content.push({ type: 'text', text: msg.content });
+      }
+      for (const att of msg.attachments) {
+        content.push({ type: 'image_url', image_url: { url: att.data } });
+      }
+      messages.push({ role, content });
+    } else {
+      messages.push({ role, content: msg.content });
+    }
   }
 
   let lastError: Error | null = null;
@@ -119,6 +153,12 @@ export const generateResponseStream = async (
     };
     if (maxTokens && maxTokens > 0) {
       body.max_tokens = maxTokens;
+    }
+    if (options?.search) {
+      body.tools = [{ type: 'web_search', max_keyword: 3, force_search: true }];
+    }
+    if (options?.think !== undefined) {
+      body.thinking = { type: options.think ? 'enabled' : 'disabled' };
     }
 
     const response = await fetch(`${base}/chat/completions`, {
@@ -181,6 +221,7 @@ export const generateChatTitle = async (
           },
         ],
         stream: false,
+        thinking: { type: 'disabled' },
       }),
     });
 
@@ -238,7 +279,7 @@ export async function generateSpeech(params: {
     },
   };
 
-  if (params.voice && params.model === 'mimo-v2.5-tts') {
+  if (params.voice) {
     body.audio.voice = params.voice;
   }
 

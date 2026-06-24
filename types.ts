@@ -3,6 +3,12 @@ export enum Role {
   Assistant = 'model'
 }
 
+export interface Attachment {
+  data: string; // base64 data URL (data:image/png;base64,...)
+  mimeType: string;
+  name: string;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -14,12 +20,24 @@ export interface Message {
   dbMessageId?: number;
   usageMetadata?: UsageMetadata;
   audioUrl?: string;
+  annotations?: SearchAnnotation[];
+  attachments?: Attachment[];
 }
 
 export interface UsageMetadata {
   promptTokens: number;
   candidatesTokens: number;
   totalTokens: number;
+}
+
+export interface SearchAnnotation {
+  type: 'url_citation';
+  url: string;
+  title: string;
+  summary?: string;
+  site_name?: string;
+  publish_time?: string;
+  logo_url?: string;
 }
 
 export interface ChatSession {
@@ -34,10 +52,10 @@ export interface ChatSession {
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
 
 export function getModelType(modelId: string): ModelType {
-  if (modelId === 'mimo-v2.5-tts') return 'tts';
-  if (modelId === 'mimo-v2.5-tts-voicedesign') return 'tts-voicedesign';
-  if (modelId === 'mimo-v2.5-tts-voiceclone') return 'tts-voiceclone';
-  if (modelId === 'mimo-v2.5-asr') return 'asr';
+  if (modelId.includes('tts-voicedesign')) return 'tts-voicedesign';
+  if (modelId.includes('tts-voiceclone')) return 'tts-voiceclone';
+  if (modelId.includes('tts')) return 'tts';
+  if (modelId.includes('asr')) return 'asr';
   return 'chat';
 }
 
@@ -59,4 +77,5 @@ export interface ModelConfig {
   provider?: string; // Provider for custom models
   apiModelId?: string; // Actual model ID sent to the API (if different from id)
   maxTokens?: number; // Maximum tokens for model output
+  modelType?: ModelType; // UI routing type (auto-derived from id if omitted)
 }

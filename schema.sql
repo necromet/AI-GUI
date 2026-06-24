@@ -63,6 +63,10 @@ CREATE TABLE Messages (
     candidates_tokens INTEGER,
     -- JSON string storing generated images from AI image generation models
     generated_images TEXT,
+    -- JSON string storing web search annotations (citations)
+    search_annotations TEXT,
+    -- JSON string storing user-attached files (images) as Attachment[]
+    attachments TEXT,
     
     FOREIGN KEY (conversation_id) REFERENCES Conversations(conversation_id) ON DELETE CASCADE
 );
