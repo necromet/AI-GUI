@@ -9,7 +9,6 @@ import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
-import DatabaseViewer from './components/DatabaseViewer';
 import TokenUsageStats from './components/TokenUsageStats';
 import PasswordScreen from './components/PasswordScreen';
 import Notification, { NotificationType } from './components/Notification';
@@ -47,7 +46,6 @@ const App: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isDatabaseViewerOpen, setIsDatabaseViewerOpen] = useState(false);
   const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSize, setFontSize] = useState<string>(() => {
@@ -648,7 +646,7 @@ const App: React.FC = () => {
         onToggle={() => setIsSidebarOpen(false)}
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenDatabase={() => setIsDatabaseViewerOpen(true)}
+
         onOpenTokenStats={() => setIsTokenStatsOpen(true)}
         conversations={conversations}
         currentConversationId={currentConversationId}
@@ -766,14 +764,6 @@ const App: React.FC = () => {
           onChangeFontSize={setFontSize}
         />
 
-        {isDatabaseViewerOpen && (
-          <div className="fixed inset-0 z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
-            <div className="relative w-full h-full">
-              <button onClick={() => setIsDatabaseViewerOpen(false)} className="absolute top-4 right-4 z-50 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105" style={{ background: 'rgba(var(--neon-rgb), 0.1)', border: '1px solid rgba(var(--neon-rgb), 0.2)', color: 'var(--neon-color)' }}>Close</button>
-              <DatabaseViewer />
-            </div>
-          </div>
-        )}
 
         <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 

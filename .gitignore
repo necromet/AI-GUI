@@ -10,10 +10,7 @@ lerna-debug.log*
 generated_images
 node_modules
 dist
-dist-electron
 dist-ssr
-release
-chat.db
 *.local
 
 # Editor directories and files
