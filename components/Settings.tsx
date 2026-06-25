@@ -12,6 +12,8 @@ interface SettingsProps {
   models: ModelConfig[];
   onAddModel: (model: ModelConfig) => void;
   onDeleteModel: (id: string) => void;
+  defaultModelId: string;
+  onChangeDefaultModel: (id: string) => void;
   maxOutputTokens: number | undefined;
   onChangeMaxOutputTokens: (value: number | undefined) => void;
   fontSize: string;
@@ -30,6 +32,8 @@ const Settings: React.FC<SettingsProps> = ({
   models,
   onAddModel,
   onDeleteModel,
+  defaultModelId,
+  onChangeDefaultModel,
   maxOutputTokens,
   onChangeMaxOutputTokens,
   fontSize,
@@ -161,6 +165,22 @@ const Settings: React.FC<SettingsProps> = ({
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-sm ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                   </div>
+                </section>
+
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Default Model</h3>
+                  <p className="text-xs text-gray-500 mb-3">Choose which model is selected when the app starts.</p>
+                  <select
+                    value={defaultModelId}
+                    onChange={(e) => onChangeDefaultModel(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white text-sm outline-none transition-all duration-200 focus:border-gray-400 dark:focus:border-white/20"
+                  >
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id} className="bg-white dark:bg-[#0a0a0a]">
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
                 </section>
 
                 <section>

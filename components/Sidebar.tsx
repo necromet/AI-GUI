@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, Database, BarChart3, Sun, Moon } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, BarChart3, Sun, Moon } from 'lucide-react';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -7,7 +7,6 @@ interface SidebarProps {
   onToggle: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
-  onOpenDatabase?: () => void;
   onOpenTokenStats?: () => void;
   conversations: ChatSession[];
   currentConversationId: number | null;
@@ -22,7 +21,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggle,
   onNewChat,
   onOpenSettings,
-  onOpenDatabase,
   onOpenTokenStats,
   conversations,
   currentConversationId,
@@ -159,15 +157,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer */}
         <div className="p-3 border-t border-gray-300 dark:border-white/[0.04] space-y-0.5">
-          {onOpenDatabase && typeof window !== 'undefined' && window.electron !== undefined && (
-            <button
-              onClick={onOpenDatabase}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-all duration-200 group"
-            >
-              <Database size={16} className="text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-              <span className="font-medium">Database</span>
-            </button>
-          )}
 
           {onOpenTokenStats && (
             <button

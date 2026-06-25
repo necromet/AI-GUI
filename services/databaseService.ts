@@ -2,7 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 // Database name and version
 const DB_NAME = 'ChatGPT_DB';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 // IndexedDB Schema
 interface ChatGPTDB extends DBSchema {
@@ -64,6 +64,14 @@ export const getDatabase = async (): Promise<IDBPDatabase<ChatGPTDB>> => {
         // Note: IndexedDB allows flexible schemas, so existing records will simply have undefined for the new field
         if (oldVersion < 2) {
           console.log('Migrating database to version 2 (adding generated_images support)');
+        }
+
+        if (oldVersion < 3) {
+          console.log('Migrating database to version 3 (adding search_annotations support)');
+        }
+
+        if (oldVersion < 4) {
+          console.log('Migrating database to version 4 (adding attachments support)');
         }
       },
     });
@@ -280,6 +288,8 @@ export interface DBMessage {
   prompt_tokens?: number | null;
   candidates_tokens?: number | null;
   generated_images?: string | null; // JSON string of array of {id, data, mimeType}
+  search_annotations?: string | null; // JSON string of SearchAnnotation[]
+  attachments?: string | null; // JSON string of Attachment[]
 }
 
 /**
@@ -293,7 +303,9 @@ export const addMessage = async (
   tokenCount: number | null = null,
   generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null,
   promptTokens?: number | null,
-  candidatesTokens?: number | null
+  candidatesTokens?: number | null,
+  searchAnnotations?: any[] | null,
+  attachments?: string | null
 ): Promise<number> => {
   const db = await getDatabase();
   const message: DBMessage = {
@@ -305,7 +317,9 @@ export const addMessage = async (
     token_count: tokenCount,
     prompt_tokens: promptTokens || null,
     candidates_tokens: candidatesTokens || null,
-    generated_images: generatedImages ? JSON.stringify(generatedImages) : null
+    generated_images: generatedImages ? JSON.stringify(generatedImages) : null,
+    search_annotations: searchAnnotations && searchAnnotations.length > 0 ? JSON.stringify(searchAnnotations) : null,
+    attachments: attachments || null
   };
   
   // Update conversation's updated_at timestamp
