@@ -7,7 +7,8 @@
     <title>edward:labs</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Fredoka:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;500;600;700&family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha384-zh0CIsljlf0E7dkDB76R3G6/58r08Bb2MFkR3lA9q9X8sYoQ6O1wVq896v8Q4lB" crossorigin="anonymous">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -28,7 +29,7 @@
               }
             },
             fontFamily: {
-              sans: ['Söhne', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Ubuntu', 'Cantarell', 'Noto Sans', 'sans-serif', 'Helvetica Neue', 'Arial', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'],
+              sans: ['Fredoka', 'Comfortaa', 'Google Sans', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Ubuntu', 'Cantarell', 'Noto Sans', 'sans-serif'],
             },
             keyframes: {
               glow: {
@@ -100,16 +101,23 @@
       :root {
         --neon-rgb: 248, 113, 113;
         --neon-color: rgb(248, 113, 113);
+        --neon-secondary-rgb: 34, 211, 238;
+        --neon-secondary: rgb(34, 211, 238);
+        --neon-accent-rgb: 192, 132, 252;
+        --neon-accent: rgb(192, 132, 252);
         --app-font-size: 15px;
+        --app-font-family: 'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
       }
 
       html {
         font-size: var(--app-font-size, 15px);
+        font-family: var(--app-font-family);
       }
 
       body {
         background-color: #ffffff;
         color: #1a1a1a;
+        font-family: var(--app-font-family);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
@@ -240,6 +248,9 @@
         text-decoration: underline;
         text-underline-offset: 3px;
       }
+      .prose a.no-underline {
+        text-decoration: none;
+      }
 
       ::selection {
         background: rgba(var(--neon-rgb), 0.3);
@@ -269,6 +280,10 @@
         box-shadow: 0 0 10px rgba(var(--neon-rgb), 0.2),
                     0 0 20px rgba(var(--neon-rgb), 0.1);
       }
+      .neon-secondary-text { color: var(--neon-secondary); }
+      .neon-secondary-bg { background-color: var(--neon-secondary); }
+      .neon-accent-text { color: var(--neon-accent); }
+      .neon-accent-bg { background-color: var(--neon-accent); }
 
       /* Smooth transitions for dark/light mode */
       html {
@@ -280,6 +295,54 @@
         outline: none;
         box-shadow: 0 0 0 2px rgba(var(--neon-rgb), 0.3);
         border-radius: inherit;
+      }
+
+      /* KaTeX math styling */
+      .katex-display {
+        margin: 1.2em 0 !important;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0.5em 0;
+      }
+
+      .katex-display > .katex {
+        white-space: normal;
+      }
+
+      .katex {
+        font-size: 1.05em;
+        color: inherit;
+      }
+
+      html.dark .katex {
+        color: #e2e8f0;
+      }
+
+      .katex-display > .katex {
+        text-align: left;
+      }
+
+      /* Inline math styling */
+      .katex-inline {
+        padding: 0 0.15em;
+      }
+
+      /* Math code block styling */
+      .math-display {
+        background: rgba(var(--neon-rgb), 0.04);
+        border: 1px solid rgba(var(--neon-rgb), 0.12);
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        margin: 1.2em 0;
+        overflow-x: auto;
+      }
+
+      html:not(.dark) .math-display {
+        background: rgba(var(--neon-rgb), 0.06);
+      }
+
+      .math-display .katex {
+        font-size: 1.1em;
       }
     </style>
   </head>
