@@ -16,6 +16,8 @@ import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
 import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
+import RAGPanel from './components/RAGPanel';
+import PluginAgentPanel from './components/PluginAgentPanel';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -47,7 +49,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_session');
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -85,6 +87,7 @@ const App: React.FC = () => {
   
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [activeView, setActiveView] = useState<'chat' | 'rag' | 'plugin-agent'>('chat');
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
@@ -175,6 +178,7 @@ const App: React.FC = () => {
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
+    setActiveView('chat');
   };
 
   const handleSelectModel = (id: string) => {
@@ -260,6 +264,7 @@ const App: React.FC = () => {
     });
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
+    setActiveView('chat');
   };
 
   const saveMessageToDb = async (
@@ -689,15 +694,21 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-white dark:bg-main text-gray-900 dark:text-white overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300" style={{ '--app-font-size': `${FONT_SIZE_MAP[fontSize] || 15}px` } as React.CSSProperties}>
-      <div className={`md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsSidebarOpen(false)} />
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg-100)', color: 'var(--text-100)' }}>
+      {/* Mobile backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
       <Sidebar 
         isOpen={isSidebarOpen} 
         onToggle={() => setIsSidebarOpen(false)}
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
-
         onOpenTokenStats={() => setIsTokenStatsOpen(true)}
         conversations={conversations}
         currentConversationId={currentConversationId}
@@ -709,93 +720,139 @@ const App: React.FC = () => {
         }}
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        activeView={activeView}
+        onNavigate={(view) => setActiveView(view)}
+        currentModelName={selectedModelConfig.name}
       />
 
-       <main className="flex-1 flex flex-col h-full relative min-w-0 bg-white dark:bg-main transition-all duration-300">
-        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10 bg-white/80 dark:bg-main/80 backdrop-blur-md transition-colors">
-           {!isSidebarOpen && (
-              <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] hover:text-gray-900 dark:hover:text-white rounded-xl transition-all duration-200">
-                <PanelLeft size={22} />
-              </button>
-           )}
-           <div className="flex items-center gap-2 md:hidden">
-             <span className="font-semibold text-gray-800 dark:text-gray-200">edward:labs</span>
-           </div>
-           <div className="hidden md:flex items-center gap-3">
-             <ModelSelect currentModel={currentModelId} models={models} onSelect={handleSelectModel} theme={theme} />
-           </div>
-           <div className="ml-auto flex items-center gap-2">
-               <button onClick={handleNewChat} className="md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors">
-                  <SquarePen size={18} />
-               </button>
-           </div>
+      <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
+        {/* Top bar */}
+        <div className="flex items-center p-2 md:p-4 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
+          {!isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 mr-2 rounded-lg transition-all duration-200"
+              style={{ color: 'var(--text-500)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
+            >
+              <PanelLeft size={20} />
+            </button>
+          )}
+          <div className="hidden md:flex items-center gap-3">
+            <ModelSelect currentModel={currentModelId} models={models} onSelect={handleSelectModel} theme={theme} />
+          </div>
+          <div className="flex items-center gap-2 md:hidden">
+            <span className="font-semibold text-sm" style={{ color: 'var(--text-300)' }}>edward:labs</span>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleNewChat}
+              className="md:hidden p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-500)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <SquarePen size={18} />
+            </button>
+          </div>
         </div>
 
+        {/* Content area */}
         <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
-           {modelType === 'chat' ? (
-             <>
-               {messages.length === 0 ? (
-                 <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                    <div className="relative mb-10">
-                      <div className="scale-[2]" style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 12px rgba(var(--neon-rgb), 0.4))' }}>{CHATGPT_LOGO}</div>
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-semibold mb-8 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-gray-200 dark:to-gray-400 bg-clip-text text-transparent">How can I help you today?</h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                       {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setInput(suggestion)}
-                             className="group border border-gray-300 dark:border-white/[0.06] rounded-xl p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-300 bg-transparent"
-                          >
-                             <span className="text-sm text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{suggestion}</span>
-                          </button>
-                       ))}
-                    </div>
-                 </div>
-               ) : (
-                  <div className="pb-10 mb-52">
-                       {messages.map((msg) => (
-                         <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} />
-                      ))}
-                     <div ref={messagesEndRef} />
+          {activeView === 'rag' ? (
+            <div className="h-full flex items-center justify-center p-6">
+              <RAGPanel theme={theme} />
+            </div>
+          ) : activeView === 'plugin-agent' ? (
+            <div className="h-full flex items-center justify-center p-6">
+              <PluginAgentPanel theme={theme} />
+            </div>
+          ) : modelType === 'chat' ? (
+            <>
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                  <div className="relative mb-8">
+                    <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
                   </div>
-               )}
-             </>
-           ) : (
-             <div className="h-full flex items-center justify-center p-6">
-               {modelType === 'tts' ? (
-                 <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-               ) : modelType === 'tts-voicedesign' ? (
-                 <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-               ) : modelType === 'tts-voiceclone' ? (
-                 <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-               ) : modelType === 'asr' ? (
-                 <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-               ) : null}
-             </div>
-           )}
+                  <h2
+                    className="text-2xl md:text-3xl font-semibold mb-8"
+                    style={{ color: 'var(--text-100)' }}
+                  >
+                    How can I help you today?
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+                    {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setInput(suggestion)}
+                        className="group rounded-xl p-4 text-left transition-all duration-200"
+                        style={{
+                          backgroundColor: 'var(--bg-200)',
+                          border: '1px solid var(--border-300)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                          e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-200)';
+                          e.currentTarget.style.borderColor = 'var(--border-300)';
+                        }}
+                      >
+                        <span className="text-sm" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="pb-10 mb-52">
+                  {messages.map((msg) => (
+                    <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center p-6">
+              {modelType === 'tts' ? (
+                <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+              ) : modelType === 'tts-voicedesign' ? (
+                <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+              ) : modelType === 'tts-voiceclone' ? (
+                <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+              ) : modelType === 'asr' ? (
+                <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Input Area — chat mode only */}
-        {modelType === 'chat' && (
-          <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white dark:from-main dark:via-main to-transparent pt-20 pb-6 px-4 transition-colors">
-             <div className="max-w-4xl mx-auto w-full">
-                <PromptInputBox
-                  onSend={handleSendMessage}
-                  isLoading={isStreaming}
-                  onStop={handleStopGeneration}
-                  placeholder="Message edward:labs..."
-                  theme={theme}
-                  externalFiles={pendingFiles}
-                  onExternalFilesConsumed={() => setPendingFiles([])}
-                />
-                <div className="text-center mt-3">
-                  <p className="text-[11px] text-gray-500/60">
-                    MiMo can make mistakes. Check important information.
-                  </p>
-                </div>
-             </div>
+        {modelType === 'chat' && activeView === 'chat' && (
+          <div
+            className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4"
+            style={{
+              background: `linear-gradient(to top, var(--bg-100) 50%, transparent)`,
+            }}
+          >
+            <div className="max-w-3xl mx-auto w-full">
+              <PromptInputBox
+                onSend={handleSendMessage}
+                isLoading={isStreaming}
+                onStop={handleStopGeneration}
+                placeholder="Message edward:labs..."
+                theme={theme}
+                externalFiles={pendingFiles}
+                onExternalFilesConsumed={() => setPendingFiles([])}
+              />
+              <div className="text-center mt-3">
+                <p className="text-[11px]" style={{ color: 'rgba(122,122,122,0.6)' }}>
+                  MiMo can make mistakes. Check important information.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -821,13 +878,11 @@ const App: React.FC = () => {
           onChangeFontFamily={setFontFamily}
         />
 
-
         <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 
         {notification && (
           <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />
         )}
-
       </main>
     </div>
   );

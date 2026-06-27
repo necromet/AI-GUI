@@ -61,7 +61,7 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to synthesize..."
             rows={5}
-            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
+            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 
@@ -71,7 +71,7 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
             <select
               value={voice}
               onChange={(e) => setVoice(e.target.value)}
-              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
+              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
             >
               {BUILT_IN_VOICES.map((v) => (
                 <option key={v} value={v}>{v}</option>
@@ -84,7 +84,7 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
               value={style}
               onChange={(e) => setStyle(e.target.value)}
               placeholder="e.g. Cheerful, slow"
-              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
+              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
             />
           </div>
         </div>

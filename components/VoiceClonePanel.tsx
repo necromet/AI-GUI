@@ -81,7 +81,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
 
   const canGenerate = text.trim().length > 0 && !!audioFile;
 
-  const borderColor = isDragOver ? 'rgba(var(--neon-rgb), 0.4)' : (theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.15)');
+  const borderColor = isDragOver ? 'rgba(var(--neon-rgb), 0.4)' : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)');
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6">
@@ -121,7 +121,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
               <span>{isDragOver ? 'Drop audio here' : 'Drag & drop or click to upload reference audio'}</span>
             </button>
           ) : (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.06]">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.04]">
               <Mic size={16} style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
               <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{audioFile.name}</span>
               <button onClick={handleRemoveFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-red-400">
@@ -141,7 +141,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to synthesize with cloned voice..."
             rows={5}
-            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
+            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 
@@ -151,7 +151,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             placeholder="e.g. Whisper softly, speak excitedly"
-            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-300 dark:border-white/[0.06] focus:border-gray-400 dark:focus:border-white/20"
+            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 

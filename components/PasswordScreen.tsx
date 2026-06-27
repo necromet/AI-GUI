@@ -52,7 +52,7 @@ function TextGlitch({ text, defaultText, className = '' }: { text: string; defau
       className={`
         text-5xl font-bold leading-none tracking-tight m-0
         text-gray-900 dark:text-white
-        border-b border-gray-200 dark:border-neutral-600/20
+        border-b border-gray-200 dark:border-neutral-600/12
         flex flex-col items-center justify-center relative
         transition-all duration-500 ease-out
         cursor-pointer overflow-hidden
@@ -130,7 +130,7 @@ const PasswordScreen: React.FC<PasswordScreenProps> = ({ onSuccess }) => {
   return (
     <div className="relative flex min-h-screen items-center justify-center">
       <NeuralBackground className="absolute inset-0 z-0" color={neonColor} trailOpacity={0.12} particleCount={600} speed={0.8} />
-      <div className="relative z-10 w-full max-w-md mx-4 p-8 rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-xl shadow-xl">
+      <div className="relative z-10 w-full max-w-md mx-4 p-8 rounded-2xl border border-white/[0.04] bg-[#0a0a0a]/80 backdrop-blur-xl shadow-xl">
         <div className="text-center mb-8">
            <TextGlitch text="EDWARD:LABS" defaultText="DRAWDE:SLAB" />
           <p className="text-sm text-gray-500 mt-4">Enter your password</p>
@@ -143,7 +143,7 @@ const PasswordScreen: React.FC<PasswordScreenProps> = ({ onSuccess }) => {
             value={password}
             onChange={(e) => { setPassword(e.target.value); setError(''); }}
             placeholder="Password"
-            className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 bg-white/[0.03] border border-white/[0.08] outline-none transition-all duration-200 focus:border-white/20"
+            className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 bg-white/[0.03] border border-white/[0.06] outline-none transition-all duration-200 focus:border-white/12"
           />
 
           {error && (
@@ -156,7 +156,7 @@ const PasswordScreen: React.FC<PasswordScreenProps> = ({ onSuccess }) => {
             className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed bg-white text-black hover:opacity-90"
           >
             {isLoading ? (
-              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
             ) : (
               <>
                 Enter

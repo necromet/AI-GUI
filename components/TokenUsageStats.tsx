@@ -192,14 +192,14 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
-      <div className="bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-300 dark:border-white/[0.08]" style={{ boxShadow: '0 0 80px -20px rgba(var(--neon-rgb), 0.1), 0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+      <div className="bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-white/[0.06]" style={{ boxShadow: '0 0 80px -20px rgba(var(--neon-rgb), 0.1), 0 25px 50px -12px rgba(0,0,0,0.5)' }}>
         {/* Top neon accent */}
         <div className="absolute top-0 left-0 right-0 h-[2px] rounded-t-2xl" style={{ background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`, boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)` }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-300 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/[0.04]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(var(--neon-rgb), 0.08)', border: '1px solid rgba(var(--neon-rgb), 0.15)' }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(var(--neon-rgb), 0.08)', border: '1px solid rgba(var(--neon-rgb), 0.1)' }}>
               <Activity className="h-6 w-6" style={{ color: 'var(--neon-color)' }} />
             </div>
             <div>
@@ -225,7 +225,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
               style={{
                 color: selectedView === id ? 'var(--neon-color)' : undefined,
                 background: selectedView === id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                border: selectedView === id ? '1px solid rgba(var(--neon-rgb), 0.15)' : '1px solid transparent',
+                border: selectedView === id ? '1px solid rgba(var(--neon-rgb), 0.1)' : '1px solid transparent',
               }}
             >
               <Icon className="h-4 w-4" />
@@ -274,7 +274,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                   </div>
 
                   {/* Usage breakdown */}
-                  <div className="rounded-xl border border-gray-300 dark:border-white/[0.06] p-6 bg-gray-50/50 dark:bg-white/[0.02]">
+                  <div className="rounded-xl border border-gray-200 dark:border-white/[0.04] p-6 bg-gray-50/50 dark:bg-white/[0.02]">
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-5 uppercase tracking-wider">Usage Breakdown</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                       {[
@@ -337,7 +337,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                         return (
                           <div
                             key={model.modelId + index}
-                            className="relative rounded-xl border border-gray-300 dark:border-white/[0.08] p-5 bg-white dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/[0.15] transition-all duration-300 hover:shadow-lg group"
+                            className="relative rounded-xl border border-gray-200 dark:border-white/[0.06] p-5 bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.1] transition-all duration-300 hover:shadow-lg group"
                           >
                             <div className="flex items-center gap-4">
                               <div className="relative flex-shrink-0">
@@ -381,14 +381,14 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                                   {model.hasUsage ? `${formatCompact(model.totalTokens)} tokens` : 'No usage yet'}
                                 </p>
                                 {model.isCustom && (
-                                  <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.15)' }}>
+                                  <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.1)' }}>
                                     CUSTOM
                                   </span>
                                 )}
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-white/[0.06]">
+                            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-50 dark:border-white/[0.04]">
                               <div>
                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Prompt</p>
                                 <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-0.5">{formatCompact(model.promptTokens)}</p>
@@ -418,7 +418,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                     <select
                       value={timeRange}
                       onChange={(e) => setTimeRange(Number(e.target.value))}
-                      className="px-3 py-1.5 bg-gray-50 dark:bg-white/[0.04] border border-gray-300 dark:border-white/[0.08] rounded-lg text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-gray-400 dark:focus:border-white/20 transition-colors"
+                      className="px-3 py-1.5 bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.06] rounded-lg text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-gray-300 dark:focus:border-white/12 transition-colors"
                     >
                       <option value={7}>Last 7 days</option>
                       <option value={30}>Last 30 days</option>
@@ -438,7 +438,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                         const percentage = maxTokens > 0 ? (stat.totalTokens / maxTokens) * 100 : 0;
 
                         return (
-                          <div key={index} className="rounded-xl border border-gray-300 dark:border-white/[0.06] p-4 bg-white dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all">
+                          <div key={index} className="rounded-xl border border-gray-200 dark:border-white/[0.04] p-4 bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.08] transition-all">
                             <div className="flex items-center justify-between mb-3">
                               <span className="text-sm font-semibold text-gray-900 dark:text-white">
                                 {formatDate(stat.date)}
@@ -486,7 +486,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                   ) : (
                     <div className="space-y-2">
                       {conversationStats.map((conv, index) => (
-                        <div key={conv.conversationId} className="rounded-xl border border-gray-300 dark:border-white/[0.06] p-4 bg-white dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all">
+                        <div key={conv.conversationId} className="rounded-xl border border-gray-200 dark:border-white/[0.04] p-4 bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.08] transition-all">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1 min-w-0 pr-4">
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
@@ -504,7 +504,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100 dark:border-white/[0.06]">
+                          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-50 dark:border-white/[0.04]">
                             <div>
                               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Prompt</p>
                               <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-0.5">{formatNumber(conv.promptTokens)}</p>
@@ -529,7 +529,7 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-300 dark:border-white/[0.06] bg-gray-50/50 dark:bg-white/[0.01]">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-white/[0.04] bg-gray-50/50 dark:bg-white/[0.01]">
           <p className="text-[11px] text-gray-400 text-center">
             Token counts are estimates based on stored conversation history. Actual API billing may vary.
           </p>

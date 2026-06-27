@@ -112,7 +112,7 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark', mod
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const borderColor = isDragOver ? 'rgba(var(--neon-rgb), 0.4)' : (theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.15)');
+  const borderColor = isDragOver ? 'rgba(var(--neon-rgb), 0.4)' : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)');
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6">
@@ -126,7 +126,7 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark', mod
         </div>
       </div>
 
-      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.06]">
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.04]">
         <button
           onClick={() => setInputMode('upload')}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
@@ -179,7 +179,7 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark', mod
               <span>{isDragOver ? 'Drop audio here' : 'Drag & drop or click to upload audio'}</span>
             </button>
           ) : (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.06]">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.04]">
               <Mic size={16} style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
               <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{audioFile.name}</span>
               <button onClick={handleRemoveFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-red-400">
@@ -201,7 +201,7 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark', mod
             />
           ) : (
             <div className="w-full flex flex-col gap-3">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.06]">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.04]">
                 <Mic size={16} style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
                 <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{audioFile.name}</span>
                 <button onClick={handleRemoveFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-red-400">
@@ -251,7 +251,7 @@ const ASRPanel: React.FC<ASRPanelProps> = ({ onNotification, theme = 'dark', mod
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
-          <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] text-sm text-gray-900 dark:text-gray-200 whitespace-pre-wrap leading-relaxed border border-gray-300 dark:border-white/[0.06]">
+          <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] text-sm text-gray-900 dark:text-gray-200 whitespace-pre-wrap leading-relaxed border border-gray-200 dark:border-white/[0.04]">
             {transcription}
           </div>
         </div>

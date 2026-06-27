@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Fredoka:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;500;600;700&family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha384-zh0CIsljlf0E7dkDB76R3G6/58r08Bb2MFkR3lA9q9X8sYoQ6O1wVq896v8Q4lB" crossorigin="anonymous">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -16,11 +15,11 @@
         theme: {
           extend: {
             colors: {
-              sidebar: '#000000',
-              main: '#050505',
-              input: '#121212',
-              hover: '#1a1a1a',
-              user: '#1a1a1a',
+              sidebar: 'var(--bg-100)',
+              main: 'var(--bg-100)',
+              input: 'var(--bg-200)',
+              hover: 'var(--bg-300)',
+              user: 'var(--bg-200)',
               neon: {
                 blue: '#ff4444',
                 purple: '#ff6666',
@@ -32,10 +31,6 @@
               sans: ['Fredoka', 'Comfortaa', 'Google Sans', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Ubuntu', 'Cantarell', 'Noto Sans', 'sans-serif'],
             },
             keyframes: {
-              glow: {
-                '0%': { boxShadow: '0 0 5px #ff4444' },
-                '100%': { boxShadow: '0 0 20px #ff4444, 0 0 10px #ff6666' },
-              },
               shake: {
                 '0%, 100%': { transform: 'translateX(0)' },
                 '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
@@ -57,18 +52,6 @@
                 '0%, 100%': { opacity: '0.3', transform: 'scale(0.8)' },
                 '50%': { opacity: '1', transform: 'scale(1.2)' },
               },
-              'pulse-glow': {
-                '0%, 100%': { opacity: '0.02', transform: 'scale(1)' },
-                '50%': { opacity: '0.04', transform: 'scale(1.05)' },
-              },
-              'float': {
-                '0%, 100%': { transform: 'translate(0, 0)' },
-                '50%': { transform: 'translate(20px, -20px)' },
-              },
-              'orbit': {
-                '0%': { transform: 'rotate(0deg)' },
-                '100%': { transform: 'rotate(360deg)' },
-              },
               'slide-in-from-top': {
                 '0%': { transform: 'translateY(-100%)', opacity: '0' },
                 '100%': { transform: 'translateY(0)', opacity: '1' },
@@ -80,15 +63,11 @@
             },
             animation: {
               'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'glow': 'glow 2s ease-in-out infinite alternate',
               'shake': 'shake 0.5s ease-in-out',
               'fade-in': 'fade-in 0.3s ease-out forwards',
               'message-in': 'message-in 0.4s ease-out forwards',
               'dropdown-in': 'dropdown-in 0.2s ease-out forwards',
               'pulse-dot': 'pulse-dot 1.4s ease-in-out infinite',
-              'pulse-glow': 'pulse-glow 4s ease-in-out infinite',
-              'float': 'float 8s ease-in-out infinite',
-              'orbit': 'orbit 6s linear infinite',
               'slide-in-from-top': 'slide-in-from-top 0.3s ease-out forwards',
               'spin': 'spin 1s linear infinite',
               'spin-slow': 'spin 3s linear infinite',
@@ -99,6 +78,18 @@
     </script>
     <style>
       :root {
+        /* Light mode palette (default) */
+        --bg-100: #ffffff;
+        --bg-200: #f7f7f8;
+        --bg-300: #ececec;
+        --bg-400: #d4d4d4;
+        --text-100: #1a1a1a;
+        --text-300: #4a4a4a;
+        --text-500: #8a8a8a;
+        --border-300: rgba(0,0,0,0.08);
+        --border-200: rgba(0,0,0,0.04);
+
+        /* Neon accent vars (preserved for accent highlights) */
         --neon-rgb: 248, 113, 113;
         --neon-color: rgb(248, 113, 113);
         --neon-secondary-rgb: 34, 211, 238;
@@ -107,6 +98,23 @@
         --neon-accent: rgb(192, 132, 252);
         --app-font-size: 15px;
         --app-font-family: 'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+
+        /* Surface aliases for inline usage */
+        --surface-hover: rgba(0,0,0,0.04);
+      }
+
+      html.dark {
+        /* Dark mode palette */
+        --bg-100: #0e0e0e;
+        --bg-200: #1a1a1a;
+        --bg-300: #252525;
+        --bg-400: #303030;
+        --text-100: #ececec;
+        --text-300: #b4b4b4;
+        --text-500: #7a7a7a;
+        --border-300: rgba(255,255,255,0.08);
+        --border-200: rgba(255,255,255,0.04);
+        --surface-hover: rgba(255,255,255,0.03);
       }
 
       html {
@@ -123,8 +131,8 @@
       }
 
       html.dark body {
-        background-color: #050505;
-        color: #ececec;
+        background-color: var(--bg-100);
+        color: var(--text-100);
       }
 
       * {
@@ -132,7 +140,7 @@
       }
 
       html.dark * {
-        scrollbar-color: #222 #000;
+        scrollbar-color: #333 transparent;
       }
 
       ::-webkit-scrollbar {
@@ -147,12 +155,15 @@
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: var(--neon-color);
-        box-shadow: 0 0 8px var(--neon-color);
+        background: #888;
       }
 
       html.dark ::-webkit-scrollbar-thumb {
-        background: #222;
+        background: #333;
+      }
+
+      html.dark ::-webkit-scrollbar-thumb:hover {
+        background: #555;
       }
 
       .scrollbar-hidden::-webkit-scrollbar {
@@ -164,8 +175,8 @@
       }
 
       .prose pre {
-        background-color: #000000 !important;
-        border: 0px;
+        background-color: #1e1e2e !important;
+        border: 1px solid rgba(255,255,255,0.06);
         border-radius: 0.5rem;
         padding: 1rem;
         margin-top: 1rem;
@@ -175,6 +186,7 @@
 
       html:not(.dark) .prose pre {
         background-color: #eff1f5 !important;
+        border: 1px solid rgba(0,0,0,0.06);
       }
 
       .prose .neon-code-block-container {
@@ -188,7 +200,7 @@
         box-shadow: none;
         transition: all 0.3s ease;
         overflow: hidden;
-        background: #000000 !important;
+        background: #1e1e2e !important;
         margin: 0 !important;
       }
 
@@ -197,7 +209,7 @@
       }
 
       .code-block-wrapper:hover .neon-code-block-container {
-        background: #000000 !important;
+        background: #1e1e2e !important;
       }
 
       html:not(.dark) .code-block-wrapper:hover .neon-code-block-container {
@@ -232,7 +244,7 @@
         margin-top: 3em;
         margin-bottom: 3em;
         border: none;
-        border-top: 1px solid rgba(var(--neon-rgb), 0.2);
+        border-top: 1px solid var(--border-300);
       }
       .prose strong {
         color: #111;
@@ -241,7 +253,6 @@
 
       html.dark .prose strong {
         color: #fff;
-        text-shadow: 0 0 1px rgba(255,255,255,0.3);
       }
       .prose a {
         color: var(--neon-color);
@@ -253,7 +264,7 @@
       }
 
       ::selection {
-        background: rgba(var(--neon-rgb), 0.3);
+        background: rgba(var(--neon-rgb), 0.25);
         color: #fff;
       }
 
@@ -269,17 +280,12 @@
 
       html:not(.dark) .glass-panel {
         background: rgba(255, 255, 255, 0.8);
-        border: 1px solid rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
       }
 
       .neon-text { color: var(--neon-color); }
       .neon-border { border-color: var(--neon-color); }
       .neon-bg { background-color: var(--neon-color); }
-      .neon-shadow { box-shadow: 0 0 20px rgba(var(--neon-rgb), 0.5); }
-      .neon-glow {
-        box-shadow: 0 0 10px rgba(var(--neon-rgb), 0.2),
-                    0 0 20px rgba(var(--neon-rgb), 0.1);
-      }
       .neon-secondary-text { color: var(--neon-secondary); }
       .neon-secondary-bg { background-color: var(--neon-secondary); }
       .neon-accent-text { color: var(--neon-accent); }
@@ -290,59 +296,49 @@
         transition: background-color 0.3s ease;
       }
 
-      /* Focus ring override */
+      /* Focus ring override — subtle */
       input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 2px rgba(var(--neon-rgb), 0.3);
+        box-shadow: 0 0 0 2px rgba(var(--neon-rgb), 0.2);
         border-radius: inherit;
       }
 
-      /* KaTeX math styling */
-      .katex-display {
-        margin: 1.2em 0 !important;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 0.5em 0;
+      /* Placeholder color via CSS vars */
+      ::placeholder {
+        color: var(--text-500);
+        opacity: 1;
       }
 
-      .katex-display > .katex {
-        white-space: normal;
-      }
-
-      .katex {
-        font-size: 1.05em;
-        color: inherit;
-      }
-
-      html.dark .katex {
-        color: #e2e8f0;
-      }
-
-      .katex-display > .katex {
-        text-align: left;
-      }
-
-      /* Inline math styling */
-      .katex-inline {
-        padding: 0 0.15em;
-      }
-
-      /* Math code block styling */
+      /* MathML math styling */
       .math-display {
         background: rgba(var(--neon-rgb), 0.04);
-        border: 1px solid rgba(var(--neon-rgb), 0.12);
+        border: 1px solid var(--border-300);
         border-radius: 0.75rem;
         padding: 1.25rem 1.5rem;
         margin: 1.2em 0;
         overflow-x: auto;
+        text-align: left;
       }
 
       html:not(.dark) .math-display {
         background: rgba(var(--neon-rgb), 0.06);
       }
 
-      .math-display .katex {
+      .math-display math {
         font-size: 1.1em;
+      }
+
+      .math-inline {
+        padding: 0 0.15em;
+      }
+
+      math {
+        font-size: 1.05em;
+        color: inherit;
+      }
+
+      html.dark math {
+        color: #e2e8f0;
       }
     </style>
   </head>

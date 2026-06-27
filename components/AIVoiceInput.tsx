@@ -90,7 +90,7 @@ export function AIVoiceInput({
           "group relative flex items-center justify-center w-16 h-16 rounded-full transition-all duration-300",
           isActive
             ? "bg-red-500/10 border-2 border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.15)]"
-            : "bg-gray-100 dark:bg-white/[0.06] border-2 border-gray-300 dark:border-white/[0.08] hover:border-gray-400 dark:hover:border-white/[0.15] hover:bg-gray-200 dark:hover:bg-white/[0.08]"
+            : "bg-gray-100 dark:bg-white/[0.06] border-2 border-gray-200 dark:border-white/[0.06] hover:border-gray-300 dark:hover:border-white/[0.1] hover:bg-gray-200 dark:hover:bg-white/[0.08]"
         )}
         disabled={demoMode}
       >

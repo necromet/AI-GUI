@@ -109,14 +109,14 @@ const Settings: React.FC<SettingsProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
       <div
-        className={`w-full max-w-2xl bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl flex flex-col overflow-hidden h-[600px] border border-gray-300 dark:border-white/[0.06] transition-all duration-300 ${mounted ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+        className={`w-full max-w-2xl bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl flex flex-col overflow-hidden h-[600px] border border-gray-200 dark:border-white/[0.04] transition-all duration-300 ${mounted ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
         style={{ boxShadow: '0 0 80px -20px rgba(var(--neon-rgb), 0.1), 0 25px 50px -12px rgba(0,0,0,0.5)' }}
       >
         {/* Top accent */}
         <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`, boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)` }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-300 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-white/[0.04]">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Settings</h2>
           <button
             onClick={onClose}
@@ -128,7 +128,7 @@ const Settings: React.FC<SettingsProps> = ({
 
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
-          <div className="w-48 border-r border-gray-300 dark:border-white/[0.04] p-3 flex flex-col gap-1 bg-gray-50/50 dark:bg-transparent">
+          <div className="w-48 border-r border-gray-200 dark:border-white/[0.02] p-3 flex flex-col gap-1 bg-gray-50/50 dark:bg-transparent">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -137,7 +137,7 @@ const Settings: React.FC<SettingsProps> = ({
                 style={{
                   background: activeTab === id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
                   color: activeTab === id ? 'var(--neon-color)' : undefined,
-                  border: activeTab === id ? '1px solid rgba(var(--neon-rgb), 0.12)' : '1px solid transparent',
+                  border: activeTab === id ? '1px solid rgba(var(--neon-rgb), 0.08)' : '1px solid transparent',
                 }}
               >
                 <Icon size={16} />
@@ -153,7 +153,7 @@ const Settings: React.FC<SettingsProps> = ({
               <div className="space-y-6 animate-fade-in">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">Appearance</h3>
-                  <div className="flex items-center justify-between p-4 rounded-xl border border-gray-300 dark:border-white/[0.06] bg-gray-50 dark:bg-white/[0.02]">
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-white/[0.04] bg-gray-50 dark:bg-white/[0.02]">
                     <div className="flex items-center gap-3">
                       {theme === 'dark' ? (
                         <Moon size={18} style={{ color: 'var(--neon-color)' }} />
@@ -183,7 +183,7 @@ const Settings: React.FC<SettingsProps> = ({
                   <select
                     value={defaultModelId}
                     onChange={(e) => onChangeDefaultModel(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white text-sm outline-none transition-all duration-200 focus:border-gray-400 dark:focus:border-white/20"
+                    className="w-full bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white text-sm outline-none transition-all duration-200 focus:border-gray-300 dark:focus:border-white/12"
                   >
                     {models.map((model) => (
                       <option key={model.id} value={model.id} className="bg-white dark:bg-[#0a0a0a]">
@@ -208,7 +208,7 @@ const Settings: React.FC<SettingsProps> = ({
                       placeholder="No limit"
                       min="1"
                       max="128000"
-                      className="w-48 bg-gray-50 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 outline-none text-sm transition-all duration-200 focus:border-gray-400 dark:focus:border-white/20"
+                      className="w-48 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 outline-none text-sm transition-all duration-200 focus:border-gray-300 dark:focus:border-white/12"
                     />
                     <span className="text-xs text-gray-500">tokens</span>
                   </div>
@@ -231,7 +231,7 @@ const Settings: React.FC<SettingsProps> = ({
                         className="px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200"
                         style={{
                           background: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                          borderColor: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.2)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.06)' : 'rgba(0,0,0,0.1)'),
+                          borderColor: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.12)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.04)' : 'rgba(0,0,0,0.07)'),
                           color: fontSize === size.id ? 'var(--neon-color)' : undefined,
                         }}
                       >
@@ -259,7 +259,7 @@ const Settings: React.FC<SettingsProps> = ({
                           className="text-left px-4 py-3 rounded-xl border transition-all duration-200"
                           style={{
                             background: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                            borderColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.06)' : 'rgba(0,0,0,0.1)'),
+                            borderColor: isActive ? 'rgba(var(--neon-rgb), 0.12)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.04)' : 'rgba(0,0,0,0.07)'),
                             fontFamily: font.id === 'default'
                               ? "'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui"
                               : font.id === 'fredoka'
@@ -284,7 +284,7 @@ const Settings: React.FC<SettingsProps> = ({
                   </h3>
                   <button
                     onClick={resetPassword}
-                    className="px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-300 dark:border-white/[0.08] text-gray-600 dark:text-gray-400 hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all duration-200"
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-white/[0.06] text-gray-600 dark:text-gray-400 hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all duration-200"
                   >
                     Lock Screen
                   </button>
@@ -302,13 +302,13 @@ const Settings: React.FC<SettingsProps> = ({
                     {models.map((model) => (
                       <div
                         key={model.id}
-                        className="flex items-center justify-between p-3.5 rounded-xl border border-gray-300 dark:border-white/[0.06] bg-gray-50 dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/[0.1] transition-all duration-200 group"
+                        className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-white/[0.04] bg-gray-50 dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.08] transition-all duration-200 group"
                       >
                         <div>
                           <div className="text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             {model.name}
                             {model.isCustom && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.2)' }}>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.12)' }}>
                                 CUSTOM
                               </span>
                             )}
@@ -357,8 +357,8 @@ const Settings: React.FC<SettingsProps> = ({
                           onClick={() => onChangeNeonPreset(preset.id)}
                           className={`relative flex items-center gap-4 p-4 rounded-xl border transition-all duration-300 hover:scale-[1.01] ${
                             isActive
-                              ? 'border-gray-300 dark:border-white/20 bg-gray-50 dark:bg-white/[0.06]'
-                              : 'border-gray-200 dark:border-white/[0.04] bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.08]'
+                              ? 'border-gray-200 dark:border-white/12 bg-gray-50 dark:bg-white/[0.06]'
+                              : 'border-gray-200 dark:border-white/[0.02] bg-white dark:bg-white/[0.02] hover:border-gray-200 dark:hover:border-white/[0.06]'
                           }`}
                           style={{
                             boxShadow: isActive ? `0 0 25px ${colors[0].tailwind.replace('rgb', 'rgba').replace(')', ', 0.15)')}` : 'none',
@@ -417,8 +417,8 @@ const Settings: React.FC<SettingsProps> = ({
                               onClick={() => onChangeNeonColor(id)}
                               className={`relative p-4 rounded-xl border transition-all duration-300 hover:scale-[1.02] ${
                                 isActive
-                                  ? 'border-gray-300 dark:border-white/20 bg-gray-50 dark:bg-white/[0.06]'
-                                  : 'border-gray-200 dark:border-white/[0.04] bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/[0.08]'
+                                  ? 'border-gray-200 dark:border-white/12 bg-gray-50 dark:bg-white/[0.06]'
+                                  : 'border-gray-200 dark:border-white/[0.02] bg-white dark:bg-white/[0.02] hover:border-gray-200 dark:hover:border-white/[0.06]'
                               }`}
                               style={{
                                 boxShadow: isActive ? `0 0 25px ${rgb.replace('rgb', 'rgba').replace(')', ', 0.3)')}` : 'none',

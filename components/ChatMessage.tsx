@@ -6,7 +6,6 @@ import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
 import { Role, Message } from '../types';
-import { CHATGPT_LOGO } from '../constants';
 import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, Globe, ChevronDown, ExternalLink, Search, Paperclip } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -212,59 +211,25 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   };
 
   return (
-    <div className={`group w-full text-gray-900 dark:text-gray-100 animate-message-in`}>
-      <div className="gap-4 md:gap-6 md:max-w-4xl lg:max-w-[56rem] xl:max-w-[68rem] p-4 md:py-1 flex lg:px-0 m-auto">
-        {/* Avatar */}
-        <div className="flex-shrink-0 flex flex-col relative items-end">
-          <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center`}>
-            {isUser ? (
-              <div
-                className="bg-gray-100 dark:bg-black border rounded-full w-full h-full flex items-center justify-center p-1 transition-shadow duration-300"
-                style={{
-                  borderColor: 'rgba(var(--neon-rgb), 0.25)',
-                  boxShadow: '0 0 12px rgba(var(--neon-rgb), 0.3)',
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" style={{ filter: 'drop-shadow(0 0 3px var(--neon-color))' }}>
-                  <path d="m223-120-89-481q-37 7-65.5-17T40-680q0-33 23.5-56.5T120-760q33 0 56.5 23.5T200-680q0 14-4 26t-12 22q22 13 44.5 21.5T276-602q44 0 81.5-22t58.5-60l25-46q-19-11-30-29t-11-41q0-33 23.5-56.5T480-880q33 0 56.5 23.5T560-800q0 23-11 41t-30 29l25 46q21 38 58.5 60t81.5 22q25 0 47.5-8t44.5-21q-8-10-12-22.5t-4-26.5q0-33 23.5-56.5T840-760q33 0 56.5 23.5T920-680q0 38-28.5 62T826-601l-89 481H223Zm67-80h380l60-326q-11 2-23 3.5t-23 1.5q-63 0-117-30t-87-84q-33 54-87 84t-117 30q-11 0-23-1.5t-23-3.5l60 326Zm190 0Z" fill="var(--neon-color)" />
-                </svg>
-              </div>
-            ) : (
-              <div
-                className="bg-gray-100 dark:bg-black border rounded-full w-full h-full flex items-center justify-center p-1 transition-shadow duration-300"
-                style={{
-                  borderColor: 'rgba(var(--neon-rgb), 0.25)',
-                  boxShadow: '0 0 12px rgba(var(--neon-rgb), 0.3)',
-                  color: 'var(--neon-color)',
-                }}
-              >
-                {CHATGPT_LOGO}
-              </div>
-            )}
-          </div>
+    <div className="group w-full animate-message-in">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 py-3">
+        {/* Sender name */}
+        <div className="text-[13px] font-medium mb-2 select-none" style={{ color: 'var(--text-500)' }}>
+          {isUser ? 'You' : 'MiMo'}
         </div>
 
         {/* Content */}
-        <div className="relative flex-1 overflow-hidden">
-          <div className="font-semibold select-none mb-1.5 text-sm opacity-90 flex items-center gap-2">
-            {isUser ? (
-              <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 4px rgba(var(--neon-rgb), 0.4))' }}>You</span>
-            ) : (
-              <span style={{ color: 'var(--neon-color)', filter: 'drop-shadow(0 0 4px rgba(var(--neon-rgb), 0.4))' }}>Ember</span>
-            )}
-          </div>
-
+        <div className="relative overflow-hidden">
           {message.isThinking ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2.5 text-sm" style={{ color: 'var(--neon-color)' }}>
+              <div className="flex items-center gap-2.5 text-sm" style={{ color: 'var(--text-500)' }}>
                 <div className="flex items-center gap-1.5">
                   {[0, 1, 2].map(i => (
                     <div
                       key={i}
                       className="w-1.5 h-1.5 rounded-full"
                       style={{
-                        backgroundColor: 'var(--neon-color)',
-                        boxShadow: '0 0 6px var(--neon-color)',
+                        backgroundColor: 'var(--text-500)',
                         animation: `pulse-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
                       }}
                     />
@@ -274,10 +239,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               </div>
               {message.thinkingContent && (
                 <div
-                  className="prose dark:prose-invert max-w-none leading-7 text-base italic opacity-70 pl-4 border-l-2 mt-3"
-                  style={{ borderColor: 'rgba(var(--neon-rgb), 0.25)' }}
+                  className="prose dark:prose-invert max-w-none leading-7 text-base italic opacity-70 pl-4 mt-3"
+                  style={{ borderLeft: '2px solid var(--border-300)' }}
                 >
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}>{message.thinkingContent}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, [rehypeKatex, { output: 'mathml' }]]}>{message.thinkingContent}</ReactMarkdown>
                 </div>
               )}
             </div>
@@ -289,11 +254,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     <div key={idx} className="relative group/att">
                       <button
                         onClick={() => setSelectedAttachment(att.data)}
-                        className="relative rounded-lg overflow-hidden border transition-all duration-200 hover:scale-[1.02] block"
-                        style={{
-                          borderColor: 'rgba(var(--neon-rgb), 0.2)',
-                          boxShadow: '0 0 8px rgba(var(--neon-rgb), 0.1)',
-                        }}
+                        className="relative rounded-lg overflow-hidden transition-all duration-200 hover:scale-[1.02] block"
+                        style={{ border: '1px solid var(--border-300)' }}
                       >
                         <img
                           src={att.data}
@@ -311,10 +273,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                             onReattach(att.data, att.name, att.mimeType);
                           }}
                           className="absolute top-1 right-1 z-10 rounded-full p-1.5 opacity-0 group-hover/att:opacity-100 transition-all duration-200 hover:scale-110"
-                          style={{
-                            background: 'rgba(var(--neon-rgb), 0.8)',
-                            boxShadow: '0 0 8px rgba(var(--neon-rgb), 0.3)',
-                          }}
+                          style={{ background: 'var(--bg-400)' }}
                           title="Attach to new message"
                         >
                           <Paperclip size={12} className="text-white" />
@@ -336,7 +295,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     className="absolute top-4 right-4 z-50 p-2 rounded-full transition-all duration-200 hover:scale-110"
                     style={{
                       background: 'rgba(255,255,255,0.1)',
-                      border: '1px solid rgba(255,255,255,0.2)',
+                      border: '1px solid rgba(255,255,255,0.12)',
                       color: 'white',
                     }}
                   >
@@ -348,23 +307,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     src={selectedAttachment}
                     alt="Full size preview"
                     className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg"
-                    style={{
-                      boxShadow: '0 0 40px rgba(var(--neon-rgb), 0.3), 0 0 80px rgba(var(--neon-rgb), 0.1)',
-                      border: '1px solid rgba(var(--neon-rgb), 0.2)',
-                    }}
+                    style={{ border: '1px solid var(--border-300)' }}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>,
                 document.body
               )}
 
-              <div className={`prose dark:prose-invert max-w-none leading-8 break-words [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4 [&>table]:my-4 [&>table]:border-collapse [&>table]:w-full [&>table]:text-sm [&>thead]:bg-gray-50/80 [&>thead]:dark:bg-white/[0.03] [&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-semibold [&>th]:text-xs [&>th]:uppercase [&>th]:tracking-wider [&>td]:px-4 [&>td]:py-3 [&>tr]:border-b [&>tr]:border-gray-200/60 [&>tr]:dark:border-white/[0.06]`}>
+              <div className="prose dark:prose-invert max-w-none leading-8 break-words [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4 [&>table]:my-4 [&>table]:border-collapse [&>table]:w-full [&>table]:text-sm [&>thead]:bg-white/[0.03] [&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-semibold [&>th]:text-xs [&>th]:uppercase [&>th]:tracking-wider [&>td]:px-4 [&>td]:py-3 [&>tr]:border-b [&>tr]:border-white/[0.04]" style={{ color: 'var(--text-100)' }}>
               {/* Collapsible reasoning section */}
               {message.thinkingContent && !message.isThinking && (
                 <div className="mb-4">
                   <button
                     onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
-                    className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors w-full text-left group"
+                    className="flex items-center gap-2 text-sm font-medium transition-colors w-full text-left"
+                    style={{ color: 'var(--text-500)' }}
                   >
                     <svg
                       className={`w-3 h-3 transition-transform duration-200 ${isThinkingExpanded ? 'rotate-90' : ''}`}
@@ -373,11 +330,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     >
                       <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span style={{ color: 'rgba(var(--neon-secondary-rgb), 0.6)' }}>Reasoning</span>
+                    <span>Reasoning</span>
                   </button>
                   {isThinkingExpanded && (
-                    <div className="mt-2 prose dark:prose-invert max-w-none leading-7 text-base italic opacity-60 pl-4 border-l-2" style={{ borderColor: 'rgba(var(--neon-rgb), 0.2)' }}>
-                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}>{message.thinkingContent}</ReactMarkdown>
+                    <div className="mt-2 prose dark:prose-invert max-w-none leading-7 text-base italic opacity-60 pl-4" style={{ borderLeft: '2px solid var(--border-200)' }}>
+                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, [rehypeKatex, { output: 'mathml' }]]}>{message.thinkingContent}</ReactMarkdown>
                     </div>
                   )}
                 </div>
@@ -385,7 +342,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeRaw, rehypeKatex]}
+                rehypePlugins={[rehypeRaw, [rehypeKatex, { output: 'mathml' }]]}
                 components={{
                   pre: ({ node, children, ...props }) => {
                     const getCodeString = (c: any): string => {
@@ -411,11 +368,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                           {steps.map((step: string, idx: number) => (
                             <React.Fragment key={idx}>
                               <div
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 hover:scale-[1.02]"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
                                 style={{
-                                  borderColor: 'rgba(var(--neon-rgb), 0.2)',
-                                  background: 'rgba(var(--neon-rgb), 0.05)',
-                                  color: isDark ? 'rgba(var(--neon-rgb), 0.9)' : 'rgba(var(--neon-rgb), 0.8)',
+                                  border: '1px solid var(--border-300)',
+                                  background: 'var(--bg-200)',
+                                  color: 'var(--text-300)',
                                 }}
                               >
                                 <span
@@ -427,7 +384,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                 <span>{step.trim()}</span>
                               </div>
                               {idx < steps.length - 1 && (
-                                <svg className="w-4 h-4 flex-shrink-0 opacity-50" viewBox="0 0 24 24" fill="none" stroke="var(--neon-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg className="w-4 h-4 flex-shrink-0 opacity-40" viewBox="0 0 24 24" fill="none" stroke="var(--text-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M5 12h14M12 5l7 7-7 7" />
                                 </svg>
                               )}
@@ -439,21 +396,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
                     if (hasWinPath) {
                       return (
-                        <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid rgba(var(--neon-rgb), 0.2)' }}>
-                          <div className="flex items-center justify-between px-4 py-2" style={{ background: isDark ? 'rgba(var(--neon-rgb), 0.06)' : 'rgba(var(--neon-rgb), 0.04)' }}>
-                            <span className="text-xs font-mono font-medium" style={{ color: 'var(--neon-secondary)' }}>Path</span>
+                        <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
+                          <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--bg-200)' }}>
+                            <span className="text-xs font-mono font-medium" style={{ color: 'var(--text-500)' }}>Path</span>
                             <button
                               onClick={() => handleCopyCode(codeString, 'path')}
-                              className={`flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded transition-all duration-200 ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/[0.08]' : 'text-gray-500 hover:text-gray-900 hover:bg-black/[0.08]'}`}
+                              className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded transition-all duration-200"
+                              style={{ color: 'var(--text-500)' }}
                               title="Copy path"
                             >
                               {copiedCode === 'path' ? <Check size={12} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={12} />}
                             </button>
                           </div>
-                          <div className="px-4 py-3" style={{ background: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.02)' }}>
+                          <div className="px-4 py-3" style={{ background: 'var(--bg-100)' }}>
                             {lines.map((line: string, i: number) => (
                               <div key={i} className="flex items-center gap-2">
-                                <span className="text-gray-400 dark:text-gray-600 select-none text-xs w-4 text-right flex-shrink-0">{i + 1}</span>
+                                <span className="select-none text-xs w-4 text-right flex-shrink-0" style={{ color: 'var(--text-500)' }}>{i + 1}</span>
                                 <code
                                   className="text-sm break-all"
                                   style={{
@@ -473,12 +431,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     return (
                       <div
                         className="relative my-6 mt-10 rounded-lg overflow-hidden transition-all duration-300"
-                        style={{
-                          border: '1px solid rgba(var(--neon-secondary-rgb), 0.4)',
-                          boxShadow: '0 0 15px rgba(var(--neon-secondary-rgb), 0.15), 0 0 30px rgba(var(--neon-secondary-rgb), 0.05)',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--neon-secondary-rgb), 0.25), 0 0 40px rgba(var(--neon-secondary-rgb), 0.1)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 15px rgba(var(--neon-secondary-rgb), 0.15), 0 0 30px rgba(var(--neon-secondary-rgb), 0.05)'; }}
+                        style={{ border: '1px solid var(--border-300)' }}
                       >
                         <pre {...props} className="neon-code-block-container">{children}</pre>
                       </div>
@@ -491,10 +444,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     const isBlock = !match ? codeString.includes('\n') : true;
                     const isCopied = copiedCode === language || (!language && copiedCode === 'text');
 
-                    const headerBg = isDark ? 'bg-[#000000]/95' : 'bg-[#dce0e8]/95';
+                    const headerBg = isDark ? 'bg-[#1a1a1a]/95' : 'bg-[#dce0e8]/95';
                     const headerBtnClass = isDark
-                      ? 'text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.12]'
-                      : 'text-gray-500 hover:text-gray-900 bg-black/[0.04] hover:bg-black/[0.08] border-black/[0.06] hover:border-black/[0.12]';
+                      ? 'text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.08]'
+                      : 'text-gray-500 hover:text-gray-900 bg-black/[0.04] hover:bg-black/[0.08] border-black/[0.04] hover:border-black/[0.08]';
                     const blockBg = isDark ? '#1e1e2e' : '#eff1f5';
                     const codeTheme = isDark ? catppuccinMocha : catppuccinLatte;
                     const displayLanguage = language || 'text';
@@ -503,7 +456,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                       return (
                         <>
                           <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
-                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--neon-secondary)' }}>
+                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               {language}
                             </span>
                             <button
@@ -552,7 +505,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                       return (
                         <>
                           <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
-                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--neon-secondary)' }}>
+                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               text
                             </span>
                             <button
@@ -595,24 +548,24 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     return <code className={className} {...props}>{children}</code>;
                   },
                   table: ({ node, ...props }) => (
-                    <div className="my-4 overflow-x-auto rounded-lg border border-gray-200 dark:border-white/[0.08]" style={{ borderColor: 'rgba(var(--neon-rgb), 0.12)' }}>
+                    <div className="my-4 overflow-x-auto rounded-lg" style={{ border: '1px solid var(--border-300)' }}>
                       <table className="w-full text-sm border-collapse" {...props} />
                     </div>
                   ),
                   thead: ({ node, ...props }) => (
-                    <thead className="bg-gray-50 dark:bg-white/[0.03]" {...props} />
+                    <thead style={{ background: 'var(--surface-hover)' }} {...props} />
                   ),
                   tbody: ({ node, ...props }) => (
-                    <tbody className="divide-y divide-gray-200 dark:divide-white/[0.06]" {...props} />
+                    <tbody className="divide-y" style={{ borderColor: 'var(--border-200)' }} {...props} />
                   ),
                   tr: ({ node, ...props }) => (
-                    <tr className="border-b border-gray-200 dark:border-white/[0.06] last:border-0 hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors" {...props} />
+                    <tr className="transition-colors" style={{ borderBottom: '1px solid var(--border-200)' }} {...props} />
                   ),
                   th: ({ node, ...props }) => (
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider whitespace-nowrap" {...props} />
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-300)' }} {...props} />
                   ),
                   td: ({ node, ...props }) => (
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap" {...props} />
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--text-500)' }} {...props} />
                   ),
                   p: ({ node, children, ...props }) => {
                     const getTextContent = (node: any): string => {
@@ -634,11 +587,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                           {steps.map((step: string, idx: number) => (
                             <React.Fragment key={idx}>
                               <div
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 hover:scale-[1.02]"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
                                 style={{
-                                  borderColor: 'rgba(var(--neon-rgb), 0.2)',
-                                  background: 'rgba(var(--neon-rgb), 0.05)',
-                                  color: isDark ? 'rgba(var(--neon-rgb), 0.9)' : 'rgba(var(--neon-rgb), 0.8)',
+                                  border: '1px solid var(--border-300)',
+                                  background: 'var(--bg-200)',
+                                  color: 'var(--text-300)',
                                 }}
                               >
                                 <span
@@ -654,10 +607,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                               </div>
                               {idx < steps.length - 1 && (
                                 <svg
-                                  className="w-4 h-4 flex-shrink-0 opacity-50"
+                                  className="w-4 h-4 flex-shrink-0 opacity-40"
                                   viewBox="0 0 24 24"
                                   fill="none"
-                                  stroke="var(--neon-color)"
+                                  stroke="var(--text-500)"
                                   strokeWidth="2"
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -684,32 +637,23 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     <div className="mt-5 mb-3">
                       <button
                         onClick={() => setIsSourcesExpanded(!isSourcesExpanded)}
-                        className="flex items-center gap-2 w-full text-left group/sources"
+                        className="flex items-center gap-2 w-full text-left"
                       >
-                        <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg border transition-all duration-300 group-hover/sources:shadow-sm"
+                        <div
+                          className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg transition-all duration-300"
                           style={{
-                            borderColor: 'rgba(var(--neon-accent-rgb), 0.2)',
-                            background: 'rgba(var(--neon-accent-rgb), 0.05)',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'rgba(var(--neon-accent-rgb), 0.35)';
-                            e.currentTarget.style.background = 'rgba(var(--neon-accent-rgb), 0.08)';
-                            e.currentTarget.style.boxShadow = '0 2px 12px rgba(var(--neon-accent-rgb), 0.1)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'rgba(var(--neon-accent-rgb), 0.2)';
-                            e.currentTarget.style.background = 'rgba(var(--neon-accent-rgb), 0.05)';
-                            e.currentTarget.style.boxShadow = 'none';
+                            border: '1px solid var(--border-300)',
+                            background: 'var(--bg-200)',
                           }}
                         >
-                          <Search size={14} style={{ color: 'var(--neon-accent)' }} />
-                          <span className="text-xs font-bold tracking-wide" style={{ color: 'var(--neon-accent)' }}>
+                          <Search size={14} style={{ color: 'var(--text-500)' }} />
+                          <span className="text-xs font-bold tracking-wide" style={{ color: 'var(--text-300)' }}>
                             {message.annotations.filter(a => a.type === 'url_citation').length} source{message.annotations.filter(a => a.type === 'url_citation').length !== 1 ? 's' : ''} found
                           </span>
                           <ChevronDown
                             size={14}
                             className={`transition-transform duration-300 ${isSourcesExpanded ? 'rotate-180' : ''}`}
-                            style={{ color: 'var(--neon-accent)' }}
+                            style={{ color: 'var(--text-500)' }}
                           />
                         </div>
                       </button>
@@ -724,62 +668,58 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                 href={annotation.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="group flex items-start gap-3.5 px-4 py-3.5 rounded-xl border transition-all duration-300 hover:-translate-y-0.5 no-underline"
+                                className="group flex items-start gap-3.5 px-4 py-3.5 rounded-xl transition-all duration-300 hover:-translate-y-0.5 no-underline"
                                 style={{
-                                  borderColor: 'rgba(var(--neon-accent-rgb), 0.1)',
-                                  background: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.015)',
-                                  backdropFilter: 'blur(8px)',
+                                  border: '1px solid var(--border-300)',
+                                  background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.borderColor = 'rgba(var(--neon-accent-rgb), 0.3)';
-                                  e.currentTarget.style.background = isDark ? 'rgba(var(--neon-accent-rgb), 0.06)' : 'rgba(var(--neon-accent-rgb), 0.04)';
-                                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(var(--neon-accent-rgb), 0.1), 0 0 0 1px rgba(var(--neon-accent-rgb), 0.08)';
+                                  e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.15)';
+                                  e.currentTarget.style.background = 'var(--surface-hover)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.currentTarget.style.borderColor = 'rgba(var(--neon-accent-rgb), 0.1)';
-                                  e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.015)';
-                                  e.currentTarget.style.boxShadow = 'none';
+                                  e.currentTarget.style.borderColor = 'var(--border-300)';
+                                  e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
                                 }}
                               >
                                 <div
                                   className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold mt-0.5"
                                   style={{
-                                    background: 'rgba(var(--neon-accent-rgb), 0.12)',
-                                    color: 'var(--neon-accent)',
-                                    boxShadow: '0 0 8px rgba(var(--neon-accent-rgb), 0.06)',
+                                    background: 'var(--bg-300)',
+                                    color: 'var(--text-300)',
                                   }}
                                 >
                                   {idx + 1}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 group-hover:text-gray-950 dark:group-hover:text-white transition-colors line-clamp-2 leading-snug tracking-tight">
+                                  <div className="text-sm font-semibold transition-colors line-clamp-2 leading-snug tracking-tight" style={{ color: 'var(--text-100)' }}>
                                     {annotation.title || annotation.url}
                                   </div>
                                   <div className="flex items-center gap-1.5 mt-1.5">
                                     {annotation.logo_url ? (
                                       <img src={annotation.logo_url} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                     ) : (
-                                      <Globe size={11} className="text-gray-400 flex-shrink-0" />
+                                      <Globe size={11} style={{ color: 'var(--text-500)' }} />
                                     )}
-                                    <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 truncate tracking-wide uppercase">
+                                    <span className="text-[11px] font-medium truncate tracking-wide uppercase" style={{ color: 'var(--text-500)' }}>
                                       {annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')}
                                     </span>
                                     {annotation.publish_time && (
                                       <>
-                                        <span className="text-[11px] text-gray-300 dark:text-gray-600">&middot;</span>
-                                        <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
+                                        <span className="text-[11px]" style={{ color: 'var(--text-500)' }}>&middot;</span>
+                                        <span className="text-[11px] truncate" style={{ color: 'var(--text-500)' }}>
                                           {annotation.publish_time}
                                         </span>
                                       </>
                                     )}
                                   </div>
                                   {annotation.summary && (
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-2 leading-relaxed">
+                                    <div className="text-xs mt-2 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-500)' }}>
                                       {annotation.summary}
                                     </div>
                                   )}
                                 </div>
-                                <ExternalLink size={13} className="text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-300 flex-shrink-0 mt-1 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                <ExternalLink size={13} className="flex-shrink-0 mt-1 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" style={{ color: 'var(--text-500)' }} />
                               </a>
                             ))}
                         </div>
@@ -789,7 +729,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
                   {/* Token usage */}
                   {message.usageMetadata && (
-                    <div className="text-xs text-gray-600 dark:text-white mt-3 flex items-center gap-3 opacity-70">
+                    <div className="text-[11px] mt-3 flex items-center gap-3" style={{ color: 'var(--text-500)' }}>
                       <span title="Total tokens used">
                         <span className="font-bold" style={{ color: 'var(--neon-accent)' }}>
                           {message.usageMetadata.totalTokens.toLocaleString()}
@@ -805,35 +745,44 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     </div>
                   )}
                   {/* Action buttons */}
-                  <div className="flex items-center gap-1 mt-3 pb-2 mb-2 text-gray-500 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-all duration-300">
+                  <div className="flex items-center gap-1 mt-3 pb-2 mb-2 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-all duration-300">
                     <button
                       onClick={handleCopyMessage}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      className="p-1.5 rounded-lg transition-all duration-200"
+                      style={{ color: copiedMessage ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title={copiedMessage ? "Copied!" : "Copy message"}
-                      style={{ color: copiedMessage ? 'var(--neon-color)' : undefined }}
+                      onMouseEnter={(e) => { if (!copiedMessage) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       {copiedMessage ? <Check size={15} /> : <Copy size={15} />}
                     </button>
                     <button
                       onClick={() => handleFeedback('good')}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      className="p-1.5 rounded-lg transition-all duration-200"
+                      style={{ color: feedback === 'good' ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title="Good response"
-                      style={{ color: feedback === 'good' ? 'var(--neon-color)' : undefined }}
+                      onMouseEnter={(e) => { if (!feedback) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <ThumbsUp size={15} />
                     </button>
                     <button
                       onClick={() => handleFeedback('bad')}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      className="p-1.5 rounded-lg transition-all duration-200"
+                      style={{ color: feedback === 'bad' ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title="Bad response"
-                      style={{ color: feedback === 'bad' ? 'var(--neon-color)' : undefined }}
+                      onMouseEnter={(e) => { if (!feedback) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <ThumbsDown size={15} />
                     </button>
                     <button
                       onClick={() => onRegenerate?.(message.id)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-all duration-200"
+                      className="p-1.5 rounded-lg transition-all duration-200"
+                      style={{ color: 'var(--text-500)' }}
                       title="Regenerate response"
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <RefreshCw size={15} />
                     </button>

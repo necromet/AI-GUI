@@ -11,11 +11,12 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttribu
   ({ className, ...props }, ref) => (
     <textarea
       className={cn(
-        "flex w-full rounded-md border-none bg-transparent px-3 py-2.5 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px] resize-none",
+        "flex w-full rounded-md border-none bg-transparent px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px] resize-none",
         className
       )}
       ref={ref}
       rows={1}
+      style={{ color: 'var(--text-100)' }}
       {...props}
     />
   )
@@ -33,7 +34,7 @@ const TooltipContent = React.forwardRef<
     ref={ref}
     sideOffset={sideOffset}
     className={cn(
-      "z-50 rounded-md border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#1F2023] px-3 py-1.5 text-sm text-gray-900 dark:text-white shadow-md max-w-xs whitespace-normal",
+      "z-50 rounded-md border border-gray-100 dark:border-[#2a2a2a] bg-white dark:bg-[#1F2023] px-3 py-1.5 text-sm text-gray-900 dark:text-white shadow-md max-w-xs whitespace-normal",
       className
     )}
     {...props}
@@ -67,7 +68,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] md:max-w-[800px] translate-x-[-50%] translate-y-[-50%] gap-4 border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#1F2023] p-0 shadow-xl rounded-2xl",
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] md:max-w-[800px] translate-x-[-50%] translate-y-[-50%] gap-4 border border-gray-100 dark:border-[#2a2a2a] bg-white dark:bg-[#1F2023] p-0 shadow-xl rounded-2xl",
         className
       )}
       {...props}
@@ -102,7 +103,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "default", size = "default", ...props }, ref) => {
     const variantClasses = {
       default: "bg-white hover:bg-white/80 text-black",
-      outline: "border border-gray-300 dark:border-[#444444] bg-transparent hover:bg-gray-100 dark:hover:bg-[#3A3A40]",
+      outline: "border border-gray-200 dark:border-[#383838] bg-transparent hover:bg-gray-100 dark:hover:bg-[#3A3A40]",
       ghost: "bg-transparent hover:bg-gray-100 dark:hover:bg-[#3A3A40]",
     };
     const sizeClasses = {
@@ -209,7 +210,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             ref={ref}
             className={cn(
               "rounded-2xl overflow-hidden transition-all duration-300",
-              isLoading && "border-red-500/70",
+              isLoading && "border-red-500/50",
               className
             )}
             onDragOver={onDragOver}
@@ -294,10 +295,8 @@ const PromptInputAction: React.FC<PromptInputActionProps> = ({ tooltip, children
 const CustomDivider: React.FC = () => (
   <div className="relative h-6 w-[1.5px] mx-1">
     <div
-      className="absolute inset-0 bg-gradient-to-t from-transparent via-gray-300 dark:via-[#9b87f5]/70 to-transparent rounded-full"
-      style={{
-        clipPath: "polygon(0% 0%, 100% 0%, 100% 40%, 140% 50%, 100% 60%, 100% 100%, 0% 100%, 0% 60%, -40% 50%, 0% 40%)",
-      }}
+      className="absolute inset-0 rounded-full"
+      style={{ background: 'var(--border-300)' }}
     />
   </div>
 );
@@ -456,10 +455,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
   const hasContent = input.trim() !== "" || files.length > 0;
 
   const borderStyle = {
-    background: theme === "dark" ? "rgba(18, 18, 18, 0.8)" : "rgba(245, 245, 245, 0.9)",
-    backdropFilter: "blur(12px)",
-    border: `1px solid ${input ? "rgba(var(--neon-rgb), 0.3)" : theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.12)"}`,
-    boxShadow: input ? `0 0 30px -8px rgba(var(--neon-rgb), 0.15)` : theme === "dark" ? "0 4px 20px rgba(0,0,0,0.2)" : "0 4px 20px rgba(0,0,0,0.06)",
+    background: "var(--bg-200)",
+    border: "1px solid var(--border-300)",
   };
 
   return (
@@ -471,7 +468,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
         onSubmit={handleSubmit}
         className={cn(
           "w-full transition-all duration-300 ease-in-out",
-          isRecording && "border-red-500/70",
+          isRecording && "border-red-500/50",
           className
         )}
         disabled={isLoading || isRecording}
@@ -537,9 +534,12 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
               )}
             >
               <PromptInputAction tooltip="Upload image">
-                <button
+                  <button
                   onClick={() => uploadInputRef.current?.click()}
-                  className="flex h-8 w-8 text-gray-400 dark:text-[#9CA3AF] cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600/30 hover:text-gray-600 dark:hover:text-[#D1D5DB]"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors"
+                  style={{ color: 'var(--text-500)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-300)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
                   disabled={isRecording}
                 >
                   <Paperclip className="h-5 w-5 transition-colors" />
@@ -565,8 +565,9 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
                     showSearch
                       ? "bg-[#1EAEDB]/15 border-[#1EAEDB] text-[#1EAEDB]"
-                      : "bg-transparent border-transparent text-gray-400 dark:text-[#9CA3AF] hover:text-gray-600 dark:hover:text-[#D1D5DB]"
+                      : "bg-transparent border-transparent hover:text-[var(--text-300)]"
                   )}
+                  style={!showSearch ? { color: 'var(--text-500)' } : undefined}
                 >
                   <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
                     <motion.div
@@ -601,8 +602,9 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
                     showThink
                       ? "bg-[#8B5CF6]/15 border-[#8B5CF6] text-[#8B5CF6]"
-                      : "bg-transparent border-transparent text-gray-400 dark:text-[#9CA3AF] hover:text-gray-600 dark:hover:text-[#D1D5DB]"
+                      : "bg-transparent border-transparent hover:text-[var(--text-300)]"
                   )}
+                  style={!showThink ? { color: 'var(--text-500)' } : undefined}
                 >
                   <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
                     <motion.div
@@ -650,16 +652,15 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     ? "bg-transparent hover:bg-gray-200 dark:hover:bg-gray-600/30 text-red-500 hover:text-red-400"
                     : hasContent
                     ? "bg-white hover:bg-white/80 text-[#1F2023]"
-                    : "bg-transparent hover:bg-gray-200 dark:hover:bg-gray-600/30 text-gray-400 dark:text-[#9CA3AF] hover:text-gray-600 dark:hover:text-[#D1D5DB]"
+                    : "bg-transparent hover:bg-[var(--bg-300)]"
                 )}
                 style={
                   hasContent && !isRecording
                     ? {
                         background: "var(--neon-color)",
                         color: "#000",
-                        boxShadow: "0 0 15px rgba(var(--neon-rgb), 0.3)",
                       }
-                    : undefined
+                    : { color: "var(--text-500)" }
                 }
                 onClick={() => {
                   if (isLoading) {
@@ -675,13 +676,13 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                 disabled={isLoading && !hasContent}
               >
                 {isLoading ? (
-                  <Square className="h-4 w-4 fill-[#1F2023] animate-pulse" />
+                  <Square className="h-4 w-4 fill-[var(--text-100)] animate-pulse" />
                 ) : isRecording ? (
                   <StopCircle className="h-5 w-5 text-red-500" />
                 ) : hasContent ? (
                   <ArrowUp className="h-4 w-4 text-[#1F2023]" />
                 ) : (
-                  <Mic className="h-5 w-5 text-gray-400 dark:text-[#9CA3AF] transition-colors" />
+                  <Mic className="h-5 w-5" style={{ color: "var(--text-500)" }} />
                 )}
               </Button>
             </PromptInputAction>
