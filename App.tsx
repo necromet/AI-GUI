@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelLeft, SquarePen } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
-import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
+import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment } from './types';
 import { generateResponseStream, generateChatTitle } from './services/mimoService';
 import * as db from './services/databaseAdapter';
@@ -36,6 +36,13 @@ const fileToAttachment = (file: File): Promise<Attachment> => {
 
 export const FONT_SIZE_MAP: Record<string, number> = { xs: 14, sm: 15, base: 16, lg: 18, xl: 20 };
 
+export const FONT_FAMILY_MAP: Record<string, string> = {
+  default: "'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
+  fredoka: "'Fredoka', sans-serif",
+  comfortaa: "'Comfortaa', sans-serif",
+  'google-sans': "'Google Sans', sans-serif",
+};
+
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_session');
@@ -51,8 +58,14 @@ const App: React.FC = () => {
   const [fontSize, setFontSize] = useState<string>(() => {
     return localStorage.getItem('edward:labs_fontSize') || 'sm';
   });
+  const [fontFamily, setFontFamily] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_fontFamily') || 'default';
+  });
   const [neonColor, setNeonColor] = useState<string>(() => {
     return localStorage.getItem('neonColor') || 'red';
+  });
+  const [neonPreset, setNeonPreset] = useState<string>(() => {
+    return localStorage.getItem('neonPreset') || 'cyber';
   });
   const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
     const stored = localStorage.getItem('maxOutputTokens');
@@ -73,6 +86,7 @@ const App: React.FC = () => {
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -104,30 +118,41 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const root = document.documentElement;
-    const colorMap: Record<string, { rgb: string; tailwind: string }> = {
-      red: { rgb: '248, 113, 113', tailwind: 'rgb(248, 113, 113)' },
-      orange: { rgb: '251, 146, 60', tailwind: 'rgb(251, 146, 60)' },
-      yellow: { rgb: '250, 204, 21', tailwind: 'rgb(250, 204, 21)' },
-      lime: { rgb: '163, 230, 53', tailwind: 'rgb(163, 230, 53)' },
-      green: { rgb: '74, 222, 128', tailwind: 'rgb(74, 222, 128)' },
-      cyan: { rgb: '34, 211, 238', tailwind: 'rgb(34, 211, 238)' },
-      blue: { rgb: '96, 165, 250', tailwind: 'rgb(96, 165, 250)' },
-      indigo: { rgb: '129, 140, 248', tailwind: 'rgb(129, 140, 248)' },
-      purple: { rgb: '192, 132, 252', tailwind: 'rgb(192, 132, 252)' },
-      pink: { rgb: '244, 114, 182', tailwind: 'rgb(244, 114, 182)' },
-      rose: { rgb: '251, 113, 133', tailwind: 'rgb(251, 113, 133)' },
-      teal: { rgb: '45, 212, 191', tailwind: 'rgb(45, 212, 191)' },
-    };
-    const color = colorMap[neonColor] || colorMap.red;
-    root.style.setProperty('--neon-rgb', color.rgb);
-    root.style.setProperty('--neon-color', color.tailwind);
+    const isDark = theme === 'dark';
+    const mode = isDark ? 'dark' : 'light';
+
+    if (neonPreset) {
+      const preset = NEON_PRESETS.find(p => p.id === neonPreset) || NEON_PRESETS[0];
+      root.style.setProperty('--neon-rgb', preset.primary[mode].rgb);
+      root.style.setProperty('--neon-color', preset.primary[mode].tailwind);
+      root.style.setProperty('--neon-secondary-rgb', preset.secondary[mode].rgb);
+      root.style.setProperty('--neon-secondary', preset.secondary[mode].tailwind);
+      root.style.setProperty('--neon-accent-rgb', preset.accent[mode].rgb);
+      root.style.setProperty('--neon-accent', preset.accent[mode].tailwind);
+    } else {
+      const color = INDIVIDUAL_COLORS[neonColor] || INDIVIDUAL_COLORS.red;
+      const variant = color[mode];
+      root.style.setProperty('--neon-rgb', variant.rgb);
+      root.style.setProperty('--neon-color', variant.tailwind);
+      root.style.setProperty('--neon-secondary-rgb', variant.rgb);
+      root.style.setProperty('--neon-secondary', variant.tailwind);
+      root.style.setProperty('--neon-accent-rgb', variant.rgb);
+      root.style.setProperty('--neon-accent', variant.tailwind);
+    }
+
+    localStorage.setItem('neonPreset', neonPreset);
     localStorage.setItem('neonColor', neonColor);
-  }, [neonColor]);
+  }, [neonColor, neonPreset, theme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--app-font-size', `${FONT_SIZE_MAP[fontSize] || 15}px`);
     localStorage.setItem('edward:labs_fontSize', fontSize);
   }, [fontSize]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_MAP[fontFamily] || FONT_FAMILY_MAP.default);
+    localStorage.setItem('edward:labs_fontFamily', fontFamily);
+  }, [fontFamily]);
 
   useEffect(() => {
     if (maxOutputTokens) {
@@ -455,6 +480,7 @@ const App: React.FC = () => {
           console.error("Generation error:", error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           const isQuota = errorMsg.toLowerCase().includes('quota');
+          const isNoImageEndpoint = errorMsg.includes('No endpoints found that support image input');
           const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
           const isThinkingDisabled = errorMsg.includes('thinking');
           if (isWebSearchDisabled) {
@@ -463,10 +489,14 @@ const App: React.FC = () => {
           } else if (isThinkingDisabled && options?.think) {
             setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
             setNotification({ message: 'Deep Thinking is not available for this model or account.', type: 'error' });
+          } else if (isNoImageEndpoint) {
+            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+            setNotification({ message: 'This model does not support image input. Try a different model or remove the image.', type: 'error' });
+          } else if (isQuota) {
+            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+            setNotification({ message: 'Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.', type: 'error' });
           } else {
-            const displayMsg = isQuota
-              ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
-              : `**Error:** ${errorMsg}`;
+            const displayMsg = `**Error:** ${errorMsg}`;
             setMessages(prev => prev.map(msg => {
                 if (msg.id === aiMessageId) {
                     return { ...msg, content: displayMsg, isThinking: false };
@@ -603,19 +633,24 @@ const App: React.FC = () => {
         console.error("Regeneration error:", error);
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         const isQuota = errorMsg.toLowerCase().includes('quota');
+        const isNoImageEndpoint = errorMsg.includes('No endpoints found that support image input');
         const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
         if (isWebSearchDisabled) {
           setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
           setNotification({ message: 'Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.', type: 'error' });
+        } else if (isNoImageEndpoint) {
+          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+          setNotification({ message: 'This model does not support image input. Try a different model or remove the image.', type: 'error' });
+        } else if (isQuota) {
+          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+          setNotification({ message: 'Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.', type: 'error' });
         } else {
-          const displayMsg = isQuota
-            ? "**Quota Exhausted:** Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings."
-            : `**Error:** ${errorMsg}`;
+          const displayMsg = `**Error:** ${errorMsg}`;
           setMessages(prev => prev.map(msg => {
-            if (msg.id === aiMessageId) {
-              return { ...msg, content: displayMsg, isThinking: false };
-            }
-            return msg;
+              if (msg.id === aiMessageId) {
+                  return { ...msg, content: displayMsg, isThinking: false };
+              }
+              return msg;
           }));
         }
       }
@@ -633,12 +668,28 @@ const App: React.FC = () => {
     });
   };
 
+  const handleReattach = useCallback((data: string, name: string, mimeType: string) => {
+    const base64ToBlob = (base64: string, mime: string) => {
+      const byteString = atob(base64.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      return new Blob([ab], { type: mime });
+    };
+    const blob = base64ToBlob(data, mimeType);
+    const ext = mimeType.split('/')[1] || 'png';
+    const fileName = name || `image-${Date.now()}.${ext}`;
+    const file = new File([blob], fileName, { type: mimeType });
+    setPendingFiles(prev => [...prev, file]);
+    setNotification({ message: `Image attached to input`, type: 'success' });
+  }, []);
+
   if (!isAuthenticated) {
     return <PasswordScreen onSuccess={() => setIsAuthenticated(true)} />;
   }
 
   return (
-    <div className="flex h-screen bg-white dark:bg-main text-gray-900 dark:text-white font-sans overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300" style={{ '--app-font-size': `${FONT_SIZE_MAP[fontSize] || 15}px` } as React.CSSProperties}>
+    <div className="flex h-screen bg-white dark:bg-main text-gray-900 dark:text-white overflow-hidden selection:bg-neon-purple selection:text-white transition-colors duration-300" style={{ '--app-font-size': `${FONT_SIZE_MAP[fontSize] || 15}px` } as React.CSSProperties}>
       <div className={`md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsSidebarOpen(false)} />
 
       <Sidebar 
@@ -703,12 +754,12 @@ const App: React.FC = () => {
                     </div>
                  </div>
                ) : (
-                 <div className="pb-10 mb-52">
-                    {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} />
-                    ))}
-                    <div ref={messagesEndRef} />
-                 </div>
+                  <div className="pb-10 mb-52">
+                       {messages.map((msg) => (
+                         <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} />
+                      ))}
+                     <div ref={messagesEndRef} />
+                  </div>
                )}
              </>
            ) : (
@@ -736,6 +787,8 @@ const App: React.FC = () => {
                   onStop={handleStopGeneration}
                   placeholder="Message edward:labs..."
                   theme={theme}
+                  externalFiles={pendingFiles}
+                  onExternalFilesConsumed={() => setPendingFiles([])}
                 />
                 <div className="text-center mt-3">
                   <p className="text-[11px] text-gray-500/60">
@@ -752,7 +805,9 @@ const App: React.FC = () => {
           theme={theme}
           onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           neonColor={neonColor}
-          onChangeNeonColor={setNeonColor}
+          onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
+          neonPreset={neonPreset}
+          onChangeNeonPreset={(preset) => { setNeonPreset(preset); }}
           models={models}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
@@ -762,6 +817,8 @@ const App: React.FC = () => {
           onChangeMaxOutputTokens={setMaxOutputTokens}
           fontSize={fontSize}
           onChangeFontSize={setFontSize}
+          fontFamily={fontFamily}
+          onChangeFontFamily={setFontFamily}
         />
 
 
