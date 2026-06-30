@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Loader2, Upload, X } from 'lucide-react';
-import { generateSpeech } from '../services/mimoService';
+import { generateSpeech } from '../services/apiService';
 import { ModelConfig } from '../types';
 
 interface VoiceClonePanelProps {
@@ -19,6 +19,15 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioPreviewRef = useRef<string | null>(null);
+  const generatedUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioPreviewRef.current) URL.revokeObjectURL(audioPreviewRef.current);
+      if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current);
+    };
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,7 +37,10 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
       return;
     }
     setAudioFile(file);
-    setAudioPreview(URL.createObjectURL(file));
+    if (audioPreviewRef.current) URL.revokeObjectURL(audioPreviewRef.current);
+    const url = URL.createObjectURL(file);
+    audioPreviewRef.current = url;
+    setAudioPreview(url);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -40,11 +52,14 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
       return;
     }
     setAudioFile(file);
-    setAudioPreview(URL.createObjectURL(file));
+    if (audioPreviewRef.current) URL.revokeObjectURL(audioPreviewRef.current);
+    const url = URL.createObjectURL(file);
+    audioPreviewRef.current = url;
+    setAudioPreview(url);
   };
 
   const handleRemoveFile = () => {
-    if (audioPreview) URL.revokeObjectURL(audioPreview);
+    if (audioPreviewRef.current) { URL.revokeObjectURL(audioPreviewRef.current); audioPreviewRef.current = null; }
     setAudioFile(null);
     setAudioPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -53,7 +68,8 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
   const handleGenerate = async () => {
     if (!text.trim() || !audioFile) return;
     setIsGenerating(true);
-    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
+    if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current);
+    generatedUrlRef.current = null;
     setGeneratedUrl(null);
 
     try {
@@ -71,6 +87,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
         style: style.trim() || undefined,
         provider: modelConfig?.provider,
       });
+      generatedUrlRef.current = url;
       setGeneratedUrl(url);
     } catch (err: any) {
       onNotification(err.message || 'Failed to generate speech', 'error');

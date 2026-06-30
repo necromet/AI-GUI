@@ -162,7 +162,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [feedback, setFeedback] = useState<'good' | 'bad' | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
-  const [isSourcesExpanded, setIsSourcesExpanded] = useState(true);
+  const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
 
@@ -356,43 +356,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     };
                     const codeString = getCodeString(children).replace(/\n$/, '');
                     const lines = codeString.split('\n');
-                    const arrowRe = /\s*(?:→|->|-->)\s*/g;
-                    const hasWorkflow = lines.some(l => (l.match(arrowRe) || []).length >= 2);
                     const hasWinPath = /(?:[A-Z]:\\)/i.test(codeString) && codeString.split('\n').length <= 8;
-
-                    if (hasWorkflow) {
-                      const wfLine = lines.find(l => (l.match(arrowRe) || []).length >= 2) || codeString;
-                      const steps = wfLine.split(/\s*(?:→|->|-->)\s*/).filter((s: string) => s.trim());
-                      return (
-                        <div className="my-5 flex flex-wrap items-center gap-2">
-                          {steps.map((step: string, idx: number) => (
-                            <React.Fragment key={idx}>
-                              <div
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
-                                style={{
-                                  border: '1px solid var(--border-300)',
-                                  background: 'var(--bg-200)',
-                                  color: 'var(--text-300)',
-                                }}
-                              >
-                                <span
-                                  className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                                  style={{ background: 'rgba(var(--neon-accent-rgb), 0.15)', color: 'var(--neon-accent)' }}
-                                >
-                                  {idx + 1}
-                                </span>
-                                <span>{step.trim()}</span>
-                              </div>
-                              {idx < steps.length - 1 && (
-                                <svg className="w-4 h-4 flex-shrink-0 opacity-40" viewBox="0 0 24 24" fill="none" stroke="var(--text-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M5 12h14M12 5l7 7-7 7" />
-                                </svg>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      );
-                    }
 
                     if (hasWinPath) {
                       return (
@@ -633,7 +597,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               {!isUser && !message.isThinking && (
                 <>
                   {/* Search citations */}
-                  {message.annotations && message.annotations.length > 0 && (
+                  {message.annotations && message.annotations.length > 0 && (() => {
+                    const citations = message.annotations.filter(a => a.type === 'url_citation');
+                    const gradients = [
+                      'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                      'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                      'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                      'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                      'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
+                      'linear-gradient(135deg, #fccb90 0%, #d57eeb 100%)',
+                      'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)',
+                    ];
+                    return (
                     <div className="mt-5 mb-3">
                       <button
                         onClick={() => setIsSourcesExpanded(!isSourcesExpanded)}
@@ -648,8 +624,34 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         >
                           <Search size={14} style={{ color: 'var(--text-500)' }} />
                           <span className="text-xs font-bold tracking-wide" style={{ color: 'var(--text-300)' }}>
-                            {message.annotations.filter(a => a.type === 'url_citation').length} source{message.annotations.filter(a => a.type === 'url_citation').length !== 1 ? 's' : ''} found
+                            {citations.length} source{citations.length !== 1 ? 's' : ''} found
                           </span>
+                          {!isSourcesExpanded && (
+                            <div className="flex items-center -space-x-1.5 ml-1">
+                              {citations.slice(0, 4).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className="w-5 h-5 rounded-full border-2 flex-shrink-0"
+                                  style={{
+                                    background: gradients[i % gradients.length],
+                                    borderColor: 'var(--bg-200)',
+                                  }}
+                                />
+                              ))}
+                              {citations.length > 4 && (
+                                <div
+                                  className="w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[8px] font-bold"
+                                  style={{
+                                    background: 'var(--bg-300)',
+                                    borderColor: 'var(--bg-200)',
+                                    color: 'var(--text-500)',
+                                  }}
+                                >
+                                  +{citations.length - 4}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <ChevronDown
                             size={14}
                             className={`transition-transform duration-300 ${isSourcesExpanded ? 'rotate-180' : ''}`}
@@ -660,8 +662,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
                       {isSourcesExpanded && (
                         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {message.annotations
-                            .filter((a) => a.type === 'url_citation')
+                          {citations
                             .map((annotation, idx) => (
                               <a
                                 key={idx}
@@ -683,13 +684,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                 }}
                               >
                                 <div
-                                  className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold mt-0.5"
-                                  style={{
-                                    background: 'var(--bg-300)',
-                                    color: 'var(--text-300)',
-                                  }}
+                                  className="inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white mt-0.5"
+                                  style={{ background: gradients[idx % gradients.length] }}
                                 >
-                                  {idx + 1}
+                                  {(annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')).charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-sm font-semibold transition-colors line-clamp-2 leading-snug tracking-tight" style={{ color: 'var(--text-100)' }}>
@@ -725,7 +723,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Token usage */}
                   {message.usageMetadata && (

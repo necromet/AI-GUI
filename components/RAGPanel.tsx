@@ -47,8 +47,10 @@ const RAGPanel: React.FC<RAGPanelProps> = ({ theme = 'dark' }) => {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-dashed border-gray-200 dark:border-white/[0.06] text-gray-400 dark:text-gray-600 text-xs">
-        <span>Coming soon</span>
+      <div className="rounded-2xl border border-gray-200 dark:border-white/[0.04] bg-gray-50 dark:bg-white/[0.02] p-6">
+        <p className="text-sm text-gray-500 dark:text-gray-500 text-center">
+          Knowledge base and document management coming soon.
+        </p>
       </div>
     </div>
   );

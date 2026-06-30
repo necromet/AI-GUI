@@ -8,10 +8,12 @@ const CORRECT_PASSWORD = 'thelordismyshepherd';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function TextGlitch({ text, defaultText, className = '' }: { text: string; defaultText?: string; className?: string }) {
-  const [displayText, setDisplayText] = useState(defaultText || text);
-  const [hoverText, setHoverText] = useState(text);
-  const hoverIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const textRef = useRef<HTMLHeadingElement>(null);
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const [displayText] = useState(defaultText || text);
+  const [displayHoverText, setDisplayHoverText] = useState(text);
   const [isHovered, setIsHovered] = useState(false);
+  const hoverIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -19,7 +21,7 @@ function TextGlitch({ text, defaultText, className = '' }: { text: string; defau
     if (hoverIntervalRef.current) clearInterval(hoverIntervalRef.current);
 
     hoverIntervalRef.current = setInterval(() => {
-      setHoverText(
+      setDisplayHoverText(
         text
           .split('')
           .map((letter, index) => {
@@ -38,7 +40,7 @@ function TextGlitch({ text, defaultText, className = '' }: { text: string; defau
   const handleMouseLeave = () => {
     setIsHovered(false);
     if (hoverIntervalRef.current) clearInterval(hoverIntervalRef.current);
-    setHoverText(text);
+    setDisplayHoverText(text);
   };
 
   useEffect(() => {
@@ -49,48 +51,49 @@ function TextGlitch({ text, defaultText, className = '' }: { text: string; defau
 
   return (
     <h1
+      ref={textRef}
       className={`
         text-5xl font-bold leading-none tracking-tight m-0
-        text-gray-900 dark:text-white
-        border-b border-gray-200 dark:border-neutral-600/12
+        text-neutral-600/20
+        bg-gradient-to-r from-neutral-700 to-neutral-500 bg-clip-text bg-no-repeat
+        border-b border-neutral-600/20
         flex flex-col items-center justify-center relative
         transition-all duration-500 ease-out
         cursor-pointer overflow-hidden
         ${className}
       `}
       style={{
-        backgroundSize: isHovered ? '100%' : '0%',
-        backgroundImage: 'linear-gradient(to right, var(--neon-color), var(--neon-color))',
+        backgroundSize: '100%',
         WebkitBackgroundClip: 'text',
         backgroundClip: 'text',
         width: '100%',
         wordBreak: 'break-word',
         whiteSpace: 'nowrap',
-        animation: 'fade-in 0.6s ease-out forwards',
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {displayText}
       <span
+        ref={spanRef}
         className="
           absolute w-full h-full
           text-black font-bold
           flex flex-col items-center justify-center
-          transition-all duration-400 ease-out
           pointer-events-none overflow-hidden
         "
         style={{
           clipPath: isHovered
             ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'
             : 'polygon(0 50%, 100% 50%, 100% 50%, 0 50%)',
+          transition: 'clip-path 400ms ease-out',
           transformOrigin: 'center',
-          backgroundColor: 'var(--neon-color)',
+          backgroundColor: '#FFFF02',
           maxWidth: '100%',
           whiteSpace: 'nowrap',
         }}
       >
-        {hoverText}
+        {displayHoverText}
       </span>
     </h1>
   );

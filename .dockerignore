@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+.git
+.gitignore
+generated_images
+output
+tmp
+.compose
+.kilo
+.mimocode
+*.md
+*.log
+.env
+.env.local
+.env.*.local

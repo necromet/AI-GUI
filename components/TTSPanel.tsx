@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Loader2 } from 'lucide-react';
-import { generateSpeech, BUILT_IN_VOICES } from '../services/mimoService';
+import { generateSpeech, BUILT_IN_VOICES } from '../services/apiService';
 import { ModelConfig } from '../types';
 
 interface TTSPanelProps {
@@ -16,11 +16,17 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => { if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current); };
+  }, []);
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setIsGenerating(true);
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
     setAudioUrl(null);
 
     try {
@@ -31,6 +37,7 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
         style: style.trim() || undefined,
         provider: modelConfig?.provider,
       });
+      audioUrlRef.current = url;
       setAudioUrl(url);
     } catch (err: any) {
       onNotification(err.message || 'Failed to generate speech', 'error');
