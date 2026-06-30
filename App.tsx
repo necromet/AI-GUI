@@ -875,6 +875,7 @@ const App: React.FC = () => {
                 theme={theme}
                 onNotification={(msg, type) => setNotification({ message: msg, type })}
                 modelConfig={selectedModelConfig}
+                models={models}
                 onProjectChange={setStitchActiveProject}
                 onControlsChange={setStitchControls}
               />

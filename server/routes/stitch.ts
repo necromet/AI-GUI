@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { chatCompletion, ChatMessage } from '../services/mimoService';
+import { chatCompletion, streamChatCompletion, ChatMessage } from '../services/mimoService';
 
 const router = Router();
 
@@ -54,7 +54,7 @@ router.post('/generate-image', async (req: Request, res: Response) => {
 
 router.post('/generate-html', async (req: Request, res: Response) => {
   try {
-    const { boardDescription, layout, prompt: userPrompt, model, provider } = req.body;
+    const { boardDescription, layout, prompt: userPrompt, model, provider, stream, isReasoning } = req.body;
 
     const layoutDims: Record<string, string> = {
       '16:9': '1920x1080',
@@ -88,26 +88,68 @@ Rules:
       },
     ];
 
-    const data = await chatCompletion(
-      {
-        model: model || 'mimo-v2.5',
-        messages,
-        stream: false,
-        thinking: { type: 'disabled' },
-      },
-      'mimo',
-    );
+    if (stream) {
+      const response = await streamChatCompletion(
+        {
+          model: model || 'mimo-v2.5',
+          messages,
+          stream: true,
+          thinking: isReasoning ? { type: 'enabled' } : { type: 'disabled' },
+        },
+        provider || 'mimo',
+      );
 
-    let html = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!response.ok) {
+        const errorText = await response.text();
+        res.status(response.status).json({ error: errorText });
+        return;
+      }
 
-    html = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '');
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
 
-    if (!html || !html.includes('<!DOCTYPE')) {
-      res.status(500).json({ error: 'Failed to generate valid HTML' });
-      return;
+      const reader = (response.body as any)?.getReader();
+      if (!reader) {
+        res.status(500).json({ error: 'No response body from upstream' });
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+        }
+      } catch (err) {
+        // client disconnected
+      } finally {
+        res.end();
+      }
+    } else {
+      const data = await chatCompletion(
+        {
+          model: model || 'mimo-v2.5',
+          messages,
+          stream: false,
+          thinking: { type: 'disabled' },
+        },
+        provider || 'mimo',
+      );
+
+      let html = data.choices?.[0]?.message?.content?.trim() || '';
+
+      html = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '');
+
+      if (!html || !html.includes('<!DOCTYPE')) {
+        res.status(500).json({ error: 'Failed to generate valid HTML' });
+        return;
+      }
+
+      res.json({ html });
     }
-
-    res.json({ html });
   } catch (error: any) {
     console.error('[stitch/generate-html] Error:', error.message);
     res.status(500).json({ error: error.message });

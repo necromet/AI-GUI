@@ -9,6 +9,7 @@ interface StitchPanelProps {
   theme?: 'dark' | 'light';
   onNotification?: (msg: string, type: 'success' | 'error') => void;
   modelConfig?: ModelConfig;
+  models?: ModelConfig[];
   onProjectChange?: (project: StitchProject | null) => void;
   onControlsChange?: (controls: StitchControls | null) => void;
 }
@@ -19,11 +20,12 @@ const LAYOUT_OPTIONS: { value: StitchLayout; label: string; desc: string }[] = [
   { value: '9:16', label: '9:16', desc: 'Portrait' },
 ];
 
-const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotification, modelConfig, onProjectChange, onControlsChange }) => {
+const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotification, modelConfig, models, onProjectChange, onControlsChange }) => {
   const [projects, setProjects] = useState<StitchProject[]>([]);
   const [activeProject, setActiveProject] = useState<StitchProject | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [projectName, setProjectName] = useState('');
 
   const loadProjects = useCallback(async () => {
     try {
@@ -39,7 +41,7 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const handleCreateProject = async (layout: StitchLayout) => {
-    const title = `Project ${Date.now().toString(36).slice(-4)}`;
+    const title = projectName.trim() || `Project ${Date.now().toString(36).slice(-4)}`;
     const project = createNewProject(title);
     const board = createNewBoard(project.id, layout);
     board.title = 'Board 1';
@@ -50,6 +52,7 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
     setActiveProject(project);
     onProjectChange?.(project);
     setIsCreating(false);
+    setProjectName('');
   };
 
   const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
@@ -77,6 +80,7 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
         onBack={() => { setActiveProject(null); onProjectChange?.(null); }}
         onSave={handleSaveProject}
         modelConfig={modelConfig}
+        models={models}
         onControlsChange={onControlsChange}
       />
     );
@@ -111,7 +115,22 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
           className="rounded-2xl border p-6 animate-fade-in"
           style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}
         >
-          <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-100)' }}>Choose a Layout</h3>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-100)' }}>Create New Project</h3>
+          <div className="mb-4">
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Enter project name..."
+              className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200"
+              style={{
+                backgroundColor: 'var(--bg-100)',
+                border: '1px solid var(--border-300)',
+                color: 'var(--text-100)',
+              }}
+            />
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-500)' }}>Choose a Layout</p>
           <div className="flex gap-3">
             {LAYOUT_OPTIONS.map(opt => (
               <button
