@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PanelLeft, SquarePen } from 'lucide-react';
+import { PanelLeft, SquarePen, ArrowLeft, Layers, Download } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
-import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment } from './types';
-import { generateResponseStream, generateChatTitle } from './services/mimoService';
+import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject } from './types';
+import { generateResponseStream, generateChatTitle } from './services/apiService';
 import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import TokenUsageStats from './components/TokenUsageStats';
-import PasswordScreen from './components/PasswordScreen';
+import ModeSelector from './components/ModeSelector';
 import Notification, { NotificationType } from './components/Notification';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
@@ -18,6 +18,9 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 import RAGPanel from './components/RAGPanel';
 import PluginAgentPanel from './components/PluginAgentPanel';
+import StitchPanel from './components/StitchPanel';
+import { StitchControls } from './components/StitchEditor';
+import patternBg from './assets/pattern-bg.png';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -46,8 +49,12 @@ export const FONT_FAMILY_MAP: Record<string, string> = {
 };
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_session');
+  const [currentMode, setCurrentMode] = useState<Mode>('selector');
+  const [isChatAuthenticated, setIsChatAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_chat_session');
+  });
+  const [isExperimentsAuthenticated, setIsExperimentsAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_experiments_session');
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [input, setInput] = useState('');
@@ -87,9 +94,12 @@ const App: React.FC = () => {
   
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<'chat' | 'rag' | 'plugin-agent'>('chat');
+  const [activeView, setActiveView] = useState<'chat' | 'rag' | 'plugin-agent' | 'stitch'>('chat');
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
+  const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
+  const [stitchResetKey, setStitchResetKey] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -108,6 +118,12 @@ const App: React.FC = () => {
       }
     };
     initDb();
+
+    fetch('/api/health').then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    }).catch(() => {
+      setNotification({ message: 'Backend server is not reachable. Chat, TTS, and ASR will not work.', type: 'error' });
+    });
   }, []);
 
   useEffect(() => {
@@ -164,6 +180,20 @@ const App: React.FC = () => {
       localStorage.removeItem('maxOutputTokens');
     }
   }, [maxOutputTokens]);
+
+  useEffect(() => {
+    if (currentMode === 'experiments') {
+      setActiveView('rag');
+    } else if (currentMode === 'chat') {
+      setActiveView('chat');
+    }
+  }, [currentMode]);
+
+  useEffect(() => {
+    if (activeView === 'stitch') {
+      setIsSidebarOpen(false);
+    }
+  }, [activeView]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -401,7 +431,6 @@ const App: React.FC = () => {
           history,
           selectedModelConfig.systemInstruction,
           selectedModelConfig.provider,
-          3,
           selectedModelConfig.maxTokens || maxOutputTokens,
           abortController.signal,
           { search: options?.search, think: options?.think },
@@ -475,12 +504,18 @@ const App: React.FC = () => {
 
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
-          setMessages(prev => prev.map(msg => {
-              if (msg.id === aiMessageId) {
-                  return { ...msg, isThinking: false };
-              }
-              return msg;
-          }));
+          setMessages(prev => {
+            const msg = prev.find(m => m.id === aiMessageId);
+            if (msg && !msg.content && !msg.thinkingContent) {
+              return prev.filter(m => m.id !== aiMessageId);
+            }
+            return prev.map(m => {
+                if (m.id === aiMessageId) {
+                    return { ...m, isThinking: false };
+                }
+                return m;
+            });
+          });
         } else {
           console.error("Generation error:", error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -562,7 +597,6 @@ const App: React.FC = () => {
         history,
         selectedModelConfig.systemInstruction,
         selectedModelConfig.provider,
-        3,
         selectedModelConfig.maxTokens || maxOutputTokens,
         abortController.signal,
       );
@@ -628,12 +662,18 @@ const App: React.FC = () => {
 
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        setMessages(prev => prev.map(msg => {
-          if (msg.id === aiMessageId) {
-            return { ...msg, isThinking: false };
+        setMessages(prev => {
+          const msg = prev.find(m => m.id === aiMessageId);
+          if (msg && !msg.content && !msg.thinkingContent) {
+            return prev.filter(m => m.id !== aiMessageId);
           }
-          return msg;
-        }));
+          return prev.map(m => {
+            if (m.id === aiMessageId) {
+              return { ...m, isThinking: false };
+            }
+            return m;
+          });
+        });
       } else {
         console.error("Regeneration error:", error);
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -689,8 +729,23 @@ const App: React.FC = () => {
     setNotification({ message: `Image attached to input`, type: 'success' });
   }, []);
 
-  if (!isAuthenticated) {
-    return <PasswordScreen onSuccess={() => setIsAuthenticated(true)} />;
+  if (currentMode === 'selector') {
+    return (
+      <ModeSelector
+        isChatAuthenticated={isChatAuthenticated}
+        isExperimentsAuthenticated={isExperimentsAuthenticated}
+        onSelectChat={() => setCurrentMode('chat')}
+        onSelectExperiments={() => setCurrentMode('experiments')}
+        onUnlockChat={() => {
+          setIsChatAuthenticated(true);
+          sessionStorage.setItem('edward:labs_chat_session', 'true');
+        }}
+        onUnlockExperiments={() => {
+          setIsExperimentsAuthenticated(true);
+          sessionStorage.setItem('edward:labs_experiments_session', 'true');
+        }}
+      />
+    );
   }
 
   return (
@@ -723,6 +778,8 @@ const App: React.FC = () => {
         activeView={activeView}
         onNavigate={(view) => setActiveView(view)}
         currentModelName={selectedModelConfig.name}
+        currentMode={currentMode}
+        onBackToSelector={() => setCurrentMode('selector')}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -739,27 +796,70 @@ const App: React.FC = () => {
               <PanelLeft size={20} />
             </button>
           )}
-          <div className="hidden md:flex items-center gap-3">
-            <ModelSelect currentModel={currentModelId} models={models} onSelect={handleSelectModel} theme={theme} />
-          </div>
-          <div className="flex items-center gap-2 md:hidden">
-            <span className="font-semibold text-sm" style={{ color: 'var(--text-300)' }}>edward:labs</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={handleNewChat}
-              className="md:hidden p-2 rounded-lg transition-colors"
-              style={{ color: 'var(--text-500)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-            >
-              <SquarePen size={18} />
-            </button>
-          </div>
+          {activeView === 'stitch' && stitchControls ? (
+            <>
+              <button
+                onClick={() => { setStitchActiveProject(null); setStitchControls(null); setStitchResetKey(k => k + 1); }}
+                className="p-2 rounded-lg transition-all duration-150"
+                style={{ color: 'var(--text-500)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <div className="flex items-center gap-2">
+                <Layers size={16} style={{ color: 'var(--neon-color)' }} />
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>{stitchControls.projectTitle}</span>
+              </div>
+              {stitchControls.hasHtml && (
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={stitchControls.onExport}
+                    disabled={stitchControls.isGenerating}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
+                    style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+                  >
+                    <Download size={14} />
+                    Export
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="hidden md:flex items-center gap-3">
+                <ModelSelect currentModel={currentModelId} models={models} onSelect={handleSelectModel} theme={theme} />
+              </div>
+              <div className="flex items-center gap-2 md:hidden">
+                <span className="font-semibold text-sm" style={{ color: 'var(--text-300)' }}>edward:labs</span>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={handleNewChat}
+                  className="md:hidden p-2 rounded-lg transition-colors"
+                  style={{ color: 'var(--text-500)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <SquarePen size={18} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Content area */}
         <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `url(${patternBg})`,
+              backgroundSize: '400px',
+              backgroundRepeat: 'repeat',
+              opacity: 0.3,
+              filter: 'grayscale(1)',
+            }}
+          />
           {activeView === 'rag' ? (
             <div className="h-full flex items-center justify-center p-6">
               <RAGPanel theme={theme} />
@@ -767,6 +867,17 @@ const App: React.FC = () => {
           ) : activeView === 'plugin-agent' ? (
             <div className="h-full flex items-center justify-center p-6">
               <PluginAgentPanel theme={theme} />
+            </div>
+          ) : activeView === 'stitch' ? (
+            <div className={`h-full overflow-auto ${stitchActiveProject ? 'p-0' : 'p-6'}`}>
+              <StitchPanel
+                key={stitchResetKey}
+                theme={theme}
+                onNotification={(msg, type) => setNotification({ message: msg, type })}
+                modelConfig={selectedModelConfig}
+                onProjectChange={setStitchActiveProject}
+                onControlsChange={setStitchControls}
+              />
             </div>
           ) : modelType === 'chat' ? (
             <>
@@ -830,7 +941,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Input Area — chat mode only */}
-        {modelType === 'chat' && activeView === 'chat' && (
+        {modelType === 'chat' && activeView === 'chat' && currentMode !== 'experiments' && (
           <div
             className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4"
             style={{

@@ -1,3 +1,7 @@
+/**
+ * @deprecated This service is unused. All components use apiService.ts (via Express backend).
+ * Kept as reference for retry/quota logic that could be ported to the server.
+ */
 import { Attachment } from '../types';
 
 const apiKey = process.env.MIMO_API_KEY || '';
@@ -36,21 +40,42 @@ function getRetryAfterMs(response: Response): number {
   return 5000;
 }
 
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
+}
+
 async function* parseSSEStream(response: Response, signal?: AbortSignal): AsyncGenerator<MiMoStreamChunk> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
+
+  if (signal?.aborted) {
+    reader.cancel();
+    throw new DOMException('Aborted', 'AbortError');
+  }
 
   const decoder = new TextDecoder();
   let buffer = '';
   let allAnnotations: any[] = [];
 
-  while (true) {
-    if (signal?.aborted) {
+  const abortPromise = new Promise<never>((_, reject) => {
+    signal?.addEventListener('abort', () => {
       reader.cancel();
-      throw new DOMException('Aborted', 'AbortError');
-    }
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
 
-    const { done, value } = await reader.read();
+  while (true) {
+    const { done, value } = await Promise.race([reader.read(), abortPromise]);
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
@@ -183,7 +208,7 @@ export const generateResponseStream = async (
       }
       if (attempt < retries) {
         const delay = getRetryAfterMs(response) * (attempt + 1);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await abortableDelay(delay, signal);
         lastError = new Error(`Rate limited (attempt ${attempt + 1}/${retries + 1}), retrying...`);
         continue;
       }

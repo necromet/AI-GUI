@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Wand2, Loader2 } from 'lucide-react';
-import { generateSpeech } from '../services/mimoService';
+import { generateSpeech } from '../services/apiService';
 import { ModelConfig } from '../types';
 
 interface VoiceDesignPanelProps {
@@ -15,11 +15,17 @@ const VoiceDesignPanel: React.FC<VoiceDesignPanelProps> = ({ onNotification, the
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => { if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current); };
+  }, []);
 
   const handleGenerate = async () => {
     if (!text.trim() || !voiceDescription.trim()) return;
     setIsGenerating(true);
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
     setAudioUrl(null);
 
     try {
@@ -29,6 +35,7 @@ const VoiceDesignPanel: React.FC<VoiceDesignPanelProps> = ({ onNotification, the
         style: voiceDescription.trim(),
         provider: modelConfig?.provider,
       });
+      audioUrlRef.current = url;
       setAudioUrl(url);
     } catch (err: any) {
       onNotification(err.message || 'Failed to generate speech', 'error');

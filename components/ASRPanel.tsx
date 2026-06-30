@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Loader2, Upload, X, FileText, Mic, Copy, Check } from 'lucide-react';
-import { transcribeAudio } from '../services/mimoService';
+import { transcribeAudio } from '../services/apiService';
 import { ModelConfig } from '../types';
 import { AIVoiceInput } from './AIVoiceInput';
 

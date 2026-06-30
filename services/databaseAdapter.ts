@@ -91,10 +91,10 @@ export const addMessage = async (
   role: 'user' | 'assistant' | 'system' | 'model',
   content: string,
   messageOrder: number,
-  tokenCount?: number,
+  tokenCount?: number | null,
   generatedImages?: Array<{ id: string; data: string; mimeType: string }> | null,
-  promptTokens?: number,
-  candidatesTokens?: number,
+  promptTokens?: number | null,
+  candidatesTokens?: number | null,
   searchAnnotations?: any[] | null,
   attachments?: string | null
 ) => {
@@ -141,4 +141,37 @@ export const getTokenStatsByDate = async (days: number = 30) => {
 
 export const getTokenStatsByConversation = async (limit: number = 20) => {
   return await idbService.getTokenStatsByConversation(limit);
+};
+
+// ===== Stitch Project Operations =====
+
+export const getStitchProjects = async () => {
+  return await idbService.getStitchProjects();
+};
+
+export const getStitchProject = async (id: string) => {
+  return await idbService.getStitchProject(id);
+};
+
+export const saveStitchProject = async (project: {
+  id: string;
+  title: string;
+  description?: string;
+  boards: any[];
+  createdAt: number;
+  updatedAt: number;
+}) => {
+  const dbProject: idbService.DBStitchProject = {
+    id: project.id,
+    title: project.title,
+    description: project.description,
+    boards_json: JSON.stringify(project.boards),
+    created_at: new Date(project.createdAt).toISOString(),
+    updated_at: new Date(project.updatedAt).toISOString(),
+  };
+  await idbService.saveStitchProject(dbProject);
+};
+
+export const deleteStitchProject = async (id: string) => {
+  await idbService.deleteStitchProject(id);
 };

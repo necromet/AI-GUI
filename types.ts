@@ -51,6 +51,8 @@ export interface ChatSession {
 
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
 
+export type Mode = 'selector' | 'chat' | 'experiments';
+
 export function getModelType(modelId: string): ModelType {
   if (modelId.includes('tts-voicedesign')) return 'tts-voicedesign';
   if (modelId.includes('tts-voiceclone')) return 'tts-voiceclone';
@@ -78,4 +80,29 @@ export interface ModelConfig {
   apiModelId?: string; // Actual model ID sent to the API (if different from id)
   maxTokens?: number; // Maximum tokens for model output
   modelType?: ModelType; // UI routing type (auto-derived from id if omitted)
+}
+
+// ===== Stitch Types =====
+
+export type StitchLayout = '16:9' | '1:1' | '9:16';
+
+export interface StitchBoard {
+  id: string;
+  projectId: string;
+  title: string;
+  layout: StitchLayout;
+  generatedHtml?: string;
+  bgImage?: string;
+  bgColor?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface StitchProject {
+  id: string;
+  title: string;
+  description?: string;
+  boards: StitchBoard[];
+  createdAt: number;
+  updatedAt: number;
 }

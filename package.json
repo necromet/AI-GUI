@@ -10,18 +10,28 @@
   "description": "edwardlabs - AI Chat Application",
   "scripts": {
     "dev": "vite",
+    "dev:server": "tsx server/index.ts",
+    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-tooltip": "^1.2.10",
     "@types/react-syntax-highlighter": "^15.5.13",
     "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "framer-motion": "^12.41.0",
+    "gsap": "^3.15.0",
     "idb": "^8.0.3",
     "katex": "^0.17.0",
     "lucide-react": "^0.554.0",
+    "multer": "^2.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
@@ -36,6 +46,8 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^10.0.3",
+    "tsx": "^4.22.4",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

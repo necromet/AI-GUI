@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
             target: 'https://api.xiaomimimo.com/v1',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/mimo-direct-api/, ''),
+          },
+          '/api': {
+            target: 'http://localhost:3001',
+            changeOrigin: true,
           }
         }
       },

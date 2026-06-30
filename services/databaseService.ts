@@ -1,8 +1,8 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
 
 // Database name and version
 const DB_NAME = 'ChatGPT_DB';
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 
 // IndexedDB Schema
 interface ChatGPTDB extends DBSchema {
@@ -21,62 +21,68 @@ interface ChatGPTDB extends DBSchema {
     value: DBMessage;
     indexes: { 'by-conversation': number; 'by-conversation-order': [number, number] };
   };
+  stitch_projects: {
+    key: string;
+    value: DBStitchProject;
+    indexes: { 'by-updated': string };
+  };
 }
 
 let dbInstance: IDBPDatabase<ChatGPTDB> | null = null;
+
+const upgradeOptions = {
+  upgrade(db: any, oldVersion: number, _newVersion: number) {
+    if (!db.objectStoreNames.contains('models')) {
+      const modelStore = db.createObjectStore('models', {
+        keyPath: 'model_id',
+        autoIncrement: true
+      });
+      modelStore.createIndex('by-name', 'name', { unique: true });
+    }
+
+    if (!db.objectStoreNames.contains('conversations')) {
+      const convStore = db.createObjectStore('conversations', {
+        keyPath: 'conversation_id',
+        autoIncrement: true
+      });
+      convStore.createIndex('by-updated', 'updated_at');
+    }
+
+    if (!db.objectStoreNames.contains('messages')) {
+      const msgStore = db.createObjectStore('messages', {
+        keyPath: 'message_id',
+        autoIncrement: true
+      });
+      msgStore.createIndex('by-conversation', 'conversation_id');
+      msgStore.createIndex('by-conversation-order', ['conversation_id', 'message_order'], { unique: true });
+    }
+
+    if (!db.objectStoreNames.contains('stitch_projects')) {
+      const stitchStore = db.createObjectStore('stitch_projects', { keyPath: 'id' });
+      stitchStore.createIndex('by-updated', 'updated_at');
+    }
+  },
+};
 
 /**
  * Get or create the database connection
  */
 export const getDatabase = async (): Promise<IDBPDatabase<ChatGPTDB>> => {
   if (!dbInstance) {
-    dbInstance = await openDB<ChatGPTDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion) {
-        // Create Models store
-        if (!db.objectStoreNames.contains('models')) {
-          const modelStore = db.createObjectStore('models', { 
-            keyPath: 'model_id', 
-            autoIncrement: true 
-          });
-          modelStore.createIndex('by-name', 'name', { unique: true });
-        }
-
-        // Create Conversations store
-        if (!db.objectStoreNames.contains('conversations')) {
-          const convStore = db.createObjectStore('conversations', { 
-            keyPath: 'conversation_id', 
-            autoIncrement: true 
-          });
-          convStore.createIndex('by-updated', 'updated_at');
-        }
-
-        // Create Messages store
-        if (!db.objectStoreNames.contains('messages')) {
-          const msgStore = db.createObjectStore('messages', { 
-            keyPath: 'message_id', 
-            autoIncrement: true 
-          });
-          msgStore.createIndex('by-conversation', 'conversation_id');
-          msgStore.createIndex('by-conversation-order', ['conversation_id', 'message_order'], { unique: true });
-        }
-
-        // Migration for version 2: Add support for generated_images
-        // Note: IndexedDB allows flexible schemas, so existing records will simply have undefined for the new field
-        if (oldVersion < 2) {
-          console.log('Migrating database to version 2 (adding generated_images support)');
-        }
-
-        if (oldVersion < 3) {
-          console.log('Migrating database to version 3 (adding search_annotations support)');
-        }
-
-        if (oldVersion < 4) {
-          console.log('Migrating database to version 4 (adding attachments support)');
-        }
-      },
-    });
-
-    // Initialize default model
+    let targetVersion = DB_VERSION;
+    try {
+      const probe = await openDB<ChatGPTDB>(DB_NAME);
+      if (probe.version > targetVersion) {
+        targetVersion = probe.version;
+      }
+      if (!probe.objectStoreNames.contains('stitch_projects')) {
+        targetVersion = probe.version + 1;
+      }
+      probe.close();
+    } catch {
+      // DB doesn't exist yet
+    }
+    dbInstance = await openDB<ChatGPTDB>(DB_NAME, targetVersion, upgradeOptions);
     await initializeDefaultModel();
   }
   return dbInstance;
@@ -290,6 +296,15 @@ export interface DBMessage {
   generated_images?: string | null; // JSON string of array of {id, data, mimeType}
   search_annotations?: string | null; // JSON string of SearchAnnotation[]
   attachments?: string | null; // JSON string of Attachment[]
+}
+
+export interface DBStitchProject {
+  id: string;
+  title: string;
+  description?: string;
+  boards_json: string; // JSON-serialized StitchBoard[]
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -609,5 +624,30 @@ export const getTokenStatsByConversation = async (limit: number = 20): Promise<T
   
   // Sort by total tokens descending and limit results
   return convStats.sort((a, b) => b.totalTokens - a.totalTokens).slice(0, limit);
+};
+
+// ===== Stitch Project Operations =====
+
+export const getStitchProjects = async (): Promise<DBStitchProject[]> => {
+  const db = await getDatabase();
+  const projects = await db.getAll('stitch_projects');
+  return projects.sort((a, b) =>
+    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+};
+
+export const getStitchProject = async (id: string): Promise<DBStitchProject | undefined> => {
+  const db = await getDatabase();
+  return await db.get('stitch_projects', id);
+};
+
+export const saveStitchProject = async (project: DBStitchProject): Promise<void> => {
+  const db = await getDatabase();
+  await db.put('stitch_projects', project);
+};
+
+export const deleteStitchProject = async (id: string): Promise<void> => {
+  const db = await getDatabase();
+  await db.delete('stitch_projects', id);
 };
 
