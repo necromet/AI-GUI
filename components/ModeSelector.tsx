@@ -74,7 +74,7 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
           <h3 className="text-lg font-semibold" style={{ color: 'var(--text-100)' }}>
             {title}
           </h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-500)' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-500)' }}>
             {subtitle}
           </p>
         </div>
@@ -202,7 +202,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       <div className="relative z-10 w-full max-w-2xl mx-4 px-4">
         <div className="text-center mb-12">
           <TextGlitch text="EDWARD:LABS" />
-          <p className="text-sm mt-4" style={{ color: 'var(--text-500)' }}>
+          <p className="text-base mt-4" style={{ color: 'var(--text-500)' }}>
             AI-powered tools for the curious
           </p>
         </div>
@@ -249,7 +249,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
               <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-100)' }}>
                 {card.title}
               </h3>
-              <p className="text-xs" style={{ color: 'var(--text-500)' }}>
+              <p className="text-sm" style={{ color: 'var(--text-500)' }}>
                 {card.description}
               </p>
             </button>

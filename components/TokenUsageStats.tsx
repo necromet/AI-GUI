@@ -2,13 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Calendar, MessageSquare, Zap, BarChart3, Activity } from 'lucide-react';
 import * as db from '../services/databaseAdapter';
 import * as RechartsPrimitive from 'recharts';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { ModelConfig } from '../types';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '@/lib/utils';
 
 const THEMES = { light: "", dark: ".dark" } as const;
 

@@ -288,7 +288,7 @@ const Settings: React.FC<SettingsProps> = ({
                   >
                     Lock Screen
                   </button>
-                  <p className="text-[11px] text-gray-400 mt-2">You'll need to re-enter your password.</p>
+                    <p className="text-xs text-gray-400 mt-2">You'll need to re-enter your password.</p>
                 </section>
               </div>
             )}
@@ -308,17 +308,17 @@ const Settings: React.FC<SettingsProps> = ({
                           <div className="text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             {model.name}
                             {model.isCustom && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.12)' }}>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.12)' }}>
                                 CUSTOM
                               </span>
                             )}
                             {model.systemInstruction && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
                                 SYSTEM PROMPT
                               </span>
                             )}
                             {model.maxTokens && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
                                 MAX: {model.maxTokens.toLocaleString()}
                               </span>
                             )}
@@ -379,7 +379,7 @@ const Settings: React.FC<SettingsProps> = ({
                           </div>
                           <div className="flex-1 text-left">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{preset.name}</div>
-                            <div className="text-[11px] text-gray-400 mt-0.5">
+                            <div className="text-xs text-gray-400 mt-0.5">
                               {preset.primary[mode].tailwind.replace('rgb(', '').replace(')', '')}
                             </div>
                           </div>

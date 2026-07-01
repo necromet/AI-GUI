@@ -2,7 +2,7 @@ import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
 
 // Database name and version
 const DB_NAME = 'ChatGPT_DB';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 // IndexedDB Schema
 interface ChatGPTDB extends DBSchema {
@@ -31,7 +31,7 @@ interface ChatGPTDB extends DBSchema {
 let dbInstance: IDBPDatabase<ChatGPTDB> | null = null;
 
 const upgradeOptions = {
-  upgrade(db: any, oldVersion: number, _newVersion: number) {
+  async upgrade(db: any, oldVersion: number, _newVersion: number) {
     if (!db.objectStoreNames.contains('models')) {
       const modelStore = db.createObjectStore('models', {
         keyPath: 'model_id',
@@ -61,6 +61,21 @@ const upgradeOptions = {
       const stitchStore = db.createObjectStore('stitch_projects', { keyPath: 'id' });
       stitchStore.createIndex('by-updated', 'updated_at');
     }
+
+    if (oldVersion < 7 && db.objectStoreNames.contains('conversations')) {
+      const tx = db.transaction('conversations', 'readwrite');
+      const store = tx.objectStore('conversations');
+      let cursor = await store.openCursor();
+      while (cursor) {
+        const conv = cursor.value;
+        if (!conv.type) {
+          conv.type = 'chat';
+          await cursor.update(conv);
+        }
+        cursor = await cursor.continue();
+      }
+      await tx.done;
+    }
   },
 };
 
@@ -74,9 +89,6 @@ export const getDatabase = async (): Promise<IDBPDatabase<ChatGPTDB>> => {
       const probe = await openDB<ChatGPTDB>(DB_NAME);
       if (probe.version > targetVersion) {
         targetVersion = probe.version;
-      }
-      if (!probe.objectStoreNames.contains('stitch_projects')) {
-        targetVersion = probe.version + 1;
       }
       probe.close();
     } catch {
@@ -210,6 +222,7 @@ export interface DBConversation {
   conversation_id?: number;
   title: string | null;
   model_id: number;
+  type: 'chat' | 'rag' | 'plugin-agent' | 'stitch';
   created_at: string;
   updated_at: string;
 }
@@ -217,12 +230,13 @@ export interface DBConversation {
 /**
  * Create a new conversation
  */
-export const createConversation = async (modelId: number, title: string | null = null): Promise<number> => {
+export const createConversation = async (modelId: number, title: string | null = null, type: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = 'chat'): Promise<number> => {
   const db = await getDatabase();
   const now = new Date().toISOString();
   const conversation: DBConversation = {
     title,
     model_id: modelId,
+    type,
     created_at: now,
     updated_at: now
   };
@@ -238,6 +252,14 @@ export const getConversations = async (): Promise<DBConversation[]> => {
   return conversations.sort((a, b) => 
     new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
+};
+
+export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'stitch'): Promise<DBConversation[]> => {
+  const db = await getDatabase();
+  const conversations = await db.getAll('conversations');
+  return conversations
+    .filter(c => (c.type || 'chat') === type)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 };
 
 /**

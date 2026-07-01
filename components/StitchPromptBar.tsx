@@ -9,6 +9,10 @@ interface StitchPromptBarProps {
   models?: ModelConfig[];
   selectedModelId?: string;
   onModelChange?: (id: string) => void;
+  initialPrompt?: string;
+  initialActiveChips?: string[];
+  onPromptChange?: (prompt: string) => void;
+  onActiveChipsChange?: (chips: string[]) => void;
 }
 
 const CHIP_CATEGORIES: { label: string; chips: string[] }[] = [
@@ -30,12 +34,31 @@ const CHIP_CATEGORIES: { label: string; chips: string[] }[] = [
   },
 ];
 
-const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerating = false, theme = 'dark', models, selectedModelId, onModelChange }) => {
-  const [prompt, setPrompt] = useState('');
-  const [activeChips, setActiveChips] = useState<Set<string>>(new Set());
+const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerating = false, theme = 'dark', models, selectedModelId, onModelChange, initialPrompt = '', initialActiveChips = [], onPromptChange, onActiveChipsChange }) => {
+  const [prompt, setPrompt] = useState(initialPrompt);
+  const [activeChips, setActiveChips] = useState<Set<string>>(new Set(initialActiveChips));
   const scrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const skipInitialChipsSync = useRef(true);
+  const [overflowState, setOverflowState] = useState<Record<string, { left: boolean; right: boolean }>>({});
 
   const chatModels = models?.filter(m => (m.modelType || 'chat') === 'chat') || [];
+
+  const checkOverflow = () => {
+    const next: Record<string, { left: boolean; right: boolean }> = {};
+    scrollRefs.current.forEach((el, label) => {
+      const left = el.scrollLeft > 2;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      next[label] = { left, right };
+    });
+    setOverflowState(next);
+  };
+
+  useEffect(() => {
+    checkOverflow();
+    const ro = new ResizeObserver(() => checkOverflow());
+    scrollRefs.current.forEach(el => ro.observe(el));
+    return () => ro.disconnect();
+  }, [chatModels.length]);
 
   const toggleChip = (chip: string) => {
     setActiveChips(prev => {
@@ -47,6 +70,19 @@ const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerat
       }
       return next;
     });
+  };
+
+  useEffect(() => {
+    if (skipInitialChipsSync.current) {
+      skipInitialChipsSync.current = false;
+      return;
+    }
+    onActiveChipsChange?.([...activeChips]);
+  }, [activeChips]);
+
+  const handlePromptChange = (value: string) => {
+    setPrompt(value);
+    onPromptChange?.(value);
   };
 
   const buildFullPrompt = (): string => {
@@ -78,110 +114,115 @@ const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerat
     const el = scrollRefs.current.get(label);
     if (el) {
       el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
+      setTimeout(checkOverflow, 350);
     }
   };
 
   return (
     <div className="space-y-3">
       {/* Chip categories */}
-      {CHIP_CATEGORIES.map(cat => (
+      {CHIP_CATEGORIES.map(cat => {
+        const ov = overflowState[cat.label] || { left: false, right: false };
+        return (
         <div key={cat.label} className="flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase tracking-wider flex-shrink-0 w-12 text-right" style={{ color: 'var(--text-500)' }}>
             {cat.label}
           </span>
-          <div className="relative flex-1 min-w-0">
-            <button
-              type="button"
-              onClick={() => scrollCategory(cat.label, 'left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-0.5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
-              style={{ color: 'var(--text-500)' }}
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <div
-              ref={el => { if (el) scrollRefs.current.set(cat.label, el); }}
-              className="flex gap-1.5 overflow-x-auto scrollbar-hidden px-5"
-            >
-              {cat.chips.map(chip => {
-                const isActive = activeChips.has(chip);
-                return (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => toggleChip(chip)}
-                    className="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap"
-                    style={{
-                      backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
-                      border: isActive ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                      color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
-                    }}
-                  >
-                    {chip}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => scrollCategory(cat.label, 'right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-0.5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
-              style={{ color: 'var(--text-500)' }}
-            >
-              <ChevronRight size={14} />
-            </button>
+          <button
+            type="button"
+            onClick={() => scrollCategory(cat.label, 'left')}
+            className="flex-shrink-0 p-1 rounded-full transition-opacity"
+            style={{ color: 'var(--neon-color)', opacity: ov.left ? 1 : 0.2, pointerEvents: ov.left ? 'auto' : 'none' }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div
+            ref={el => { if (el) scrollRefs.current.set(cat.label, el); }}
+            className="flex gap-1.5 overflow-x-auto scrollbar-hidden flex-1 min-w-0"
+            onScroll={checkOverflow}
+          >
+            {cat.chips.map(chip => {
+              const isActive = activeChips.has(chip);
+              return (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => toggleChip(chip)}
+                  className="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap"
+                  style={{
+                    backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
+                    border: isActive ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
+                    color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                  }}
+                >
+                  {chip}
+                </button>
+              );
+            })}
           </div>
+          <button
+            type="button"
+            onClick={() => scrollCategory(cat.label, 'right')}
+            className="flex-shrink-0 p-1 rounded-full transition-opacity"
+            style={{ color: 'var(--neon-color)', opacity: ov.right ? 1 : 0.2, pointerEvents: ov.right ? 'auto' : 'none' }}
+          >
+            <ChevronRight size={14} />
+          </button>
         </div>
-      ))}
+        );
+      })}
 
       {/* Model chips */}
-      {chatModels.length > 0 && (
+      {chatModels.length > 0 && (() => {
+        const ov = overflowState['Model'] || { left: false, right: false };
+        return (
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase tracking-wider flex-shrink-0 w-12 text-right" style={{ color: 'var(--text-500)' }}>
             Model
           </span>
-          <div className="relative flex-1 min-w-0">
-            <button
-              type="button"
-              onClick={() => scrollCategory('Model', 'left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-0.5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
-              style={{ color: 'var(--text-500)' }}
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <div
-              ref={el => { if (el) scrollRefs.current.set('Model', el); }}
-              className="flex gap-1.5 overflow-x-auto scrollbar-hidden px-5"
-            >
-              {chatModels.map(model => {
-                const isActive = selectedModelId === model.id;
-                return (
-                  <button
-                    key={model.id}
-                    type="button"
-                    onClick={() => onModelChange?.(model.id)}
-                    className="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap"
-                    style={{
-                      backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
-                      border: isActive ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                      color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
-                    }}
-                  >
-                    {model.name}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => scrollCategory('Model', 'right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-0.5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
-              style={{ color: 'var(--text-500)' }}
-            >
-              <ChevronRight size={14} />
-            </button>
+          <button
+            type="button"
+            onClick={() => scrollCategory('Model', 'left')}
+            className="flex-shrink-0 p-1 rounded-full transition-opacity"
+            style={{ color: 'var(--neon-color)', opacity: ov.left ? 1 : 0.2, pointerEvents: ov.left ? 'auto' : 'none' }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div
+            ref={el => { if (el) scrollRefs.current.set('Model', el); }}
+            className="flex gap-1.5 overflow-x-auto scrollbar-hidden flex-1 min-w-0"
+            onScroll={checkOverflow}
+          >
+            {chatModels.map(model => {
+              const isActive = selectedModelId === model.id;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => onModelChange?.(model.id)}
+                  className="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap"
+                  style={{
+                    backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
+                    border: isActive ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
+                    color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                  }}
+                >
+                  {model.name}
+                </button>
+              );
+            })}
           </div>
+          <button
+            type="button"
+            onClick={() => scrollCategory('Model', 'right')}
+            className="flex-shrink-0 p-1 rounded-full transition-opacity"
+            style={{ color: 'var(--neon-color)', opacity: ov.right ? 1 : 0.2, pointerEvents: ov.right ? 'auto' : 'none' }}
+          >
+            <ChevronRight size={14} />
+          </button>
         </div>
-      )}
+        );
+      })()}
 
       {/* Input + Generate */}
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
@@ -189,7 +230,7 @@ const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerat
           <input
             type="text"
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={e => handlePromptChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={activeChips.size > 0 ? 'Add more details or press Enter to generate...' : 'Describe the HTML you want to generate...'}
             className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200"

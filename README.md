@@ -1,287 +1,104 @@
-<div align="center">
-<img src="banner/Banner BG.png" alt="AIUI Banner" width="100%" />
+# edward:labs
 
-# AI User Interface for future purposes
+AI chat web app powered by the Xiaomi MiMo API.
 
-*AI chat application powered by Google's Gemini API*
+## Tech Stack
 
-[![Electron](https://img.shields.io/badge/Electron-33.2.0-47848F?style=flat&logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-19.2.0-61DAFB?style=flat&logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8.2-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-6.2.0-646CFF?style=flat&logo=vite)](https://vitejs.dev/)
+- **Frontend**: React 19 + TypeScript + Vite
+- **Styling**: Tailwind CSS (CDN)
+- **Backend**: Express (Node.js)
+- **AI**: Xiaomi MiMo API
+- **Storage**: IndexedDB (via `idb`)
+- **Deployment**: Docker (nginx + Express containers)
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Database](#database-persistence) • [Development](#development) • [Building](#building)
+## Features
 
-</div>
+- Chat with MiMo models (streaming completions)
+- TTS / ASR / Voice design / Voice clone panels
+- RAG experiments (embeddings + retrieval)
+- Agent plugin system
+- Stitch visual design editor (Fabric.js canvas, HTML + image generation)
+- Persistent conversations in IndexedDB
+- Token usage tracking and charts
+- Neon theme customization
 
----
-
-## 📋 Overview
-
-This is a modern, cross-platform AI chat interface that brings the power of Google's Gemini AI models to your desktop and browser. Built with React, TypeScript, and Electron, it offers a seamless chat experience with persistent conversation history, multiple model support, and a beautiful user interface.
-
-## ✨ Features
-
-- 🤖 **Multiple Gemini Models** - Support for various Gemini models including `gemini-2.5-flash-preview`
-- 💬 **Persistent Chat History** - All conversations are automatically saved and organized
-- 🖥️ **Cross-Platform** - Available as both a desktop app (Electron) and web app
-- 🗄️ **Dual Database Support** - SQLite for desktop, IndexedDB for web
-- 🎨 **Modern UI** - Clean, responsive interface built with React
-- 📊 **Token Usage Tracking** - Monitor your API usage
-- 🖼️ **Image Generation** - Support for AI image generation
-- 📁 **Database Viewer** - Built-in tool to explore your chat database
-- 🔒 **Local Storage** - Your data stays on your machine
-- ⚡ **Fast & Responsive** - Powered by Vite for lightning-fast development
-
-## 🚀 Installation
+## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- A [Google Gemini API key](https://ai.google.dev/)
+- Node.js v18+
+- A Xiaomi MiMo API key (or token-plan key)
 
-### Setup
+### Environment Variables
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd AI\ GUI
-   ```
+Create a `.env` file in the project root:
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure API Key** (for web version)
-   - Create a `.env.local` file in the root directory
-   - Add your Gemini API key:
-     ```
-     GEMINI_API_KEY=your_api_key_here
-     ```
-
-## 💻 Usage
-
-### Web Version (Browser)
-
-Run the development server:
-```bash
-npm run dev
+```env
+MIMO_API_KEY=your_token_plan_key
+MIMO_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
+MIMO_DIRECT_API_KEY=your_direct_api_key
+MIMO_DIRECT_BASE_URL=https://api.xiaomimimo.com/v1
+OPENAI_API_KEY=your_openai_key          # optional, for Stitch image generation
 ```
 
-The app will be available at `http://localhost:5173`
-
-### Desktop App (Electron)
-
-Run in development mode:
-```bash
-npm run electron:dev
-```
-
-Build for production:
-```bash
-npm run electron:build
-```
-
-The built application will be in the `release/` directory.
-
-## 🗄️ Database Persistence
-
-This application supports dual database backends for optimal performance across platforms:
-
-| Platform | Database | Storage Location |
-|----------|----------|------------------|
-| **Desktop (Electron)** | SQLite (better-sqlite3) | `~/.config/aiui/chat.db` |
-| **Web Browser** | IndexedDB | Browser storage (per-domain) |
-
-The database is automatically created on first run and handles all conversation persistence.
-
-### 📊 Database Schema
-
-The application uses three main tables/stores:
-
-<details>
-<summary><strong>1. Models Store</strong> - AI model configurations</summary>
-
-```typescript
-interface DBModel {
-  model_id?: number;
-  name: string;
-  description: string | null;
-  context_window_size: number | null;
-  active: boolean;
-}
-```
-
-Stores available Gemini models (e.g., `gemini-2.5-flash-preview-09-2025`).
-</details>
-
-<details>
-<summary><strong>2. Conversations Store</strong> - Chat session metadata</summary>
-
-```typescript
-interface DBConversation {
-  conversation_id?: number;
-  title: string | null;
-  model_id: number;
-  created_at: string;
-  updated_at: string;
-}
-```
-
-Tracks all conversations with automatic timestamp management.
-</details>
-
-<details>
-<summary><strong>3. Messages Store</strong> - Chat message content</summary>
-
-```typescript
-interface DBMessage {
-  message_id?: number;
-  conversation_id: number;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  message_order: number;
-  timestamp: string;
-  token_count: number | null;
-}
-```
-
-Stores individual messages with role tracking and token counting.
-</details>
-
-### 🎯 Key Features
-
-- ✅ **Automatic Persistence** - All conversations saved in real-time
-- 📅 **Smart Organization** - Conversations grouped by time (Today, Yesterday, Last 7 Days, Older)
-- 🗑️ **Cascade Delete** - Removing a conversation deletes all associated messages
-- 🏷️ **Model Tracking** - Each conversation remembers which AI model was used
-- ⏰ **Timestamp Tracking** - Automatic creation and update time recording
-- 🔍 **Database Viewer** - Built-in tool to inspect and manage your data
-
-### 💾 Data Management
-
-**Browser (IndexedDB)**
-- Database name: `ChatGPT_DB`
-- Inspect: Browser DevTools → Application → IndexedDB
-- Clear: Browser settings → Clear site data
-
-**Desktop (SQLite)**
-- Location: `~/.config/aiui/chat.db`
-- View: Use any SQLite browser or the built-in database viewer
-- Backup: Simply copy the `.db` file
-
-For the complete SQL schema reference, see [schema.sql](schema.sql).
-
-## 🏗️ Project Structure
-
-```
-AI GUI/
-├── components/          # React components
-│   ├── ChatMessage.tsx
-│   ├── DatabaseViewer.tsx
-│   ├── ModelSelect.tsx
-│   ├── Settings.tsx
-│   └── Sidebar.tsx
-├── electron/           # Electron main process
-│   ├── database.ts
-│   ├── main.ts
-│   └── preload.ts
-├── services/           # Business logic
-│   ├── databaseService.ts
-│   ├── geminiService.ts
-│   └── databaseAdapter.ts
-├── App.tsx            # Main React app
-├── types.ts           # TypeScript definitions
-└── schema.sql         # Database schema
-```
-
-## 🛠️ Development
-
-### Tech Stack
-
-- **Frontend**: React 19, TypeScript, Vite
-- **Desktop**: Electron 33
-- **Database**: SQLite (desktop), IndexedDB (web)
-- **AI**: Google Gemini API
-- **UI**: Lucide React icons, React Markdown, Syntax Highlighting
-
-### Scripts
+### Install & Run
 
 ```bash
-npm run dev              # Start web dev server
-npm run build            # Build web version
-npm run preview          # Preview production build
-npm run electron:dev     # Start Electron in dev mode
-npm run electron:build   # Build Electron app for production
+npm install
+npm run dev          # Vite dev server → localhost:5173
+npm run dev:server   # Express API server → localhost:3001
+npm run dev:all      # Run both concurrently
 ```
 
-### Adding New Features
-
-1. **New Components**: Add to `components/` directory
-2. **Database Changes**: Update `schema.sql` and type definitions in `types.ts`
-3. **Services**: Add business logic to `services/` directory
-4. **Electron Features**: Modify `electron/main.ts` and `electron/preload.ts`
-
-## 📦 Building
-
-### Desktop Application
-
-Build for your platform:
+### Build
 
 ```bash
-npm run electron:build
+npm run build        # Production build → dist/
+npm run preview      # Preview the production build
 ```
 
-Outputs:
-- **Linux**: AppImage and .deb in `release/`
-- **Windows**: Portable .exe (configure in package.json)
-- **macOS**: .dmg and .zip (configure in package.json)
-
-### Web Application
-
-Build for deployment:
+## Docker
 
 ```bash
-npm run build
+npm run docker:build   # Build images
+npm run docker:up      # Start containers (frontend:80, backend:3001)
+npm run docker:down    # Stop containers
+npm run docker:logs    # Tail container logs
 ```
 
-The built files will be in the `dist/` directory. Deploy to any static hosting service.
+## Architecture
 
-## 🔧 Configuration
+```
+Client (React + Vite)
+  → Express API server (port 3001)
+    → Xiaomi MiMo API
+    → OpenAI API (Stitch image gen)
 
-### Electron Builder
-
-Configure build targets in [package.json](package.json) under the `build` key:
-
-```json
-{
-  "build": {
-    "appId": "com.aiui.app",
-    "productName": "AI UI",
-    "linux": { "target": ["AppImage", "deb"] },
-    "win": { "target": ["portable"] },
-    "mac": { "target": ["dmg", "zip"] }
-  }
-}
+IndexedDB (browser) ← databaseAdapter ← databaseService
 ```
 
-### Vite Configuration
+### Key Directories
 
-Customize build and dev settings in [vite.config.ts](vite.config.ts).
+| Path | Description |
+|------|-------------|
+| `components/` | React UI components |
+| `services/` | Client-side API and DB adapters |
+| `server/` | Express backend (routes, services) |
+| `lib/` | Shared utilities (`cn`, etc.) |
+| `docs/` | Documentation |
 
-## 🤝 Contributing
+### Model Routing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Model IDs are prefixed to determine the UI panel:
 
-## 📝 License
+| Prefix | Panel |
+|--------|-------|
+| `mimo-v2.5-tts` | TTS |
+| `mimo-v2.5-tts-voicedesign` | Voice Design |
+| `mimo-v2.5-tts-voiceclone` | Voice Clone |
+| `mimo-v2.5-asr` | ASR |
+| Everything else | Chat |
 
-This project is open source. Please add your license information.
+## License
 
-## 🙏 Acknowledgments
-
-- [Google Gemini API](https://ai.google.dev/) - AI capabilities
-- [Electron](https://www.electronjs.org/) - Desktop framework
-- [React](https://react.dev/) - UI framework
-- [Vite](https://vitejs.dev/) - Build tool
-
+Private project.

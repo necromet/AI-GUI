@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,7 +6,7 @@ import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
 import { Role, Message } from '../types';
-import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, Globe, ChevronDown, ExternalLink, Search, Paperclip } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, Globe, ChevronDown, ExternalLink, Search, Paperclip, Eye, Code } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -123,6 +123,7 @@ interface ChatMessageProps {
   onRegenerate?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: 'good' | 'bad') => void;
   onReattach?: (data: string, name: string, mimeType: string) => void;
+  isStreaming?: boolean;
 }
 
 function preprocessMarkdown(content: string): string {
@@ -156,7 +157,7 @@ function preprocessMarkdown(content: string): string {
   return result.join('\n');
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach, isStreaming }) => {
   const isUser = message.role === Role.User;
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
@@ -165,6 +166,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
+  const [htmlPreviewMap, setHtmlPreviewMap] = useState<Record<number, boolean>>({});
+  const htmlBlockCounterRef = useRef(0);
+  const prevStreamingRef = useRef(isStreaming);
 
   const closeAttachment = useCallback(() => setSelectedAttachment(null), []);
 
@@ -184,6 +188,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming) {
+      setHtmlPreviewMap(prev => {
+        const next: Record<number, boolean> = {};
+        for (const key of Object.keys(prev)) {
+          next[Number(key)] = true;
+        }
+        return next;
+      });
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  htmlBlockCounterRef.current = 0;
 
   const handleCopyCode = async (code: string, language: string) => {
     try {
@@ -214,7 +233,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
     <div className="group w-full animate-message-in">
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-3">
         {/* Sender name */}
-        <div className="text-[13px] font-medium mb-2 select-none" style={{ color: 'var(--text-500)' }}>
+        <div className="text-sm font-medium mb-2 select-none" style={{ color: 'var(--text-500)' }}>
           {isUser ? 'You' : 'MiMo'}
         </div>
 
@@ -263,7 +282,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                           className="max-h-40 max-w-[280px] object-contain"
                         />
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 opacity-0 group-hover/att:opacity-100 transition-opacity">
-                          <span className="text-[10px] text-white truncate block">{att.name}</span>
+                          <span className="text-xs text-white truncate block">{att.name}</span>
                         </div>
                       </button>
                       {onReattach && (
@@ -358,6 +377,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     const lines = codeString.split('\n');
                     const hasWinPath = /(?:[A-Z]:\\)/i.test(codeString) && codeString.split('\n').length <= 8;
 
+                    const codeNode = (node as any)?.children?.[0];
+                    const isHtmlBlock = codeNode?.properties?.className?.includes('language-html');
+                    if (isHtmlBlock) {
+                      return <>{children}</>;
+                    }
+
                     if (hasWinPath) {
                       return (
                         <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
@@ -416,16 +441,86 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     const codeTheme = isDark ? catppuccinMocha : catppuccinLatte;
                     const displayLanguage = language || 'text';
 
+                    if (isBlock && language === 'html') {
+                      const blockIndex = htmlBlockCounterRef.current++;
+                      const showPreview = htmlPreviewMap[blockIndex] ?? !isStreaming;
+                      const togglePreview = () => {
+                        setHtmlPreviewMap(prev => ({ ...prev, [blockIndex]: !(prev[blockIndex] ?? !isStreaming) }));
+                      };
+                      return (
+                        <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
+                          <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
+                            <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>html</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={togglePreview}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
+                              >
+                                {showPreview ? <Code size={13} /> : <Eye size={13} />}
+                                <span>{showPreview ? 'Source' : 'Preview'}</span>
+                              </button>
+                              <button
+                                onClick={() => handleCopyCode(codeString, 'html')}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
+                                title="Copy code"
+                              >
+                                {copiedCode === 'html' ? (
+                                  <>
+                                    <Check size={13} style={{ color: 'var(--neon-secondary)' }} />
+                                    <span style={{ color: 'var(--neon-secondary)' }}>Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={13} />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          {showPreview ? (
+                            <iframe
+                              srcDoc={codeString}
+                              sandbox="allow-scripts"
+                              className="w-full border-0"
+                              style={{ minHeight: '300px', backgroundColor: '#fff' }}
+                              title="HTML Preview"
+                            />
+                          ) : (
+                            <SyntaxHighlighter
+                              language="html"
+                              style={codeTheme}
+                              customStyle={{
+                                margin: 0,
+                                padding: '1rem',
+                                background: blockBg,
+                                fontSize: 'var(--app-font-size, 17px)',
+                                borderRadius: '0 0 0.5rem 0.5rem',
+                                fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
+                              }}
+                              codeTagProps={{
+                                style: {
+                                  fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
+                                }
+                              }}
+                            >
+                              {codeString}
+                            </SyntaxHighlighter>
+                          )}
+                        </div>
+                      );
+                    }
+
                     if (isBlock && language) {
                       return (
                         <>
                           <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
-                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
+                            <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               {language}
                             </span>
                             <button
                               onClick={() => handleCopyCode(codeString, language)}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                               title="Copy code"
                             >
                               {isCopied ? (
@@ -469,12 +564,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                       return (
                         <>
                           <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
-                            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
+                            <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               text
                             </span>
                             <button
                               onClick={() => handleCopyCode(codeString, 'text')}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                               title="Copy code"
                             >
                               {isCopied ? (
@@ -526,7 +621,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     <tr className="transition-colors" style={{ borderBottom: '1px solid var(--border-200)' }} {...props} />
                   ),
                   th: ({ node, ...props }) => (
-                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-300)' }} {...props} />
+                    <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-300)' }} {...props} />
                   ),
                   td: ({ node, ...props }) => (
                     <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--text-500)' }} {...props} />
@@ -623,7 +718,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                           }}
                         >
                           <Search size={14} style={{ color: 'var(--text-500)' }} />
-                          <span className="text-xs font-bold tracking-wide" style={{ color: 'var(--text-300)' }}>
+                          <span className="text-sm font-bold tracking-wide" style={{ color: 'var(--text-300)' }}>
                             {citations.length} source{citations.length !== 1 ? 's' : ''} found
                           </span>
                           {!isSourcesExpanded && (
@@ -640,7 +735,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                               ))}
                               {citations.length > 4 && (
                                 <div
-                                  className="w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[8px] font-bold"
+                                  className="w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
                                   style={{
                                     background: 'var(--bg-300)',
                                     borderColor: 'var(--bg-200)',
@@ -684,7 +779,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                 }}
                               >
                                 <div
-                                  className="inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white mt-0.5"
+                                  className="inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white mt-0.5"
                                   style={{ background: gradients[idx % gradients.length] }}
                                 >
                                   {(annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')).charAt(0).toUpperCase()}
@@ -699,20 +794,20 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                     ) : (
                                       <Globe size={11} style={{ color: 'var(--text-500)' }} />
                                     )}
-                                    <span className="text-[11px] font-medium truncate tracking-wide uppercase" style={{ color: 'var(--text-500)' }}>
+                                    <span className="text-xs font-medium truncate tracking-wide uppercase" style={{ color: 'var(--text-500)' }}>
                                       {annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')}
                                     </span>
                                     {annotation.publish_time && (
                                       <>
-                                        <span className="text-[11px]" style={{ color: 'var(--text-500)' }}>&middot;</span>
-                                        <span className="text-[11px] truncate" style={{ color: 'var(--text-500)' }}>
+                                        <span className="text-xs" style={{ color: 'var(--text-500)' }}>&middot;</span>
+                                        <span className="text-xs truncate" style={{ color: 'var(--text-500)' }}>
                                           {annotation.publish_time}
                                         </span>
                                       </>
                                     )}
                                   </div>
                                   {annotation.summary && (
-                                    <div className="text-xs mt-2 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-500)' }}>
+                                    <div className="text-sm mt-2 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-500)' }}>
                                       {annotation.summary}
                                     </div>
                                   )}
@@ -728,7 +823,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
 
                   {/* Token usage */}
                   {message.usageMetadata && (
-                    <div className="text-[11px] mt-3 flex items-center gap-3" style={{ color: 'var(--text-500)' }}>
+                    <div className="text-xs mt-3 flex items-center gap-3" style={{ color: 'var(--text-500)' }}>
                       <span title="Total tokens used">
                         <span className="font-bold" style={{ color: 'var(--neon-accent)' }}>
                           {message.usageMetadata.totalTokens.toLocaleString()}

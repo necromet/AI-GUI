@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PanelLeft, SquarePen, ArrowLeft, Layers, Download } from 'lucide-react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
-import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject } from './types';
+import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle } from './services/apiService';
 import * as db from './services/databaseAdapter';
 import Sidebar from './components/Sidebar';
@@ -16,8 +17,9 @@ import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
 import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
-import RAGPanel from './components/RAGPanel';
 import PluginAgentPanel from './components/PluginAgentPanel';
+import RAGChatPanel from './components/RAGChatPanel';
+import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
 import { StitchControls } from './components/StitchEditor';
 import patternBg from './assets/pattern-bg.png';
@@ -39,7 +41,7 @@ const fileToAttachment = (file: File): Promise<Attachment> => {
   });
 };
 
-export const FONT_SIZE_MAP: Record<string, number> = { xs: 14, sm: 15, base: 16, lg: 18, xl: 20 };
+export const FONT_SIZE_MAP: Record<string, number> = { xs: 16, sm: 17, base: 18, lg: 20, xl: 22 };
 
 export const FONT_FAMILY_MAP: Record<string, string> = {
   default: "'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
@@ -48,8 +50,31 @@ export const FONT_FAMILY_MAP: Record<string, string> = {
   'google-sans': "'Google Sans', sans-serif",
 };
 
+const RequireAuth: React.FC<{ isAuth: boolean; children: React.ReactNode }> = ({ isAuth, children }) => {
+  if (!isAuth) return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {
-  const [currentMode, setCurrentMode] = useState<Mode>('selector');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isSelector = location.pathname === '/';
+  const isChatMode = location.pathname.startsWith('/chat');
+  const isExperimentsMode = location.pathname.startsWith('/experiments');
+  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : 'experiments';
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
+    if (isChatMode) return 'chat';
+    if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
+    if (location.pathname.includes('/stitch')) return 'stitch';
+    return 'rag';
+  })();
+
+  const stitchProjectId = (() => {
+    const match = location.pathname.match(/^\/experiments\/stitch\/([^/]+)$/);
+    return match ? match[1] : undefined;
+  })();
+
   const [isChatAuthenticated, setIsChatAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_chat_session');
   });
@@ -65,7 +90,7 @@ const App: React.FC = () => {
   const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSize, setFontSize] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_fontSize') || 'sm';
+    return localStorage.getItem('edward:labs_fontSize') || 'base';
   });
   const [fontFamily, setFontFamily] = useState<string>(() => {
     return localStorage.getItem('edward:labs_fontFamily') || 'default';
@@ -94,18 +119,24 @@ const App: React.FC = () => {
   
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<'chat' | 'rag' | 'plugin-agent' | 'stitch'>('chat');
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
   const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
   const [stitchResetKey, setStitchResetKey] = useState(0);
+  const [experimentConversationId, setExperimentConversationId] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const modelType = getModelType(currentModelId);
   const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
+
+  const filteredConversations = isChatMode
+    ? conversations.filter(c => !c.type || c.type === 'chat')
+    : isExperimentsMode
+      ? conversations.filter(c => c.type === activeView)
+      : conversations;
 
   useEffect(() => {
     const initDb = async () => {
@@ -182,18 +213,10 @@ const App: React.FC = () => {
   }, [maxOutputTokens]);
 
   useEffect(() => {
-    if (currentMode === 'experiments') {
-      setActiveView('rag');
-    } else if (currentMode === 'chat') {
-      setActiveView('chat');
-    }
-  }, [currentMode]);
-
-  useEffect(() => {
-    if (activeView === 'stitch') {
+    if (location.pathname.startsWith('/experiments/stitch')) {
       setIsSidebarOpen(false);
     }
-  }, [activeView]);
+  }, [location.pathname]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -208,7 +231,12 @@ const App: React.FC = () => {
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
-    setActiveView('chat');
+    if (isExperimentsMode) {
+      setExperimentConversationId(null);
+      navigate(`/experiments/${activeView}`);
+    } else {
+      navigate('/chat');
+    }
   };
 
   const handleSelectModel = (id: string) => {
@@ -227,7 +255,8 @@ const App: React.FC = () => {
       messages: [],
       updatedAt: new Date(conv.updated_at).getTime(),
       dbConversationId: conv.conversation_id,
-      modelId: conv.model_id
+      modelId: conv.model_id,
+      type: (conv.type || 'chat') as ConversationType,
     }));
     setConversations(sessions);
   };
@@ -294,7 +323,6 @@ const App: React.FC = () => {
     });
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
-    setActiveView('chat');
   };
 
   const saveMessageToDb = async (
@@ -311,7 +339,7 @@ const App: React.FC = () => {
     return await db.addMessage(conversationId, role, content, messageOrder, tokenCount, null, promptTokens, candidatesTokens, searchAnnotations, attachmentsJson);
   };
 
-  const ensureConversation = async (): Promise<number> => {
+  const ensureConversation = async (type: ConversationType = 'chat'): Promise<number> => {
     if (currentConversationId) return currentConversationId;
     
     let dbModel = await db.getModelByName(currentModelId);
@@ -325,7 +353,7 @@ const App: React.FC = () => {
       dbModel = await db.getModelById(modelId);
     }
     
-    const newConversationId = await db.createConversation(dbModel!.model_id!, null);
+    const newConversationId = await db.createConversation(dbModel!.model_id!, null, type);
     setCurrentConversationId(newConversationId);
     await loadConversations();
     return newConversationId;
@@ -371,6 +399,10 @@ const App: React.FC = () => {
     setInput('');
 
     const conversationId = await ensureConversation();
+
+    if (messages.length === 0 && isChatMode) {
+      navigate(`/chat/${conversationId}`);
+    }
 
     let attachments: Attachment[] | undefined;
     if (hasFiles) {
@@ -585,7 +617,7 @@ const App: React.FC = () => {
     abortControllerRef.current = abortController;
 
     try {
-      const conversationId = await ensureConversation();
+    const conversationId = await ensureConversation();
       const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
       history.push({ role: Role.User, content: userText });
 
@@ -729,13 +761,59 @@ const App: React.FC = () => {
     setNotification({ message: `Image attached to input`, type: 'success' });
   }, []);
 
-  if (currentMode === 'selector') {
+  useEffect(() => {
+    const match = location.pathname.match(/^\/chat\/(\d+)$/);
+    if (match) {
+      const convId = parseInt(match[1], 10);
+      if (convId !== currentConversationId) {
+        loadConversation(convId);
+      }
+    } else if (location.pathname === '/chat') {
+      if (currentConversationId !== null) {
+        setMessages([]);
+        setInput('');
+        setIsStreaming(false);
+        setCurrentConversationId(null);
+      }
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const ragMatch = location.pathname.match(/^\/experiments\/rag\/(\d+)$/);
+    if (ragMatch) {
+      const convId = parseInt(ragMatch[1], 10);
+      if (convId !== experimentConversationId) {
+        setExperimentConversationId(convId);
+      }
+      return;
+    }
+
+    const agentMatch = location.pathname.match(/^\/experiments\/plugin-agent\/(\d+)$/);
+    if (agentMatch) {
+      const convId = parseInt(agentMatch[1], 10);
+      if (convId !== experimentConversationId) {
+        setExperimentConversationId(convId);
+      }
+      return;
+    }
+
+    if (
+      location.pathname === '/experiments/rag' ||
+      location.pathname === '/experiments/plugin-agent'
+    ) {
+      if (experimentConversationId !== null) {
+        setExperimentConversationId(null);
+      }
+    }
+  }, [location.pathname]);
+
+  if (isSelector) {
     return (
       <ModeSelector
         isChatAuthenticated={isChatAuthenticated}
         isExperimentsAuthenticated={isExperimentsAuthenticated}
-        onSelectChat={() => setCurrentMode('chat')}
-        onSelectExperiments={() => setCurrentMode('experiments')}
+        onSelectChat={() => navigate('/chat')}
+        onSelectExperiments={() => navigate('/experiments')}
         onUnlockChat={() => {
           setIsChatAuthenticated(true);
           sessionStorage.setItem('edward:labs_chat_session', 'true');
@@ -765,9 +843,18 @@ const App: React.FC = () => {
         onNewChat={handleNewChat}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTokenStats={() => setIsTokenStatsOpen(true)}
-        conversations={conversations}
+        conversations={filteredConversations}
         currentConversationId={currentConversationId}
-        onSelectConversation={loadConversation}
+        onSelectConversation={async (id) => {
+          const conv = conversations.find(c => c.dbConversationId === id);
+          if (conv?.type && conv.type !== 'chat') {
+            setExperimentConversationId(id);
+            navigate(`/experiments/${conv.type}/${id}`);
+          } else {
+            await loadConversation(id);
+            navigate(`/chat/${id}`);
+          }
+        }}
         onDeleteConversation={async (id) => {
           await db.deleteConversation(id);
           if (currentConversationId === id) handleNewChat();
@@ -775,11 +862,7 @@ const App: React.FC = () => {
         }}
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        activeView={activeView}
-        onNavigate={(view) => setActiveView(view)}
         currentModelName={selectedModelConfig.name}
-        currentMode={currentMode}
-        onBackToSelector={() => setCurrentMode('selector')}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -796,10 +879,10 @@ const App: React.FC = () => {
               <PanelLeft size={20} />
             </button>
           )}
-          {activeView === 'stitch' && stitchControls ? (
+          {location.pathname.startsWith('/experiments/stitch') && stitchControls ? (
             <>
               <button
-                onClick={() => { setStitchActiveProject(null); setStitchControls(null); setStitchResetKey(k => k + 1); }}
+                onClick={() => { setStitchActiveProject(null); navigate('/experiments/stitch'); }}
                 className="p-2 rounded-lg transition-all duration-150"
                 style={{ color: 'var(--text-500)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
@@ -810,20 +893,88 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Layers size={16} style={{ color: 'var(--neon-color)' }} />
                 <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>{stitchControls.projectTitle}</span>
+                <span
+                  className="px-2 py-0.5 rounded text-xs font-medium"
+                  style={{
+                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                    color: 'var(--neon-color)',
+                    border: '1px solid rgba(var(--neon-rgb), 0.2)',
+                  }}
+                >
+                  {stitchControls.layout || '16:9'}
+                </span>
               </div>
-              {stitchControls.hasHtml && (
-                <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2">
+                {stitchControls.hasHtml && (
                   <button
-                    onClick={stitchControls.onExport}
-                    disabled={stitchControls.isGenerating}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
-                    style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+                    onClick={stitchControls.onViewModeToggle}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: 'var(--bg-200)',
+                      color: 'var(--text-300)',
+                      border: '1px solid var(--border-300)',
+                    }}
                   >
-                    <Download size={14} />
-                    Export
+                    {stitchControls.viewMode === 'preview' ? <Code size={12} /> : <Eye size={12} />}
+                    {stitchControls.viewMode === 'preview' ? 'Source' : 'Preview'}
                   </button>
-                </div>
-              )}
+                )}
+                {!stitchControls.isGenerating && stitchControls.hasLastPrompt && (
+                  <button
+                    onClick={stitchControls.onRegenerate}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: 'var(--bg-200)',
+                      color: 'var(--text-300)',
+                      border: '1px solid var(--border-300)',
+                    }}
+                  >
+                    <RotateCcw size={12} />
+                    Regenerate
+                  </button>
+                )}
+                {stitchControls.isGenerating && (
+                  <button
+                    onClick={stitchControls.onStopGeneration}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: 'rgba(239,68,68,0.15)',
+                      color: '#f87171',
+                      border: '1px solid rgba(239,68,68,0.3)',
+                    }}
+                  >
+                    Stop
+                  </button>
+                )}
+                {stitchControls.hasHtml && !stitchControls.isGenerating && (
+                  <>
+                    <button
+                      onClick={stitchControls.onExport}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{
+                        backgroundColor: 'var(--bg-200)',
+                        color: 'var(--text-300)',
+                        border: '1px solid var(--border-300)',
+                      }}
+                    >
+                      <Download size={12} />
+                      HTML
+                    </button>
+                    <button
+                      onClick={stitchControls.onCopy}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{
+                        backgroundColor: 'rgba(var(--neon-rgb), 0.15)',
+                        color: 'var(--neon-color)',
+                        border: '1px solid rgba(var(--neon-rgb), 0.3)',
+                      }}
+                    >
+                      {stitchControls.copied ? <Check size={12} /> : <Copy size={12} />}
+                      {stitchControls.copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </>
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -860,89 +1011,237 @@ const App: React.FC = () => {
               filter: 'grayscale(1)',
             }}
           />
-          {activeView === 'rag' ? (
-            <div className="h-full flex items-center justify-center p-6">
-              <RAGPanel theme={theme} />
-            </div>
-          ) : activeView === 'plugin-agent' ? (
-            <div className="h-full flex items-center justify-center p-6">
-              <PluginAgentPanel theme={theme} />
-            </div>
-          ) : activeView === 'stitch' ? (
-            <div className={`h-full overflow-auto ${stitchActiveProject ? 'p-0' : 'p-6'}`}>
-              <StitchPanel
-                key={stitchResetKey}
-                theme={theme}
-                onNotification={(msg, type) => setNotification({ message: msg, type })}
-                modelConfig={selectedModelConfig}
-                models={models}
-                onProjectChange={setStitchActiveProject}
-                onControlsChange={setStitchControls}
-              />
-            </div>
-          ) : modelType === 'chat' ? (
-            <>
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                  <div className="relative mb-8">
-                    <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                  </div>
-                  <h2
-                    className="text-2xl md:text-3xl font-semibold mb-8"
-                    style={{ color: 'var(--text-100)' }}
-                  >
-                    How can I help you today?
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                    {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setInput(suggestion)}
-                        className="group rounded-xl p-4 text-left transition-all duration-200"
-                        style={{
-                          backgroundColor: 'var(--bg-200)',
-                          border: '1px solid var(--border-300)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                          e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-200)';
-                          e.currentTarget.style.borderColor = 'var(--border-300)';
-                        }}
+          <Routes>
+            <Route path="/chat" element={
+              <RequireAuth isAuth={isChatAuthenticated}>
+                {modelType === 'chat' ? (
+                  messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                      <div className="relative mb-8">
+                        <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      </div>
+                      <h2
+                        className="text-2xl md:text-3xl font-semibold mb-8"
+                        style={{ color: 'var(--text-100)' }}
                       >
-                        <span className="text-sm" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                      </button>
-                    ))}
+                        How can I help you today?
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+                        {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setInput(suggestion)}
+                            className="group rounded-xl p-4 text-left transition-all duration-200"
+                            style={{
+                              backgroundColor: 'var(--bg-200)',
+                              border: '1px solid var(--border-300)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--bg-200)';
+                              e.currentTarget.style.borderColor = 'var(--border-300)';
+                            }}
+                          >
+                            <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pb-10 mb-52">
+                      {messages.map((msg) => (
+                        <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )
+                ) : (
+                  <div className="h-full flex items-center justify-center p-6">
+                    {modelType === 'tts' ? (
+                      <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'tts-voicedesign' ? (
+                      <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'tts-voiceclone' ? (
+                      <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'asr' ? (
+                      <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : null}
                   </div>
+                )}
+              </RequireAuth>
+            } />
+            <Route path="/chat/:conversationId" element={
+              <RequireAuth isAuth={isChatAuthenticated}>
+                {modelType === 'chat' ? (
+                  messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+                      <div className="relative mb-8">
+                        <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      </div>
+                      <h2
+                        className="text-2xl md:text-3xl font-semibold mb-8"
+                        style={{ color: 'var(--text-100)' }}
+                      >
+                        How can I help you today?
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+                        {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setInput(suggestion)}
+                            className="group rounded-xl p-4 text-left transition-all duration-200"
+                            style={{
+                              backgroundColor: 'var(--bg-200)',
+                              border: '1px solid var(--border-300)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--bg-200)';
+                              e.currentTarget.style.borderColor = 'var(--border-300)';
+                            }}
+                          >
+                            <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pb-10 mb-52">
+                      {messages.map((msg) => (
+                        <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )
+                ) : (
+                  <div className="h-full flex items-center justify-center p-6">
+                    {modelType === 'tts' ? (
+                      <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'tts-voicedesign' ? (
+                      <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'tts-voiceclone' ? (
+                      <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : modelType === 'asr' ? (
+                      <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                    ) : null}
+                  </div>
+                )}
+              </RequireAuth>
+            } />
+            <Route path="/experiments" element={<Navigate to="/experiments/rag" replace />} />
+            <Route path="/experiments/rag" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className="h-full relative">
+                  <RAGChatPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    conversationId={experimentConversationId}
+                    onConversationChange={setExperimentConversationId}
+                  />
                 </div>
-              ) : (
-                <div className="pb-10 mb-52">
-                  {messages.map((msg) => (
-                    <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} />
-                  ))}
-                  <div ref={messagesEndRef} />
+              </RequireAuth>
+            } />
+            <Route path="/experiments/rag/:conversationId" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className="h-full relative">
+                  <RAGChatPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    conversationId={experimentConversationId}
+                    onConversationChange={setExperimentConversationId}
+                  />
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="h-full flex items-center justify-center p-6">
-              {modelType === 'tts' ? (
-                <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-              ) : modelType === 'tts-voicedesign' ? (
-                <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-              ) : modelType === 'tts-voiceclone' ? (
-                <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-              ) : modelType === 'asr' ? (
-                <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
-              ) : null}
-            </div>
-          )}
+              </RequireAuth>
+            } />
+            <Route path="/experiments/plugin-agent" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className="h-full relative">
+                  <AgentChatPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    conversationId={experimentConversationId}
+                    onConversationChange={setExperimentConversationId}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="/experiments/plugin-agent/:conversationId" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className="h-full relative">
+                  <AgentChatPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    conversationId={experimentConversationId}
+                    onConversationChange={setExperimentConversationId}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="/experiments/stitch" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className={`h-full overflow-auto ${stitchActiveProject ? 'p-0' : 'p-6'}`}>
+                  <StitchPanel
+                    key={stitchResetKey}
+                    theme={theme}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    onProjectChange={(project) => {
+                      setStitchActiveProject(project);
+                      if (project) {
+                        navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                      } else {
+                        navigate('/experiments/stitch', { replace: true });
+                      }
+                    }}
+                    onControlsChange={setStitchControls}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="/experiments/stitch/:projectId" element={
+              <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <div className="h-full overflow-auto p-0">
+                  <StitchPanel
+                    key={stitchResetKey}
+                    theme={theme}
+                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    modelConfig={selectedModelConfig}
+                    models={models}
+                    initialProjectId={stitchProjectId}
+                    onProjectChange={(project) => {
+                      setStitchActiveProject(project);
+                      if (project) {
+                        navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                      } else {
+                        navigate('/experiments/stitch', { replace: true });
+                      }
+                    }}
+                    onControlsChange={setStitchControls}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </div>
 
         {/* Input Area — chat mode only */}
-        {modelType === 'chat' && activeView === 'chat' && currentMode !== 'experiments' && (
+        {modelType === 'chat' && isChatMode && (
           <div
             className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4"
             style={{
@@ -960,7 +1259,7 @@ const App: React.FC = () => {
                 onExternalFilesConsumed={() => setPendingFiles([])}
               />
               <div className="text-center mt-3">
-                <p className="text-[11px]" style={{ color: 'rgba(122,122,122,0.6)' }}>
+                <p className="text-xs" style={{ color: 'rgba(122,122,122,0.6)' }}>
                   MiMo can make mistakes. Check important information.
                 </p>
               </div>

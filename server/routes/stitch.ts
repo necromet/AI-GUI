@@ -54,7 +54,7 @@ router.post('/generate-image', async (req: Request, res: Response) => {
 
 router.post('/generate-html', async (req: Request, res: Response) => {
   try {
-    const { boardDescription, layout, prompt: userPrompt, model, provider, stream, isReasoning } = req.body;
+    const { boardDescription, layout, prompt: userPrompt, model, provider, stream, isReasoning, currentHtml, history } = req.body;
 
     const layoutDims: Record<string, string> = {
       '16:9': '1920x1080',
@@ -63,7 +63,15 @@ router.post('/generate-html', async (req: Request, res: Response) => {
     };
     const dims = layoutDims[layout] || '1920x1080';
 
-    const systemPrompt = `You are an expert HTML/CSS designer. Generate a single self-contained HTML file based on the user's description.
+    const isFollowUp = !!currentHtml;
+
+    const systemPrompt = isFollowUp
+      ? `You are an expert HTML/CSS code editor. The user has an existing HTML file and wants modifications.
+You will receive the current HTML and a modification request.
+Apply ONLY the requested changes. Preserve all existing design, content, and structure that isn't affected.
+Output the COMPLETE modified HTML file (not just the changed parts).
+Output ONLY raw HTML starting with <!DOCTYPE html>.`
+      : `You are an expert HTML/CSS designer. Generate a single self-contained HTML file based on the user's description.
 
 Output ONLY the raw HTML code. No markdown fences, no explanation. The HTML must be complete with inline CSS, ready to render in an iframe.
 
@@ -74,19 +82,25 @@ Rules:
 - The entire design must fit within the given layout dimensions
 - Include a viewport meta tag
 - Make it visually polished with modern CSS (flexbox, grid where appropriate)
-- Use Google Fonts if needed (include the link tag)
 - All images should use placeholder gradients or SVG patterns if no actual URLs are provided
-- Use a clean, professional color palette unless otherwise specified
 - Ensure text is readable and well-sized
 - Output ONLY valid HTML starting with <!DOCTYPE html>`;
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: userPrompt || 'Generate a clean, modern HTML layout',
-      },
     ];
+
+    if (history && Array.isArray(history)) {
+      for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    const userContent = currentHtml
+      ? `Current HTML:\n\`\`\`html\n${currentHtml}\n\`\`\`\n\nModification request: ${userPrompt || 'Make improvements'}`
+      : (userPrompt || 'Generate a clean, modern HTML layout');
+
+    messages.push({ role: 'user', content: userContent });
 
     if (stream) {
       const response = await streamChatCompletion(
@@ -143,7 +157,7 @@ Rules:
 
       html = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '');
 
-      if (!html || !html.includes('<!DOCTYPE')) {
+      if (!html || !/<!doctype/i.test(html)) {
         res.status(500).json({ error: 'Failed to generate valid HTML' });
         return;
       }

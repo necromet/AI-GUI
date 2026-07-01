@@ -12,6 +12,7 @@ interface StitchPanelProps {
   models?: ModelConfig[];
   onProjectChange?: (project: StitchProject | null) => void;
   onControlsChange?: (controls: StitchControls | null) => void;
+  initialProjectId?: string;
 }
 
 const LAYOUT_OPTIONS: { value: StitchLayout; label: string; desc: string }[] = [
@@ -20,7 +21,7 @@ const LAYOUT_OPTIONS: { value: StitchLayout; label: string; desc: string }[] = [
   { value: '9:16', label: '9:16', desc: 'Portrait' },
 ];
 
-const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotification, modelConfig, models, onProjectChange, onControlsChange }) => {
+const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotification, modelConfig, models, onProjectChange, onControlsChange, initialProjectId }) => {
   const [projects, setProjects] = useState<StitchProject[]>([]);
   const [activeProject, setActiveProject] = useState<StitchProject | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -39,6 +40,22 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
   }, []);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  useEffect(() => {
+    if (initialProjectId && projects.length > 0 && !activeProject) {
+      const project = projects.find(p => p.id === initialProjectId);
+      if (project) {
+        setActiveProject(project);
+        onProjectChange?.(project);
+      }
+    }
+  }, [initialProjectId, projects]);
+
+  useEffect(() => {
+    if (!initialProjectId && activeProject) {
+      setActiveProject(null);
+    }
+  }, [initialProjectId]);
 
   const handleCreateProject = async (layout: StitchLayout) => {
     const title = projectName.trim() || `Project ${Date.now().toString(36).slice(-4)}`;

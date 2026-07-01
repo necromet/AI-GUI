@@ -14,11 +14,13 @@ export async function generateHTML(
   prompt?: string,
   model?: string,
   provider?: string,
+  currentHtml?: string,
+  history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
   const response = await fetch(`${API_BASE}/stitch/generate-html`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ boardDescription, layout, prompt, model, provider }),
+    body: JSON.stringify({ boardDescription, layout, prompt, model, provider, currentHtml, history }),
   });
 
   if (!response.ok) {
@@ -38,11 +40,13 @@ export async function* generateHTMLStream(
   provider?: string,
   isReasoning?: boolean,
   signal?: AbortSignal,
+  currentHtml?: string,
+  history?: Array<{ role: string; content: string }>,
 ): AsyncGenerator<StitchStreamChunk> {
   const response = await fetch(`${API_BASE}/stitch/generate-html`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ boardDescription, layout, prompt, model, provider, stream: true, isReasoning }),
+    body: JSON.stringify({ boardDescription, layout, prompt, model, provider, stream: true, isReasoning, currentHtml, history }),
     signal,
   });
 
