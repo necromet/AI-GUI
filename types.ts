@@ -47,9 +47,12 @@ export interface ChatSession {
   updatedAt: number;
   dbConversationId?: number; // Database conversation ID
   modelId?: number; // Database model ID
+  type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch';
 }
 
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
+
+export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'stitch';
 
 export type Mode = 'selector' | 'chat' | 'experiments';
 

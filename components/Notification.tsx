@@ -61,7 +61,7 @@ const Notification: React.FC<NotificationProps> = ({
         ) : (
           <XCircle size={18} className="flex-shrink-0 text-red-500 dark:text-red-400" />
         )}
-        <p className={`flex-1 text-sm font-medium ${isSuccess ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{message}</p>
+        <p className={`flex-1 text-base font-medium ${isSuccess ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{message}</p>
         <button
           onClick={() => { setIsVisible(false); setTimeout(onClose, 200); }}
           className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"

@@ -1,6 +1,7 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, BarChart3, Sun, Moon, Database, Puzzle, Home, FlaskConical, Layers } from 'lucide-react';
-import { ChatSession, Mode } from '../types';
+import { ChatSession, Mode, ConversationType } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -14,11 +15,7 @@ interface SidebarProps {
   onDeleteConversation: (id: number) => Promise<void>;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
-  activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch';
-  onNavigate: (view: 'chat' | 'rag' | 'plugin-agent' | 'stitch') => void;
   currentModelName?: string;
-  currentMode: Mode;
-  onBackToSelector: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -33,12 +30,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   onDeleteConversation,
   theme,
   onToggleTheme,
-  activeView,
-  onNavigate,
   currentModelName,
-  currentMode,
-  onBackToSelector
 }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isChatMode = location.pathname.startsWith('/chat');
+  const currentMode: Mode = isChatMode ? 'chat' : 'experiments';
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
+    if (isChatMode) return 'chat';
+    if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
+    if (location.pathname.includes('/stitch')) return 'stitch';
+    return 'rag';
+  })();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today);
@@ -99,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const sectionLabel = (text: string) => (
     <div className="px-3 pt-4 pb-2">
-      <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--text-500)' }}>
+      <span className="text-xs font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--text-500)' }}>
         {text}
       </span>
     </div>
@@ -107,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const modeBadge = (
     <span
-      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+      className="text-xs font-medium px-2 py-0.5 rounded-full"
       style={{
         backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
         color: 'var(--neon-color)',
@@ -152,77 +155,146 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {currentMode === 'experiments' ? (
-          /* Experiments mode: tool navigation */
-          <div className="px-2 pt-2">
-            {sectionLabel('Tools')}
-            <ul className="space-y-0.5">
-              <li>
-                <div
-                  onClick={() => onNavigate('rag')}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                  style={itemStyle(activeView === 'rag')}
-                  onMouseEnter={(e) => {
-                    if (activeView !== 'rag') {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                      e.currentTarget.style.color = 'var(--text-100)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeView !== 'rag') {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-500)';
-                    }
-                  }}
-                >
-                  <Database size={16} style={{ color: activeView === 'rag' ? 'var(--text-100)' : 'var(--text-500)' }} />
-                  <span className="truncate">RAG</span>
+          /* Experiments mode: tool navigation + conversation history */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-2 pt-2">
+              {sectionLabel('Tools')}
+              <ul className="space-y-0.5">
+                <li>
+                  <div
+                    onClick={() => navigate('/experiments/rag')}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
+                    style={itemStyle(activeView === 'rag')}
+                    onMouseEnter={(e) => {
+                      if (activeView !== 'rag') {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                        e.currentTarget.style.color = 'var(--text-100)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeView !== 'rag') {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-500)';
+                      }
+                    }}
+                  >
+                    <Database size={16} style={{ color: activeView === 'rag' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <span className="truncate">RAG</span>
+                  </div>
+                </li>
+                <li>
+                  <div
+                    onClick={() => navigate('/experiments/plugin-agent')}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
+                    style={itemStyle(activeView === 'plugin-agent')}
+                    onMouseEnter={(e) => {
+                      if (activeView !== 'plugin-agent') {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                        e.currentTarget.style.color = 'var(--text-100)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeView !== 'plugin-agent') {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-500)';
+                      }
+                    }}
+                  >
+                    <Puzzle size={16} style={{ color: activeView === 'plugin-agent' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <span className="truncate">Plug-in Agent</span>
+                  </div>
+                </li>
+                <li>
+                  <div
+                    onClick={() => navigate('/experiments/stitch')}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
+                    style={itemStyle(activeView === 'stitch')}
+                    onMouseEnter={(e) => {
+                      if (activeView !== 'stitch') {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
+                        e.currentTarget.style.color = 'var(--text-100)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeView !== 'stitch') {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-500)';
+                      }
+                    }}
+                  >
+                    <Layers size={16} style={{ color: activeView === 'stitch' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <span className="truncate">Stitch</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            {/* Experiment conversation history */}
+            {activeView !== 'stitch' && (
+              <>
+                <div className="px-2 pt-1">
+                  <button
+                    onClick={onNewChat}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
+                    style={{ color: 'var(--text-100)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div
+                      className="flex items-center justify-center rounded-full w-5 h-5 transition-all duration-200 group-hover:scale-110"
+                      style={{ backgroundColor: 'var(--surface-hover)' }}
+                    >
+                      <Plus size={14} style={{ color: 'var(--text-300)' }} />
+                    </div>
+                    <span className="font-medium">New chat</span>
+                  </button>
                 </div>
-              </li>
-              <li>
-                <div
-                  onClick={() => onNavigate('plugin-agent')}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                  style={itemStyle(activeView === 'plugin-agent')}
-                  onMouseEnter={(e) => {
-                    if (activeView !== 'plugin-agent') {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                      e.currentTarget.style.color = 'var(--text-100)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeView !== 'plugin-agent') {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-500)';
-                    }
-                  }}
-                >
-                  <Puzzle size={16} style={{ color: activeView === 'plugin-agent' ? 'var(--text-100)' : 'var(--text-500)' }} />
-                  <span className="truncate">Plug-in Agent</span>
+
+                <div className="flex-1 overflow-y-auto scrollbar-hidden px-2 pt-2">
+                  {todayConvos.length > 0 && (
+                    <>
+                      {sectionLabel('Today')}
+                      <ul className="space-y-0.5">
+                        {todayConvos.map(renderConversation)}
+                      </ul>
+                    </>
+                  )}
+
+                  {yesterdayConvos.length > 0 && (
+                    <>
+                      {sectionLabel('Yesterday')}
+                      <ul className="space-y-0.5">
+                        {yesterdayConvos.map(renderConversation)}
+                      </ul>
+                    </>
+                  )}
+
+                  {lastWeekConvos.length > 0 && (
+                    <>
+                      {sectionLabel('Last 7 Days')}
+                      <ul className="space-y-0.5">
+                        {lastWeekConvos.map(renderConversation)}
+                      </ul>
+                    </>
+                  )}
+
+                  {olderConvos.length > 0 && (
+                    <>
+                      {sectionLabel('Older')}
+                      <ul className="space-y-0.5">
+                        {olderConvos.map(renderConversation)}
+                      </ul>
+                    </>
+                  )}
+
+                  {conversations.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-8 text-xs" style={{ color: 'var(--text-500)' }}>
+                      <p>No conversations yet</p>
+                    </div>
+                  )}
                 </div>
-              </li>
-              <li>
-                <div
-                  onClick={() => onNavigate('stitch')}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                  style={itemStyle(activeView === 'stitch')}
-                  onMouseEnter={(e) => {
-                    if (activeView !== 'stitch') {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                      e.currentTarget.style.color = 'var(--text-100)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeView !== 'stitch') {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-500)';
-                    }
-                  }}
-                >
-                  <Layers size={16} style={{ color: activeView === 'stitch' ? 'var(--text-100)' : 'var(--text-500)' }} />
-                  <span className="truncate">Stitch</span>
-                </div>
-              </li>
-            </ul>
+              </>
+            )}
           </div>
         ) : (
           /* Chat mode: standard sidebar */
@@ -243,7 +315,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <Plus size={14} style={{ color: 'var(--text-300)' }} />
                 </div>
                 <span className="font-medium">New chat</span>
-                <span className="ml-auto text-[11px] opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: 'var(--text-500)' }}>
+                <span className="ml-auto text-xs opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: 'var(--text-500)' }}>
                   Ctrl+⇧+O
                 </span>
               </button>
@@ -299,7 +371,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Footer */}
         <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid var(--border-300)' }}>
           <button
-            onClick={onBackToSelector}
+            onClick={() => navigate('/')}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
             style={{ color: 'var(--text-500)' }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
@@ -359,7 +431,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="flex flex-col min-w-0 flex-1">
               <span className="font-medium truncate" style={{ color: 'var(--text-100)' }}>Edward</span>
-              <span className="text-[11px] truncate" style={{ color: 'var(--text-500)' }}>
+              <span className="text-xs truncate" style={{ color: 'var(--text-500)' }}>
                 {currentModelName || 'MiMo V2.5'}
               </span>
             </div>

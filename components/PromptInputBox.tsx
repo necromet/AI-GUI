@@ -5,7 +5,7 @@ import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog } from 
 import { motion, AnimatePresence } from "framer-motion";
 import { AIVoiceInput } from "./AIVoiceInput";
 
-const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
+import { cn } from "@/lib/utils";
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   ({ className, ...props }, ref) => (
@@ -34,7 +34,7 @@ const TooltipContent = React.forwardRef<
     ref={ref}
     sideOffset={sideOffset}
     className={cn(
-      "z-50 rounded-md border border-gray-100 dark:border-[#2a2a2a] bg-white dark:bg-[#1F2023] px-3 py-1.5 text-sm text-gray-900 dark:text-white shadow-md max-w-xs whitespace-normal",
+      "z-50 rounded-md border border-gray-100 dark:border-[#2a2a2a] bg-white dark:bg-[#1F2023] px-3 py-1.5 text-base text-gray-900 dark:text-white shadow-md max-w-xs whitespace-normal",
       className
     )}
     {...props}
@@ -585,7 +585,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         animate={{ width: "auto", opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="text-xs overflow-hidden whitespace-nowrap text-[#1EAEDB] flex-shrink-0"
+                        className="text-sm overflow-hidden whitespace-nowrap text-[#1EAEDB] flex-shrink-0"
                       >
                         Search
                       </motion.span>
@@ -622,7 +622,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         animate={{ width: "auto", opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="text-xs overflow-hidden whitespace-nowrap text-[#8B5CF6] flex-shrink-0"
+                        className="text-sm overflow-hidden whitespace-nowrap text-[#8B5CF6] flex-shrink-0"
                       >
                         Think
                       </motion.span>

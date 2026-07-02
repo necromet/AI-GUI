@@ -60,12 +60,16 @@ export const getConversations = async () => {
   return await idbService.getConversations();
 };
 
+export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'stitch') => {
+  return await idbService.getConversationsByType(type);
+};
+
 export const getConversationById = async (conversationId: number) => {
   return await idbService.getConversationById(conversationId);
 };
 
-export const createConversation = async (modelId: number, title?: string | null) => {
-  return await idbService.createConversation(modelId, title || null);
+export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch') => {
+  return await idbService.createConversation(modelId, title || null, type || 'chat');
 };
 
 export const updateConversation = async (conversationId: number, title: string) => {

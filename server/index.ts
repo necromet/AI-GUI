@@ -22,6 +22,8 @@ const { default: express } = await import('express');
 const { default: cors } = await import('cors');
 const { default: chatRoutes } = await import('./routes/chat');
 const { default: stitchRoutes } = await import('./routes/stitch');
+const { default: ragRoutes } = await import('./routes/rag');
+const { default: agentRoutes } = await import('./routes/agent');
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -31,6 +33,8 @@ app.use(express.json({ limit: '50mb' }));
 
 app.use('/api/chat', chatRoutes);
 app.use('/api/stitch', stitchRoutes);
+app.use('/api/rag', ragRoutes);
+app.use('/api/agent', agentRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -71,13 +71,13 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
 
         <div className="relative z-10 flex-1 min-w-0">
           <div
-            className="font-medium text-xs transition-colors flex items-center gap-1.5"
+            className="font-medium text-sm transition-colors flex items-center gap-1.5"
             style={{ color: isActive ? 'var(--text-100)' : 'var(--text-300)' }}
           >
             {model.name}
             {model.isCustom && (
               <span
-                className="text-[8px] font-bold px-1 py-0.5 rounded-md"
+                className="text-[10px] font-bold px-1 py-0.5 rounded-md"
                 style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.12)' }}
               >
                 CUSTOM
