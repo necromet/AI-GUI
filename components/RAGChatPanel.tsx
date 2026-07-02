@@ -3,7 +3,7 @@ import { Database, Upload, Trash2, FileText, Loader2 } from 'lucide-react';
 import { Role, Message, ModelConfig, ConversationType } from '../types';
 import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
-import * as db from '../services/databaseAdapter';
+import * as db from '../services/apiDatabaseAdapter';
 import { uploadDocument, listDocuments, deleteDocument, queryRAG, RAGDocument, RAGSource } from '../services/ragService';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -64,12 +64,12 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
   const loadConversationMessages = async (convId: number) => {
     const dbMessages = await db.getMessagesByConversation(convId);
     const loaded: Message[] = dbMessages.map(msg => ({
-      id: msg.message_id!.toString(),
+      id: msg.id!.toString(),
       role: msg.role === 'assistant' ? Role.Assistant : Role.User,
       content: msg.content,
       timestamp: new Date(msg.timestamp).getTime(),
       messageOrder: msg.message_order,
-      dbMessageId: msg.message_id,
+      dbMessageId: msg.id,
       annotations: (() => {
         const raw = (msg as any).search_annotations;
         if (raw && typeof raw === 'string') { try { return JSON.parse(raw); } catch {} }
@@ -86,7 +86,7 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
       const modelId = await db.addModel(modelConfig.id, modelConfig.description || null, modelConfig.contextWindowSize || null);
       dbModel = await db.getModelById(modelId);
     }
-    const newId = await db.createConversation(dbModel!.model_id!, null, 'rag');
+    const newId = await db.createConversation(dbModel!.id!, null, 'rag');
     onConversationChange(newId);
     await db.getConversations(); // refresh
     return newId;

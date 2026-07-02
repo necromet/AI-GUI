@@ -5,7 +5,7 @@ import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle } from './services/apiService';
-import * as db from './services/databaseAdapter';
+import * as db from './services/apiDatabaseAdapter';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
@@ -22,7 +22,7 @@ import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
 import { StitchControls } from './components/StitchEditor';
-import patternBg from './assets/pattern-bg.png';
+
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -250,11 +250,11 @@ const App: React.FC = () => {
   const loadConversations = async () => {
     const dbConversations = await db.getConversations();
     const sessions: ChatSession[] = dbConversations.map(conv => ({
-      id: conv.conversation_id!.toString(),
+      id: conv.id!.toString(),
       title: conv.title || 'New Chat',
       messages: [],
       updatedAt: new Date(conv.updated_at).getTime(),
-      dbConversationId: conv.conversation_id,
+      dbConversationId: conv.id,
       modelId: conv.model_id,
       type: (conv.type || 'chat') as ConversationType,
     }));
@@ -272,7 +272,7 @@ const App: React.FC = () => {
         isReasoning: false,
         systemInstruction: m.system_instruction || undefined,
         isCustom: true,
-        dbModelId: m.model_id,
+        dbModelId: m.id,
         contextWindowSize: m.context_window_size || undefined,
         apiKey: m.api_key || undefined,
         provider: m.provider || undefined
@@ -310,12 +310,12 @@ const App: React.FC = () => {
         attachments = rawAttachments;
       }
       return {
-        id: msg.message_id!.toString(),
+        id: msg.id!.toString(),
         role: msg.role === 'assistant' ? Role.Assistant : Role.User,
         content: msg.content,
         timestamp: new Date(msg.timestamp).getTime(),
         messageOrder: msg.message_order,
-        dbMessageId: msg.message_id,
+        dbMessageId: msg.id,
         usageMetadata,
         annotations,
         attachments
@@ -353,7 +353,7 @@ const App: React.FC = () => {
       dbModel = await db.getModelById(modelId);
     }
     
-    const newConversationId = await db.createConversation(dbModel!.model_id!, null, type);
+    const newConversationId = await db.createConversation(dbModel!.id!, null, type);
     setCurrentConversationId(newConversationId);
     await loadConversations();
     return newConversationId;
@@ -1001,16 +1001,6 @@ const App: React.FC = () => {
 
         {/* Content area */}
         <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: `url(${patternBg})`,
-              backgroundSize: '400px',
-              backgroundRepeat: 'repeat',
-              opacity: 0.3,
-              filter: 'grayscale(1)',
-            }}
-          />
           <Routes>
             <Route path="/chat" element={
               <RequireAuth isAuth={isChatAuthenticated}>

@@ -1,5 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { resolve } from 'path';
+import { getDatabase } from '../db';
 import { getEmbedding, getEmbeddings, cosineSimilarity } from './embeddingService';
 
 export interface RAGChunk {
@@ -19,42 +18,8 @@ export interface RAGDocument {
   createdAt: string;
 }
 
-interface StoredData {
-  documents: RAGDocument[];
-  chunks: RAGChunk[];
-}
-
-const DATA_DIR = resolve(process.cwd(), 'data');
-const DATA_FILE = resolve(DATA_DIR, 'rag_chunks.json');
 const CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
-
-let inMemoryStore: StoredData = { documents: [], chunks: [] };
-let isLoaded = false;
-
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-function loadStore() {
-  if (isLoaded) return;
-  if (existsSync(DATA_FILE)) {
-    try {
-      const raw = readFileSync(DATA_FILE, 'utf-8');
-      inMemoryStore = JSON.parse(raw);
-    } catch {
-      inMemoryStore = { documents: [], chunks: [] };
-    }
-  }
-  isLoaded = true;
-}
-
-function saveStore() {
-  ensureDataDir();
-  writeFileSync(DATA_FILE, JSON.stringify(inMemoryStore), 'utf-8');
-}
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
@@ -76,60 +41,77 @@ function chunkText(text: string): { text: string; startIndex: number; endIndex: 
 }
 
 export async function addDocument(name: string, type: string, content: string): Promise<RAGDocument> {
-  loadStore();
-
+  const db = getDatabase();
   const docId = generateId();
   const textChunks = chunkText(content);
-
   const embeddings = await getEmbeddings(textChunks.map(c => c.text));
 
-  const chunks: RAGChunk[] = textChunks.map((c, i) => ({
-    id: generateId(),
-    documentId: docId,
-    text: c.text,
-    embedding: embeddings[i],
-    startIndex: c.startIndex,
-    endIndex: c.endIndex,
-  }));
+  const insertChunk = db.prepare(
+    'INSERT INTO rag_chunks (id, document_id, text, embedding, start_index, end_index) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const insertDoc = db.prepare(
+    'INSERT INTO rag_documents (id, name, type, chunk_count) VALUES (?, ?, ?, ?)'
+  );
 
-  const doc: RAGDocument = {
+  const insertAll = db.transaction(() => {
+    insertDoc.run(docId, name, type, textChunks.length);
+    for (let i = 0; i < textChunks.length; i++) {
+      insertChunk.run(
+        generateId(),
+        docId,
+        textChunks[i].text,
+        JSON.stringify(embeddings[i]),
+        textChunks[i].startIndex,
+        textChunks[i].endIndex
+      );
+    }
+  });
+  insertAll();
+
+  return {
     id: docId,
     name,
     type,
-    chunkCount: chunks.length,
+    chunkCount: textChunks.length,
     createdAt: new Date().toISOString(),
   };
-
-  inMemoryStore.documents.push(doc);
-  inMemoryStore.chunks.push(...chunks);
-  saveStore();
-
-  return doc;
 }
 
 export function listDocuments(): RAGDocument[] {
-  loadStore();
-  return inMemoryStore.documents;
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM rag_documents ORDER BY created_at DESC').all() as any[];
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    chunkCount: r.chunk_count,
+    createdAt: r.created_at,
+  }));
 }
 
 export function deleteDocument(docId: string): boolean {
-  loadStore();
-  const idx = inMemoryStore.documents.findIndex(d => d.id === docId);
-  if (idx === -1) return false;
-  inMemoryStore.documents.splice(idx, 1);
-  inMemoryStore.chunks = inMemoryStore.chunks.filter(c => c.documentId !== docId);
-  saveStore();
-  return true;
+  const db = getDatabase();
+  const result = db.prepare('DELETE FROM rag_documents WHERE id = ?').run(docId);
+  return result.changes > 0;
 }
 
 export async function retrieveRelevantChunks(query: string, topK: number = 5): Promise<RAGChunk[]> {
-  loadStore();
-
-  if (inMemoryStore.chunks.length === 0) return [];
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM rag_chunks').all() as any[];
+  if (rows.length === 0) return [];
 
   const queryEmbedding = await getEmbedding(query);
 
-  const scored = inMemoryStore.chunks.map(chunk => ({
+  const chunks: RAGChunk[] = rows.map(r => ({
+    id: r.id,
+    documentId: r.document_id,
+    text: r.text,
+    embedding: JSON.parse(r.embedding),
+    startIndex: r.start_index,
+    endIndex: r.end_index,
+  }));
+
+  const scored = chunks.map(chunk => ({
     chunk,
     score: cosineSimilarity(queryEmbedding, chunk.embedding),
   }));

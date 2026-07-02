@@ -111,3 +111,46 @@ export async function chatCompletion(
 
   return response.json();
 }
+
+export interface StreamChunk {
+  content?: string;
+  reasoning?: string;
+  finishReason?: string;
+}
+
+export async function readSSEStream(
+  response: Response,
+  onChunk: (chunk: StreamChunk) => void,
+): Promise<void> {
+  const reader = (response.body as any)?.getReader();
+  if (!reader) throw new Error('No response body from upstream');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') return;
+
+      try {
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content;
+        const reasoning = parsed.choices?.[0]?.delta?.reasoning_content;
+        const finishReason = parsed.choices?.[0]?.finish_reason;
+        onChunk({ content: content || undefined, reasoning: reasoning || undefined, finishReason: finishReason || undefined });
+      } catch {
+        // skip malformed
+      }
+    }
+  }
+}

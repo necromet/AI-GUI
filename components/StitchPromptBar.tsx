@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ModelConfig } from '../types';
+import { ModelConfig, StitchProjectType } from '../types';
 
 interface StitchPromptBarProps {
   onGenerate: (prompt: string) => void;
@@ -13,6 +13,7 @@ interface StitchPromptBarProps {
   initialActiveChips?: string[];
   onPromptChange?: (prompt: string) => void;
   onActiveChipsChange?: (chips: string[]) => void;
+  projectType?: StitchProjectType;
 }
 
 const CHIP_CATEGORIES: { label: string; chips: string[] }[] = [
@@ -34,7 +35,37 @@ const CHIP_CATEGORIES: { label: string; chips: string[] }[] = [
   },
 ];
 
-const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerating = false, theme = 'dark', models, selectedModelId, onModelChange, initialPrompt = '', initialActiveChips = [], onPromptChange, onActiveChipsChange }) => {
+const IG_CAROUSEL_CHIPS: { label: string; chips: string[] }[] = [
+  {
+    label: 'Content',
+    chips: ['Listicle', 'Before/After', 'Step-by-Step', 'Tips & Tricks', 'Story Sequence', 'Tutorial', 'Product Showcase', 'Testimonial'],
+  },
+  {
+    label: 'Style',
+    chips: ['Bold & Colorful', 'Minimalist', 'Dark Luxury', 'Pastel Aesthetic', 'Neon Pop', 'Corporate Clean', 'Hand-drawn', 'Gradient Mesh'],
+  },
+  {
+    label: 'CTA',
+    chips: ['Save This Post', 'Follow for More', 'Comment Below', 'Share with Friend', 'Link in Bio', 'DM Us', 'Tag a Friend', 'Shop Now'],
+  },
+];
+
+const IG_STORY_CHIPS: { label: string; chips: string[] }[] = [
+  {
+    label: 'Type',
+    chips: ['Announcement', 'Poll/Question', 'Countdown', 'Quote', 'Behind the Scenes', 'Promotion', 'Tutorial', 'Meme'],
+  },
+  {
+    label: 'Style',
+    chips: ['Bold Text', 'Photo-centric', 'Gradient BG', 'Minimal', 'Neon', 'Vintage', 'Monochrome'],
+  },
+  {
+    label: 'Interactive',
+    chips: ['Poll Sticker', 'Question Box', 'Quiz', 'Slider', 'Countdown Timer', 'Swipe Up', 'Link Sticker'],
+  },
+];
+
+const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerating = false, theme = 'dark', models, selectedModelId, onModelChange, initialPrompt = '', initialActiveChips = [], onPromptChange, onActiveChipsChange, projectType }) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [activeChips, setActiveChips] = useState<Set<string>>(new Set(initialActiveChips));
   const scrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -42,6 +73,12 @@ const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerat
   const [overflowState, setOverflowState] = useState<Record<string, { left: boolean; right: boolean }>>({});
 
   const chatModels = models?.filter(m => (m.modelType || 'chat') === 'chat') || [];
+
+  const chipCategories = projectType === 'ig-carousel'
+    ? IG_CAROUSEL_CHIPS
+    : projectType === 'ig-story'
+      ? IG_STORY_CHIPS
+      : CHIP_CATEGORIES;
 
   const checkOverflow = () => {
     const next: Record<string, { left: boolean; right: boolean }> = {};
@@ -121,7 +158,7 @@ const StitchPromptBar: React.FC<StitchPromptBarProps> = ({ onGenerate, isGenerat
   return (
     <div className="space-y-3">
       {/* Chip categories */}
-      {CHIP_CATEGORIES.map(cat => {
+      {chipCategories.map(cat => {
         const ov = overflowState[cat.label] || { left: false, right: false };
         return (
         <div key={cat.label} className="flex items-center gap-2">

@@ -18,6 +18,11 @@ services:
       - .env
     environment:
       - SERVER_PORT=3001
+    volumes:
+      - db-data:/app/data
     ports:
       - "3001:3001"
     restart: unless-stopped
+
+volumes:
+  db-data:

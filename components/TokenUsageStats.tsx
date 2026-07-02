@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Calendar, MessageSquare, Zap, BarChart3, Activity } from 'lucide-react';
-import * as db from '../services/databaseAdapter';
+import * as db from '../services/apiDatabaseAdapter';
 import * as RechartsPrimitive from 'recharts';
 import { ModelConfig } from '../types';
 import { cn } from '@/lib/utils';

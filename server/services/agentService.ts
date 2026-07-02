@@ -1,6 +1,60 @@
 import { runInNewContext } from 'vm';
 import * as cheerio from 'cheerio';
-import { chatCompletion, ChatMessage } from './mimoService';
+import { chatCompletion, streamChatCompletion, readSSEStream, ChatMessage } from './mimoService';
+import { buildSpecSystemPrompt, buildSpecEditSystemPrompt } from './stitchSpecPrompt';
+
+export async function analyzeImages(images: any[], model?: string, provider?: string): Promise<string> {
+  if (!images || images.length === 0) return '';
+
+  try {
+    const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: 'text', text: 'Describe these reference images in detail for use in an HTML design. For each image, note: dominant colors (with hex values), composition, subjects, any text visible, visual style, mood, and key layout elements. Be concise but precise — this will be used as design context.' },
+    ];
+
+    for (const img of images) {
+      let imageUrl = img.url;
+
+      if (!imageUrl.startsWith('data:')) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
+          const resp = await fetch(imageUrl, { signal: controller.signal });
+          clearTimeout(timeout);
+
+          if (!resp.ok) continue;
+
+          const buffer = Buffer.from(await resp.arrayBuffer());
+          const mimeType = img.mimeType || resp.headers.get('content-type') || 'image/png';
+          imageUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
+        } catch {
+          continue;
+        }
+      }
+
+      contentParts.push({ type: 'image_url', image_url: { url: imageUrl } });
+    }
+
+    if (contentParts.length <= 1) return '';
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: 'You are a visual design analyst. Describe images concisely for an HTML designer to reference. Focus on actionable design details: colors, typography, layout, imagery style.' },
+      { role: 'user', content: contentParts },
+    ];
+
+    const data = await chatCompletion({
+      model: model || 'mimo-v2.5',
+      messages,
+      stream: false,
+    }, provider);
+
+    const analysis = data.choices?.[0]?.message?.content?.trim() || '';
+    console.log('[image-analysis] Generated analysis (%d chars) for %d images', analysis.length, images.length);
+    return analysis;
+  } catch (err: any) {
+    console.error('[image-analysis] Failed:', err.message);
+    return '';
+  }
+}
 
 export interface ToolDefinition {
   name: string;
@@ -52,16 +106,31 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'edit_html',
-    description: 'Apply surgical edits to an HTML document using CSS selectors. Use for incremental changes to existing HTML. Returns the full modified HTML.',
+    description: 'Apply surgical edits to an HTML document using CSS selectors. Use for incremental changes to existing HTML. Returns the full modified HTML. Always wrap edits in an array.',
     parameters: {
-      edits: { type: 'array', description: 'JSON array of edit operations. Each edit: { selector: string, action: "style"|"set_attr"|"remove_attr"|"add_class"|"remove_class"|"replace_content"|"insert_before"|"insert_after"|"remove"|"replace", property?: string, value?: string, html?: string }' },
+      edits: { type: 'array', description: 'Array of edit operations. Each: { "selector": "css", "action": "style|set_attr|remove_attr|add_class|remove_class|replace_content|insert_before|insert_after|remove|replace", "property"?: "prop", "value"?: "val", "html"?: "new html" }. Example: [{"selector": "h1", "action": "replace_content", "html": "New Title"}]' },
     },
   },
   {
     name: 'generate_html',
-    description: 'Generate a complete HTML file from scratch. Use for first-time generation or major redesigns that would require too many edits.',
+    description: 'Generate a complete HTML file from scratch. Pass a brief text description of what to create — the tool generates the HTML. If the user already provided full HTML, pass it directly and it will be used as-is.',
     parameters: {
-      prompt: { type: 'string', description: 'Description of the HTML to generate' },
+      prompt: { type: 'string', description: 'Text description of the design to generate, OR the full HTML code if already written' },
+    },
+  },
+  {
+    name: 'generate_spec',
+    description: 'Generate a JSON design spec for IG content (carousels, stories). Outputs structured JSON, not HTML. Use this for Instagram carousel and story projects.',
+    parameters: {
+      prompt: { type: 'string', description: 'Design description for the IG content' },
+      slideCount: { type: 'number', description: 'Number of slides (for carousels)' },
+    },
+  },
+  {
+    name: 'edit_spec',
+    description: 'Edit specific fields in an existing JSON design spec. Use JSON path notation (e.g. "slides[0].elements[0].text"). Returns the complete updated spec.',
+    parameters: {
+      edits: { type: 'array', description: 'Array of { "path": "json.path", "value": new_value } edits. Example: [{"path": "slides[0].elements[0].text", "value": "New Title"}]' },
     },
   },
 ];
@@ -91,7 +160,7 @@ ${toolDescriptions}
 Important: Only use tools when necessary. When you have enough information, provide a clear final answer without using more tools.`;
 }
 
-export async function executeTool(call: ToolCall, context?: Record<string, any>): Promise<ToolResult> {
+export async function executeTool(call: ToolCall, context?: Record<string, any>, onProgress?: (chunk: string) => void): Promise<ToolResult> {
   const result: ToolResult = { name: call.name, input: call.arguments, output: '' };
 
   try {
@@ -105,18 +174,92 @@ export async function executeTool(call: ToolCall, context?: Record<string, any>)
       case 'search_web':
         result.output = await toolSearchWeb(call.arguments.query);
         break;
-      case 'edit_html':
-        result.output = await toolEditHtml(call.arguments.edits, context?.currentHtml || '');
+      case 'edit_html': {
+        let edits = call.arguments.edits;
+        if (!Array.isArray(edits)) {
+          if (call.arguments.selector && call.arguments.action) {
+            const edit: Record<string, any> = {
+              selector: call.arguments.selector,
+              action: call.arguments.action,
+            };
+            if (call.arguments.property) edit.property = call.arguments.property;
+            if (call.arguments.html || call.arguments.content) {
+              edit.html = call.arguments.html || call.arguments.content;
+            }
+            if (call.arguments.value) edit.value = call.arguments.value;
+            edits = [edit];
+          } else {
+            edits = [];
+          }
+        } else {
+          edits = edits.map((e: Record<string, any>) => {
+            if (e.content && !e.html) {
+              return { ...e, html: e.content };
+            }
+            return e;
+          });
+        }
+        result.output = await toolEditHtml(edits, context?.currentHtml || '');
         break;
-      case 'generate_html':
-        result.output = await toolGenerateHtml(
-          call.arguments.prompt,
-          context?.layout || '16:9',
-          context?.boardDescription,
+      }
+      case 'generate_html': {
+        const promptOrHtml = call.arguments.prompt || call.arguments.content || call.arguments.html || '';
+        if (/<!doctype|<html/i.test(promptOrHtml)) {
+          result.output = promptOrHtml;
+        } else {
+          result.output = await toolGenerateHtml(
+            promptOrHtml,
+            context?.layout || '16:9',
+            context?.boardDescription,
+            context?.model,
+            context?.provider,
+            context?.projectType,
+            context?.images,
+            context?.imageAnalysis,
+            onProgress,
+          );
+        }
+        break;
+      }
+      case 'generate_spec': {
+        const specPrompt = call.arguments.prompt || call.arguments.content || '';
+        const specSlideCount = call.arguments.slideCount || context?.slideCount || context?.totalSlides;
+        result.output = await toolGenerateSpec(
+          specPrompt,
+          context?.layout || '4:5',
+          context?.projectType || 'ig-carousel',
+          specSlideCount,
           context?.model,
           context?.provider,
+          context?.images,
+          context?.imageAnalysis,
+          context?.currentSpec,
+          context?.referenceSpec,
+          context?.componentContext,
+          onProgress,
         );
         break;
+      }
+      case 'edit_spec': {
+        const edits = call.arguments.edits;
+        if (!Array.isArray(edits) || edits.length === 0) {
+          result.output = 'Error: No edits provided. Provide an array of { path, value } objects.';
+          result.error = 'No edits';
+        } else if (!context?.currentSpec) {
+          result.output = 'Error: No current spec to edit. Use generate_spec first.';
+          result.error = 'No current spec';
+        } else {
+          result.output = await toolEditSpec(
+            context.currentSpec,
+            edits,
+            context?.layout || '4:5',
+            context?.model,
+            context?.provider,
+            onProgress,
+          );
+        }
+        break;
+      }
       default:
         result.output = `Unknown tool: ${call.name}`;
         result.error = 'Tool not found';
@@ -252,6 +395,11 @@ const LAYOUT_DIMS: Record<string, string> = {
   '16:9': '1920x1080',
   '1:1': '1080x1080',
   '9:16': '1080x1920',
+  '4:5': '1080x1350',
+  '1.91:1': '1200x628',
+  '4:3': '1440x1080',
+  '3:4': '1080x1440',
+  '32:9': '2560x1080',
 };
 
 async function toolEditHtml(edits: EditOperation[], html: string): Promise<string> {
@@ -363,8 +511,25 @@ async function toolEditHtml(edits: EditOperation[], html: string): Promise<strin
   return JSON.stringify({ html: result, summary: summary.join('\n') });
 }
 
-async function toolGenerateHtml(prompt: string, layout: string, boardDescription?: string, model?: string, provider?: string): Promise<string> {
+async function toolGenerateHtml(prompt: string, layout: string, boardDescription?: string, model?: string, provider?: string, projectType?: string, images?: any[], imageAnalysis?: string, onProgress?: (chunk: string) => void): Promise<string> {
   const dims = LAYOUT_DIMS[layout] || '1920x1080';
+
+  let imagePrompt = '';
+  if (images && images.length > 0) {
+    const imageLines = images.map((img: any) => `- "${img.label}" \u2192 ${img.url}`).join('\n');
+    imagePrompt = `\n\nAvailable images:\n${imageLines}\n\nUse these images with <img> tags. Use object-fit: cover for backgrounds. Do NOT use placeholder gradients when images are provided.`;
+  }
+
+  if (imageAnalysis) {
+    imagePrompt += `\n\nImage Analysis (from vision model — use this to inform your design):\n${imageAnalysis}`;
+  }
+
+  let igPrompt = '';
+  if (projectType === 'ig-carousel') {
+    igPrompt = `\n\nINSTAGRAM CAROUSEL: Mobile-first design, large bold text (min 24px body), 5% safe margins, vibrant colors for thumbnails.`;
+  } else if (projectType === 'ig-story') {
+    igPrompt = `\n\nINSTAGRAM STORY: Full-screen 9:16, keep text in center 80%, large text (min 28px), high contrast.`;
+  }
 
   const systemPrompt = `You are an expert HTML/CSS designer. Generate a single self-contained HTML file based on the user's description.
 
@@ -379,20 +544,33 @@ Rules:
 - Make it visually polished with modern CSS (flexbox, grid where appropriate)
 - All images should use placeholder gradients or SVG patterns if no actual URLs are provided
 - Ensure text is readable and well-sized
-- Output ONLY valid HTML starting with <!DOCTYPE html>`;
+- Output ONLY valid HTML starting with <!DOCTYPE html>${imagePrompt}${igPrompt}`;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: prompt },
   ];
 
-  const data = await chatCompletion({
+  const response = await streamChatCompletion({
     model: model || 'mimo-v2.5',
     messages,
-    stream: false,
+    stream: true,
+    thinking: { type: 'disabled' },
   }, provider);
 
-  let html = data.choices?.[0]?.message?.content?.trim() || '';
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MiMo API error ${response.status}: ${errorText}`);
+  }
+
+  let html = '';
+  await readSSEStream(response, (chunk) => {
+    if (chunk.content) {
+      html += chunk.content;
+      onProgress?.(chunk.content);
+    }
+  });
+
   html = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '');
 
   if (!html || !/<!doctype/i.test(html)) {
@@ -402,26 +580,242 @@ Rules:
   return html;
 }
 
+async function toolGenerateSpec(
+  prompt: string,
+  layout: string,
+  projectType: string,
+  slideCount?: number,
+  model?: string,
+  provider?: string,
+  images?: any[],
+  imageAnalysis?: string,
+  currentSpec?: any,
+  referenceSpec?: any,
+  componentContext?: string,
+  onProgress?: (chunk: string) => void,
+): Promise<string> {
+  const systemPrompt = buildSpecSystemPrompt({
+    layout,
+    projectType,
+    slideCount,
+    images,
+    imageAnalysis,
+    currentSpec,
+    referenceSpec,
+    componentContext,
+  });
+
+  const userContent = currentSpec
+    ? `Current spec:\n\`\`\`json\n${JSON.stringify(currentSpec, null, 2)}\n\`\`\`\n\nModification request: ${prompt}`
+    : prompt;
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userContent },
+  ];
+
+  const response = await streamChatCompletion({
+    model: model || 'mimo-v2.5',
+    messages,
+    stream: true,
+    thinking: { type: 'disabled' },
+  }, provider);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MiMo API error ${response.status}: ${errorText}`);
+  }
+
+  let specText = '';
+  await readSSEStream(response, (chunk) => {
+    if (chunk.content) {
+      specText += chunk.content;
+      onProgress?.(chunk.content);
+    }
+  });
+
+  specText = specText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  try {
+    const parsed = JSON.parse(specText);
+    return JSON.stringify(parsed);
+  } catch {
+    throw new Error('AI did not return valid JSON spec. Raw output: ' + specText.substring(0, 500));
+  }
+}
+
+async function toolEditSpec(
+  currentSpec: any,
+  edits: { path: string; value: any }[],
+  layout: string,
+  model?: string,
+  provider?: string,
+  onProgress?: (chunk: string) => void,
+): Promise<string> {
+  const systemPrompt = buildSpecEditSystemPrompt(currentSpec, layout);
+
+  const editDescription = edits.map(e => `- Set "${e.path}" to ${JSON.stringify(e.value)}`).join('\n');
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Apply these edits:\n${editDescription}` },
+  ];
+
+  const response = await streamChatCompletion({
+    model: model || 'mimo-v2.5',
+    messages,
+    stream: true,
+    thinking: { type: 'disabled' },
+  }, provider);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MiMo API error ${response.status}: ${errorText}`);
+  }
+
+  let specText = '';
+  await readSSEStream(response, (chunk) => {
+    if (chunk.content) {
+      specText += chunk.content;
+      onProgress?.(chunk.content);
+    }
+  });
+
+  specText = specText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  try {
+    const parsed = JSON.parse(specText);
+    return JSON.stringify(parsed);
+  } catch {
+    throw new Error('AI did not return valid JSON spec after edit. Raw output: ' + specText.substring(0, 500));
+  }
+}
+
 export function buildStitchSystemPrompt(context?: Record<string, any>): string {
   const currentHtml = context?.currentHtml;
   const layout = context?.layout || '16:9';
   const dims = LAYOUT_DIMS[layout] || '1920x1080';
   const boardDescription = context?.boardDescription;
+  const projectType = context?.projectType || 'website';
+  const images = context?.images || [];
+  const slideNumber = context?.slideNumber;
+  const totalSlides = context?.totalSlides;
+  const referenceSlideHtml = context?.referenceSlideHtml;
 
   const hasExistingHtml = !!currentHtml;
+  const isIgContent = projectType === 'ig-carousel' || projectType === 'ig-story';
 
-  const toolNote = `You also have access to tools (edit_html, generate_html) which you can use by outputting a JSON block like:
+  let imagePrompt = '';
+  if (images.length > 0) {
+    const imageLines = images.map((img: any) => `- "${img.label}" \u2192 ${img.url}`).join('\n');
+    imagePrompt = `\n\nAvailable images to use in the design:\n${imageLines}\n\nRules for images:\n- Use <img> tags with the provided URLs where appropriate\n- Use "object-fit: cover" for background-style images\n- Do NOT use placeholder gradients when actual images are provided\n- Reference images by their label in your design decisions`;
+  }
+
+  const imageAnalysis = context?.imageAnalysis;
+  if (imageAnalysis) {
+    imagePrompt += `\n\nImage Analysis (from vision model \u2014 use this to inform your design):\n${imageAnalysis}`;
+  }
+
+  if (isIgContent) {
+    const currentSpec = context?.currentSpec;
+    const referenceSpec = context?.referenceSpec;
+    const componentContext = context?.componentContext;
+
+    let specPrompt = '';
+    if (currentSpec) {
+      specPrompt = `\n\nCURRENT DESIGN SPEC:\n\`\`\`json\n${JSON.stringify(currentSpec, null, 2)}\n\`\`\`\nThe user wants to modify this spec. Use the edit_spec tool to make targeted changes, or generate_spec to create a completely new design.`;
+    }
+
+    let refPrompt = '';
+    if (referenceSpec) {
+      refPrompt = `\n\nREFERENCE SPEC (slide 1 \u2014 match its theme):\n\`\`\`json\n${JSON.stringify(referenceSpec, null, 2).substring(0, 2000)}\n\`\`\``;
+    }
+
+    let compPrompt = '';
+    if (componentContext) {
+      compPrompt = `\n\nAVAILABLE COMPONENTS:\n${componentContext}`;
+    }
+
+    let igRules = '';
+    if (projectType === 'ig-carousel') {
+      const slideCount = context?.slideCount || context?.totalSlides;
+      igRules = `\n\nINSTAGRAM CAROUSEL DESIGN RULES:\n- Mobile-first: large text, high contrast, bold typography\n- Minimum 24px body text, 32px+ headlines\n- Leave 5% safe margin on all edges\n- Vibrant, eye-catching colors for thumbnail views\n- Consistent theme across all slides\n- 4:5 aspect ratio (1080\u00d71350px)`;
+      if (slideCount) {
+        igRules += `\n- Generate all ${slideCount} slides in a single spec`;
+        igRules += `\n- First slide: hook attention with bold headline and striking visual`;
+        igRules += `\n- Last slide: strong CTA (Follow, Save, Comment, Share)`;
+        igRules += `\n- Middle slides: deliver one key point clearly each`;
+      }
+    } else if (projectType === 'ig-story') {
+      igRules = `\n\nINSTAGRAM STORY DESIGN RULES:\n- Full-screen 9:16 (1080\u00d71920px)\n- Min 28px body text, high contrast\n- Text in center 80% (safe zone)\n- Top 15% and bottom 20% are IG UI overlays`;
+    }
+
+    const specToolNote = `You have access to tools for working with JSON design specs:
+
 \`\`\`tool
-{"name": "tool_name", "arguments": {...}}
+{"name": "generate_spec", "arguments": {"prompt": "Design description", "slideCount": 5}}
 \`\`\`
-Using tools is optional. If you use a tool, the result will be returned to you automatically.`;
+
+To edit an existing spec:
+\`\`\`tool
+{"name": "edit_spec", "arguments": {"edits": [{"path": "slides[0].elements[0].text", "value": "New Title"}]}}
+\`\`\`
+
+For IG content, ALWAYS use generate_spec (not generate_html). The spec will be rendered to HTML automatically.
+After using a tool, respond with a brief summary of what you created/changed.`;
+
+    return `You are an expert visual designer for Instagram content. You work with JSON design specs, not raw HTML.
+
+CRITICAL RULES:
+- For IG content (carousels, stories), ALWAYS use the generate_spec or edit_spec tools
+- Do NOT output raw HTML. The spec is rendered to HTML by a deterministic renderer
+- After the tool finishes, respond with a concise summary of the design${igRules}${imagePrompt}${specPrompt}${refPrompt}${compPrompt}
+
+${specToolNote}`;
+  }
+
+  // Website mode — existing HTML-based flow
+  let referencePrompt = '';
+  if (referenceSlideHtml && !hasExistingHtml) {
+    referencePrompt = `\n\nREFERENCE: Here is slide 1's HTML for visual consistency. Match its color scheme, typography, spacing, and layout style. This slide should feel like a natural continuation:\n\`\`\`html\n${referenceSlideHtml.substring(0, 6000)}\n\`\`\``;
+  }
+
+  const toolNote = `You have access to tools. To call a tool, output a fenced JSON block exactly like this:
+
+For editing existing HTML:
+\`\`\`tool
+{"name": "edit_html", "arguments": {"edits": [{"selector": "h1", "action": "replace_content", "html": "New Title"}]}}
+\`\`\`
+
+For generating new HTML from scratch \u2014 pass the FULL HTML code directly:
+\`\`\`tool
+{"name": "generate_html", "arguments": {"prompt": "<!DOCTYPE html><html>...</html>"}}
+\`\`\`
+
+You may write the complete HTML yourself and pass it in the "prompt" field. The tool accepts either a text description or the full HTML code.
+
+IMPORTANT: The "edits" field MUST be an array. Each edit needs "selector", "action", and "html" (not "content").
+After using a tool the result is returned to you automatically.`;
 
   const rules = hasExistingHtml
-    ? `You are an expert HTML/CSS code editor. The user has an existing HTML file and wants modifications.
-You will receive the current HTML and a modification request.
-Apply ONLY the requested changes. Preserve all existing design, content, and structure that isn't affected.
-Output the COMPLETE modified HTML file (not just the changed parts).
-Output ONLY raw HTML starting with <!DOCTYPE html>.
+    ? `You are an expert HTML/CSS editor. The user has an existing HTML design and wants modifications.
+
+CRITICAL RULES:
+- ALWAYS use the \`edit_html\` tool to make changes. Do NOT output raw HTML.
+- Use surgical CSS selectors to target only the elements that need changing.
+- NEVER rewrite the entire file. Only edit what the user asked for.
+- You may chain multiple edit operations in a single tool call.
+- If the user asks for a completely new design (not an edit), use \`generate_html\` instead.
+- After the tool finishes and returns the generated HTML, ALWAYS respond with a concise natural language summary describing the design you created. Do not include raw HTML in your summary.
+
+Good selector examples:
+- "h1" \u2014 all h1 elements
+- ".hero-title" \u2014 element with class hero-title
+- "#main-banner" \u2014 element with id main-banner
+- "section > .card:nth-child(2)" \u2014 second .card inside a section
+- "header nav a" \u2014 anchor links inside nav inside header
+
+Available edit actions: style, set_attr, remove_attr, add_class, remove_class, replace_content, insert_before, insert_after, remove, replace.
 
 Current HTML:
 \`\`\`html
@@ -432,29 +826,29 @@ Layout: ${layout} (${dims}px)
 ${boardDescription ? `Project: ${boardDescription}` : ''}
 
 ${toolNote}`
-    : `You are an expert HTML/CSS designer. Generate a single self-contained HTML file based on the user's description.
+    : `You are an expert HTML/CSS designer. Your job is to generate HTML designs using the \`generate_html\` tool.
 
-Output ONLY the raw HTML code. No markdown fences, no explanation. The HTML must be complete with inline CSS, ready to render in an iframe.
+CRITICAL RULES:
+- ALWAYS use the \`generate_html\` tool to create the design. Do NOT output raw HTML directly.
+- After the tool finishes and returns the generated HTML, ALWAYS respond with a concise natural language summary describing the design you created. Do not include raw HTML in your summary.
 
 Layout: ${layout} (${dims}px)
 ${boardDescription ? `Description: ${boardDescription}` : ''}
 
-Rules:
+Design guidelines:
 - The entire design must fit within the given layout dimensions
-- Include a viewport meta tag
 - Make it visually polished with modern CSS (flexbox, grid where appropriate)
 - All images should use placeholder gradients or SVG patterns if no actual URLs are provided
 - Ensure text is readable and well-sized
-- Output ONLY valid HTML starting with <!DOCTYPE html>
 
 ${toolNote}`;
 
-  return rules;
+  return rules + imagePrompt + referencePrompt;
 }
 
 export function parseToolCalls(response: string): ToolCall[] {
   const calls: ToolCall[] = [];
-  const regex = /```tool\s*\n?([\s\S]*?)```/g;
+  const regex = /```(?:tool|json)\s*\n?([\s\S]*?)```/g;
   let match;
 
   while ((match = regex.exec(response)) !== null) {
@@ -462,9 +856,25 @@ export function parseToolCalls(response: string): ToolCall[] {
       const parsed = JSON.parse(match[1].trim());
       if (parsed.name && parsed.arguments) {
         calls.push({ name: parsed.name, arguments: parsed.arguments });
+      } else if (parsed.prompt && !parsed.name) {
+        calls.push({ name: 'generate_spec', arguments: parsed });
       }
     } catch {
       // skip malformed tool calls
+    }
+  }
+
+  if (calls.length === 0) {
+    const jsonRegex = /\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g;
+    while ((match = jsonRegex.exec(response)) !== null) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        if (parsed.name && parsed.arguments) {
+          calls.push({ name: parsed.name, arguments: parsed.arguments });
+        }
+      } catch {
+        // skip malformed
+      }
     }
   }
 

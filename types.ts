@@ -87,7 +87,16 @@ export interface ModelConfig {
 
 // ===== Stitch Types =====
 
-export type StitchLayout = '16:9' | '1:1' | '9:16';
+export type StitchLayout = '16:9' | '1:1' | '9:16' | '4:5' | '1.91:1' | '4:3' | '3:4' | '32:9';
+
+export type StitchProjectType = 'website' | 'ig-carousel' | 'ig-story';
+
+export interface StitchImageRef {
+  id: string;
+  label: string;
+  url: string;
+  mimeType?: string;
+}
 
 export interface StitchBoard {
   id: string;
@@ -95,6 +104,7 @@ export interface StitchBoard {
   title: string;
   layout: StitchLayout;
   generatedHtml?: string;
+  designSpec?: import('./types/stitchSpec').StitchSlideSpec;
   bgImage?: string;
   bgColor?: string;
   createdAt: number;
@@ -105,7 +115,11 @@ export interface StitchProject {
   id: string;
   title: string;
   description?: string;
+  projectType: StitchProjectType;
   boards: StitchBoard[];
+  images?: StitchImageRef[];
+  theme?: import('./types/stitchSpec').StitchTheme;
+  fullDesignSpec?: import('./types/stitchSpec').StitchDesignSpec;
   createdAt: number;
   updatedAt: number;
 }

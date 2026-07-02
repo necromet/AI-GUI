@@ -3,7 +3,7 @@ import { Puzzle, Globe, Code, Wrench, Loader2, ChevronDown, ChevronRight, Check,
 import { Role, Message, ModelConfig, ConversationType } from '../types';
 import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
-import * as db from '../services/databaseAdapter';
+import * as db from '../services/apiDatabaseAdapter';
 import { sendAgentMessage, ToolResult, getAvailableTools, ToolDefinition } from '../services/agentService';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -61,12 +61,12 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const loadConversationMessages = async (convId: number) => {
     const dbMessages = await db.getMessagesByConversation(convId);
     const loaded: Message[] = dbMessages.map(msg => ({
-      id: msg.message_id!.toString(),
+      id: msg.id!.toString(),
       role: msg.role === 'assistant' ? Role.Assistant : Role.User,
       content: msg.content,
       timestamp: new Date(msg.timestamp).getTime(),
       messageOrder: msg.message_order,
-      dbMessageId: msg.message_id,
+      dbMessageId: msg.id,
     }));
     setMessages(loaded);
   };
@@ -78,7 +78,7 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       const modelId = await db.addModel(modelConfig.id, modelConfig.description || null, modelConfig.contextWindowSize || null);
       dbModel = await db.getModelById(modelId);
     }
-    const newId = await db.createConversation(dbModel!.model_id!, null, 'plugin-agent');
+    const newId = await db.createConversation(dbModel!.id!, null, 'plugin-agent');
     onConversationChange(newId);
     return newId;
   };

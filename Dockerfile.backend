@@ -7,5 +7,7 @@ RUN npm ci --include=dev
 COPY server/ ./server/
 COPY .env.example ./.env.example
 
+RUN mkdir -p /app/data
+
 EXPOSE 3001
 CMD ["npx", "tsx", "server/index.ts"]

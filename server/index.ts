@@ -24,6 +24,13 @@ const { default: chatRoutes } = await import('./routes/chat');
 const { default: stitchRoutes } = await import('./routes/stitch');
 const { default: ragRoutes } = await import('./routes/rag');
 const { default: agentRoutes } = await import('./routes/agent');
+const { default: modelRoutes } = await import('./routes/models');
+const { default: conversationRoutes } = await import('./routes/conversations');
+const { default: messageRoutes } = await import('./routes/messages');
+const { default: statsRoutes } = await import('./routes/stats');
+const { getDatabase } = await import('./db');
+
+getDatabase();
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -35,6 +42,10 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/stitch', stitchRoutes);
 app.use('/api/rag', ragRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/models', modelRoutes);
+app.use('/api/conversations', conversationRoutes);
+app.use('/api/db', messageRoutes);
+app.use('/api/stats', statsRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

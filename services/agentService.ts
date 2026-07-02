@@ -19,6 +19,7 @@ export interface AgentStreamChunk {
   toolCall?: { name: string; arguments: Record<string, any> };
   toolResult?: ToolResult;
   toolSummary?: ToolResult[];
+  toolProgress?: { name: string; chunk: string };
 }
 
 export async function getAvailableTools(): Promise<ToolDefinition[]> {
@@ -106,6 +107,11 @@ export async function* sendAgentMessage(
 
         if (parsed.tool_summary) {
           yield { text: '', toolSummary: parsed.tool_summary };
+          continue;
+        }
+
+        if (parsed.tool_progress) {
+          yield { text: '', toolProgress: parsed.tool_progress };
           continue;
         }
 
