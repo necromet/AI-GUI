@@ -5,6 +5,11 @@ import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
 import * as db from '../services/apiDatabaseAdapter';
 import { sendAgentMessage, ToolResult, getAvailableTools, ToolDefinition } from '../services/agentService';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Separator } from '@/components/ui/separator';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -180,7 +185,6 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl" style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}>
@@ -194,71 +198,78 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          {availableTools.map(tool => (
-            <button
-              key={tool.name}
-              onClick={() => toggleTool(tool.name)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all"
-              style={{
-                backgroundColor: enabledTools.includes(tool.name) ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
-                color: enabledTools.includes(tool.name) ? 'var(--neon-color)' : 'var(--text-500)',
-                border: `1px solid ${enabledTools.includes(tool.name) ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)'}`,
-              }}
-              title={tool.description}
-            >
-              {TOOL_ICONS[tool.name] || <Wrench size={12} />}
-              {tool.name.replace(/_/g, ' ')}
-            </button>
-          ))}
+          {availableTools.map(tool => {
+            const isEnabled = enabledTools.includes(tool.name);
+            return (
+              <Button
+                key={tool.name}
+                variant="outline"
+                size="sm"
+                onClick={() => toggleTool(tool.name)}
+                className="h-6 gap-1 px-2 text-[10px] font-medium"
+                style={{
+                  backgroundColor: isEnabled ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
+                  color: isEnabled ? 'var(--neon-color)' : 'var(--text-500)',
+                  borderColor: isEnabled ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)',
+                }}
+                title={tool.description}
+              >
+                {TOOL_ICONS[tool.name] || <Wrench size={12} />}
+                {tool.name.replace(/_/g, ' ')}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Tool results panel */}
+      <Separator className="mx-4" style={{ backgroundColor: 'var(--border-300)' }} />
+
       {toolResults.length > 0 && (
-        <div className="mx-4 mb-3">
-          <button
-            onClick={() => setShowToolResults(!showToolResults)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold mb-1.5"
-            style={{ color: 'var(--text-500)' }}
-          >
-            {showToolResults ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            Tool Calls ({toolResults.length})
-          </button>
-          {showToolResults && (
+        <Collapsible open={showToolResults} onOpenChange={setShowToolResults} className="mx-4 mb-3">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-6 gap-1.5 px-1 text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-500)' }}>
+              {showToolResults ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              Tool Calls ({toolResults.length})
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
             <div className="space-y-1.5">
               {toolResults.map((result, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-lg p-2.5 text-[11px]"
-                  style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    {TOOL_ICONS[result.name] || <Wrench size={10} />}
-                    <span className="font-semibold" style={{ color: 'var(--text-100)' }}>{result.name}</span>
-                    {result.output ? (
-                      <Check size={10} style={{ color: '#4ade80' }} />
-                    ) : result.error ? (
-                      <X size={10} style={{ color: '#f87171' }} />
-                    ) : (
-                      <Loader2 size={10} className="animate-spin" style={{ color: 'var(--neon-color)' }} />
+                <Card key={idx} className="p-0" style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
+                  <CardContent className="p-2.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {TOOL_ICONS[result.name] || <Wrench size={10} />}
+                      <span className="text-[11px] font-semibold" style={{ color: 'var(--text-100)' }}>{result.name}</span>
+                      {result.output ? (
+                        <Badge variant="outline" className="h-4 px-1 text-[9px] gap-0.5" style={{ borderColor: '#4ade80', color: '#4ade80' }}>
+                          <Check size={8} /> Done
+                        </Badge>
+                      ) : result.error ? (
+                        <Badge variant="destructive" className="h-4 px-1 text-[9px] gap-0.5">
+                          <X size={8} /> Error
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="h-4 px-1 text-[9px] gap-0.5" style={{ borderColor: 'var(--neon-color)', color: 'var(--neon-color)' }}>
+                          <Loader2 size={8} className="animate-spin" /> Running
+                        </Badge>
+                      )}
+                    </div>
+                    {result.output && (
+                      <pre className="text-[11px] max-h-24 overflow-y-auto font-mono leading-relaxed" style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {result.output.substring(0, 500)}{result.output.length > 500 ? '...' : ''}
+                      </pre>
                     )}
-                  </div>
-                  {result.output && (
-                    <pre className="max-h-24 overflow-y-auto font-mono leading-relaxed" style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {result.output.substring(0, 500)}{result.output.length > 500 ? '...' : ''}
-                    </pre>
-                  )}
-                  {result.error && (
-                    <p style={{ color: '#f87171' }}>{result.error}</p>
-                  )}
-                </div>
+                    {result.error && (
+                      <p className="text-[11px]" style={{ color: '#f87171' }}>{result.error}</p>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
-          )}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 pb-52">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
@@ -278,7 +289,6 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         )}
       </div>
 
-      {/* Input */}
       <div
         className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4"
         style={{ background: `linear-gradient(to top, var(--bg-100) 50%, transparent)` }}

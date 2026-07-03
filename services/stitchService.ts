@@ -250,7 +250,6 @@ export function createNewProject(title: string, projectType: StitchProjectType =
     title,
     projectType,
     boards: [],
-    images: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -276,7 +275,6 @@ export function stitchProjectToDB(project: StitchProject) {
     description: project.description,
     projectType: project.projectType,
     boards: project.boards,
-    images: project.images,
     theme: project.theme,
     fullDesignSpec: project.fullDesignSpec,
     createdAt: project.createdAt,
@@ -289,13 +287,6 @@ export function stitchDBToProject(dbProject: { id: string; title: string; descri
   try {
     boards = JSON.parse(dbProject.boards_json);
   } catch {}
-
-  let images: StitchImageRef[] = [];
-  if (dbProject.images_json) {
-    try {
-      images = JSON.parse(dbProject.images_json);
-    } catch {}
-  }
 
   let theme: StitchTheme | undefined;
   if (dbProject.theme_json) {
@@ -317,7 +308,6 @@ export function stitchDBToProject(dbProject: { id: string; title: string; descri
     description: dbProject.description,
     projectType: (dbProject.project_type as StitchProjectType) || 'website',
     boards,
-    images,
     theme,
     fullDesignSpec,
     createdAt: new Date(dbProject.created_at).getTime(),

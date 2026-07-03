@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Loader2, Upload, X } from 'lucide-react';
 import { generateSpeech } from '../services/apiService';
 import { ModelConfig } from '../types';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 interface VoiceClonePanelProps {
   onNotification: (msg: string, type: 'success' | 'error') => void;
@@ -114,7 +118,7 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
 
       <div className="flex flex-col gap-4">
         <div>
-          <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Reference Voice Sample</label>
+          <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Reference Voice Sample</Label>
           <input
             ref={fileInputRef}
             type="file"
@@ -141,9 +145,9 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.04]">
               <Mic size={16} style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
               <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{audioFile.name}</span>
-              <button onClick={handleRemoveFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/[0.06] rounded-lg transition-colors text-gray-500 hover:text-red-400">
+              <Button variant="ghost" size="icon" onClick={handleRemoveFile} className="h-7 w-7 hover:bg-gray-200 dark:hover:bg-white/[0.06] text-gray-500 hover:text-red-400">
                 <X size={14} />
-              </button>
+              </Button>
             </div>
           )}
           {audioPreview && (
@@ -152,27 +156,27 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
         </div>
 
         <div>
-          <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Text to synthesize</label>
-          <textarea
+          <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Text to synthesize</Label>
+          <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to synthesize with cloned voice..."
             rows={5}
-            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
+            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 
         <div>
-          <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Style (optional)</label>
-          <input
+          <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Style (optional)</Label>
+          <Input
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             placeholder="e.g. Whisper softly, speak excitedly"
-            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
+            className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl transition-all duration-200 border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 
-        <button
+        <Button
           onClick={handleGenerate}
           disabled={!canGenerate || isGenerating}
           className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -193,11 +197,11 @@ const VoiceClonePanel: React.FC<VoiceClonePanelProps> = ({ onNotification, theme
               Clone & Generate
             </>
           )}
-        </button>
+        </Button>
 
         {generatedUrl && (
           <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Cloned Output</label>
+            <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Cloned Output</Label>
             <audio ref={audioRef} src={generatedUrl} controls className="w-full rounded-xl" />
           </div>
         )}

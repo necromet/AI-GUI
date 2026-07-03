@@ -1,6 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { ChevronDown, MessageSquare, Volume2, Mic, Copy, Wand2, Sparkles } from 'lucide-react';
 import { ModelConfig, ModelType } from '../types';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 interface ModelSelectProps {
   currentModel: string;
@@ -23,19 +27,7 @@ function getModelIcon(model: ModelConfig): React.ComponentType<any> {
 }
 
 const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelect, theme = 'dark' }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
   const selectedConfig = models.find(m => m.id === currentModel) || models[0];
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const isDark = theme === 'dark';
 
   const tokenPlanModels = models.filter(m => m.provider !== 'mimo-direct');
@@ -47,7 +39,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
     return (
       <button
         key={model.id}
-        onClick={() => { onSelect(model.id); setIsOpen(false); }}
+        onClick={() => onSelect(model.id)}
         className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-all duration-150 group relative"
         style={{
           background: isActive ? 'var(--bg-300)' : 'transparent',
@@ -76,12 +68,13 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
           >
             {model.name}
             {model.isCustom && (
-              <span
+              <Badge
+                variant="outline"
                 className="text-[10px] font-bold px-1 py-0.5 rounded-md"
-                style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.12)' }}
+                style={{ background: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)', borderColor: 'rgba(var(--neon-rgb), 0.12)' }}
               >
                 CUSTOM
-              </span>
+              </Badge>
             )}
           </div>
         </div>
@@ -93,10 +86,13 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
     );
   };
 
-  const renderSection = (label: string, sectionModels: ModelConfig[]) => {
+  const renderSection = (label: string, sectionModels: ModelConfig[], showSeparatorBefore: boolean) => {
     if (sectionModels.length === 0) return null;
     return (
       <div key={label}>
+        {showSeparatorBefore && (
+          <Separator className="my-1" style={{ backgroundColor: 'var(--border-300)' }} />
+        )}
         <div className="px-3 pt-2 pb-1">
           <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
             {label}
@@ -108,48 +104,40 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
   };
 
   return (
-    <div className="relative inline-block text-left" ref={ref}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm font-medium transition-all duration-150"
-        style={{ color: 'var(--text-100)' }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-      >
-        {(() => {
-          const Icon = getModelIcon(selectedConfig);
-          return (
-            <span className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center" style={{ color: 'var(--neon-color)' }}>
-              <Icon size={14} />
-            </span>
-          );
-        })()}
-        <span>
-          {selectedConfig.name}
-        </span>
-        <ChevronDown
-          size={14}
-          className={`transition-all duration-200 ${isOpen ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--text-500)' }}
-        />
-      </button>
-
-      {isOpen && (
-        <div
-          className="absolute left-0 top-full mt-2 w-72 rounded-xl z-50 overflow-hidden py-1 animate-dropdown-in"
-          style={{
-            backgroundColor: 'var(--bg-200)',
-            border: '1px solid var(--border-300)',
-            boxShadow: isDark ? '0 20px 60px -15px rgba(0,0,0,0.8)' : '0 20px 60px -15px rgba(0,0,0,0.15)',
-            maxHeight: 'calc(4 * 40px + 2 * 32px + 8px)',
-            overflowY: 'auto',
-          }}
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-1.5 px-2 py-1 h-auto rounded-lg text-sm font-medium"
+          style={{ color: 'var(--text-100)' }}
         >
-          {renderSection('Token Plan', tokenPlanModels)}
-          {renderSection('API Key', apiKeyModels)}
-        </div>
-      )}
-    </div>
+          <span className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center" style={{ color: 'var(--neon-color)' }}>
+            {(() => {
+              const Icon = getModelIcon(selectedConfig);
+              return <Icon size={14} />;
+            })()}
+          </span>
+          <span>{selectedConfig.name}</span>
+          <ChevronDown size={14} style={{ color: 'var(--text-500)' }} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-72 p-1 overflow-hidden"
+        style={{
+          backgroundColor: 'var(--bg-200)',
+          border: '1px solid var(--border-300)',
+          boxShadow: isDark ? '0 20px 60px -15px rgba(0,0,0,0.8)' : '0 20px 60px -15px rgba(0,0,0,0.15)',
+          maxHeight: 'calc(4 * 40px + 2 * 32px + 8px)',
+          overflowY: 'auto',
+        }}
+      >
+        {renderSection('Token Plan', tokenPlanModels, false)}
+        {renderSection('API Key', apiKeyModels, tokenPlanModels.length > 0)}
+      </PopoverContent>
+    </Popover>
   );
 };
 

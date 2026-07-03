@@ -47,14 +47,34 @@ export interface ChatSession {
   updatedAt: number;
   dbConversationId?: number; // Database conversation ID
   modelId?: number; // Database model ID
-  type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch';
+  type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'library';
 }
 
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
 
-export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'stitch';
+export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'library';
 
-export type Mode = 'selector' | 'chat' | 'experiments';
+export type Mode = 'selector' | 'chat' | 'experiments' | 'library';
+
+export interface LibraryComponent {
+  id: string;
+  name: string;
+  category: 'ui-widget' | 'template' | 'snippet' | 'pattern' | 'hook' | 'util' | 'agent-tool';
+  contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  description: string;
+  tags: string[];
+  content: string;
+  metadata?: Record<string, any>;
+  thumbnail?: string;
+  isGlobal: boolean;
+  agentAccessible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibraryComponentWithScore extends LibraryComponent {
+  score: number;
+}
 
 export function getModelType(modelId: string): ModelType {
   if (modelId.includes('tts-voicedesign')) return 'tts-voicedesign';
@@ -117,7 +137,6 @@ export interface StitchProject {
   description?: string;
   projectType: StitchProjectType;
   boards: StitchBoard[];
-  images?: StitchImageRef[];
   theme?: import('./types/stitchSpec').StitchTheme;
   fullDesignSpec?: import('./types/stitchSpec').StitchDesignSpec;
   createdAt: number;

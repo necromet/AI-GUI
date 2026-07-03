@@ -4,8 +4,8 @@ import { getEmbedding, cosineSimilarity } from './embeddingService';
 export interface StitchComponent {
   id: string;
   name: string;
-  category: 'section' | 'component' | 'icon' | 'svg' | 'template' | 'widget';
-  contentType: 'html' | 'svg' | 'json' | 'js';
+  category: 'section' | 'component' | 'icon' | 'svg' | 'template' | 'widget' | 'image' | 'palette' | 'layout';
+  contentType: 'html' | 'svg' | 'json' | 'js' | 'image-url' | 'image-base64' | 'colors';
   projectType: 'website' | 'ig-carousel' | 'ig-story' | 'all';
   description: string;
   tags: string[];

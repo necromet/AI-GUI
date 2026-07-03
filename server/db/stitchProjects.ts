@@ -29,7 +29,6 @@ export function saveStitchProject(project: {
   description?: string;
   project_type?: string;
   boards_json: string;
-  images_json?: string | null;
   theme_json?: string | null;
   full_design_spec_json?: string | null;
   created_at: string;
@@ -38,13 +37,13 @@ export function saveStitchProject(project: {
   const db = getDatabase();
   db.prepare(
     `INSERT INTO stitch_projects (id, title, description, project_type, boards_json, images_json, theme_json, full_design_spec_json, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        title = excluded.title,
        description = excluded.description,
        project_type = excluded.project_type,
        boards_json = excluded.boards_json,
-       images_json = excluded.images_json,
+       images_json = NULL,
        theme_json = excluded.theme_json,
        full_design_spec_json = excluded.full_design_spec_json,
        updated_at = excluded.updated_at`
@@ -54,7 +53,6 @@ export function saveStitchProject(project: {
     project.description || null,
     project.project_type || 'website',
     project.boards_json,
-    project.images_json || null,
     project.theme_json || null,
     project.full_design_spec_json || null,
     project.created_at,

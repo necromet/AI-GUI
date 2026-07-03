@@ -211,7 +211,6 @@ export const saveStitchProject = async (project: {
   description?: string;
   projectType?: string;
   boards: any[];
-  images?: any[];
   theme?: any;
   fullDesignSpec?: any;
   createdAt: number;
@@ -224,7 +223,6 @@ export const saveStitchProject = async (project: {
       description: project.description,
       project_type: project.projectType || 'website',
       boards_json: JSON.stringify(project.boards),
-      images_json: project.images ? JSON.stringify(project.images) : null,
       theme_json: project.theme ? JSON.stringify(project.theme) : null,
       full_design_spec_json: project.fullDesignSpec ? JSON.stringify(project.fullDesignSpec) : null,
       created_at: new Date(project.createdAt).toISOString(),

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -9,6 +8,11 @@ import { Role, Message } from '../types';
 import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, Globe, ChevronDown, ExternalLink, Search, Paperclip, Eye, Code } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 
 const catppuccinLatte: Record<string, React.CSSProperties> = {
   'code[class*="language-"]': {
@@ -303,60 +307,34 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                 </div>
               )}
 
-              {selectedAttachment && createPortal(
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200"
-                  style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
-                  onClick={closeAttachment}
-                >
-                  <button
-                    onClick={closeAttachment}
-                    className="absolute top-4 right-4 z-50 p-2 rounded-full transition-all duration-200 hover:scale-110"
-                    style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      color: 'white',
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                  <img
-                    src={selectedAttachment}
-                    alt="Full size preview"
-                    className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg"
-                    style={{ border: '1px solid var(--border-300)' }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>,
-                document.body
-              )}
+              <Dialog open={!!selectedAttachment} onOpenChange={(open) => !open && closeAttachment()}>
+                <DialogContent className="max-w-[90vw] md:max-w-[800px] p-0 border-none bg-transparent shadow-none">
+                  <DialogTitle className="sr-only">Image Preview</DialogTitle>
+                  <img src={selectedAttachment ?? undefined} alt="Full size preview" className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg" style={{ border: '1px solid var(--border-300)' }} />
+                </DialogContent>
+              </Dialog>
 
               <div className="prose dark:prose-invert max-w-none leading-8 break-words [&>p]:mb-4 [&>ul]:my-4 [&>ul]:space-y-2 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:pl-0 [&>ol]:my-4 [&>ol]:space-y-2 [&>ol]:list-decimal [&>ol]:ml-10 [&>ol]:pl-0 [&>ul>li]:mb-2 [&>ul>li]:list-item [&>ul>li]:ml-0 [&>ol>li]:mb-2 [&>ol>li]:list-item [&>ol>li]:ml-0 [&>li>ul]:list-disc [&>li>ul]:ml-6 [&>li>ul]:mt-2 [&>li>ul]:pl-0 [&>li>ul>li]:list-item [&>li>ul>li]:ml-0 [&>li>ol]:list-decimal [&>li>ol]:ml-10 [&>li>ol]:mt-2 [&>li>ol]:pl-0 [&>li>ol>li]:list-item [&>li>ol>li]:ml-0 [&>pre]:my-4 [&>blockquote]:my-4 [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-xl [&>h3]:font-medium [&>h3]:mb-3 [&>h3]:mt-4 [&>table]:my-4 [&>table]:border-collapse [&>table]:w-full [&>table]:text-sm [&>thead]:bg-white/[0.03] [&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-semibold [&>th]:text-xs [&>th]:uppercase [&>th]:tracking-wider [&>td]:px-4 [&>td]:py-3 [&>tr]:border-b [&>tr]:border-white/[0.04]" style={{ color: 'var(--text-100)' }}>
-              {/* Collapsible reasoning section */}
               {message.thinkingContent && !message.isThinking && (
-                <div className="mb-4">
-                  <button
-                    onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
-                    className="flex items-center gap-2 text-sm font-medium transition-colors w-full text-left"
-                    style={{ color: 'var(--text-500)' }}
-                  >
-                    <svg
-                      className={`w-3 h-3 transition-transform duration-200 ${isThinkingExpanded ? 'rotate-90' : ''}`}
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>Reasoning</span>
-                  </button>
-                  {isThinkingExpanded && (
+                <Collapsible open={isThinkingExpanded} onOpenChange={setIsThinkingExpanded} className="mb-4">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="flex items-center gap-2 text-sm font-medium w-full justify-start" style={{ color: 'var(--text-500)' }}>
+                      <svg
+                        className={`w-3 h-3 transition-transform duration-200 ${isThinkingExpanded ? 'rotate-90' : ''}`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span>Reasoning</span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
                     <div className="mt-2 prose dark:prose-invert max-w-none leading-7 text-base italic opacity-60 pl-4" style={{ borderLeft: '2px solid var(--border-200)' }}>
                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, [rehypeKatex, { output: 'mathml' }]]}>{message.thinkingContent}</ReactMarkdown>
                     </div>
-                  )}
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
 
               <ReactMarkdown
@@ -388,14 +366,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
                           <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--bg-200)' }}>
                             <span className="text-xs font-mono font-medium" style={{ color: 'var(--text-500)' }}>Path</span>
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleCopyCode(codeString, 'path')}
-                              className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded transition-all duration-200"
-                              style={{ color: 'var(--text-500)' }}
                               title="Copy path"
                             >
                               {copiedCode === 'path' ? <Check size={12} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={12} />}
-                            </button>
+                            </Button>
                           </div>
                           <div className="px-4 py-3" style={{ background: 'var(--bg-100)' }}>
                             {lines.map((line: string, i: number) => (
@@ -434,9 +412,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                     const isCopied = copiedCode === language || (!language && copiedCode === 'text');
 
                     const headerBg = isDark ? 'bg-[#1a1a1a]/95' : 'bg-[#dce0e8]/95';
-                    const headerBtnClass = isDark
-                      ? 'text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.08]'
-                      : 'text-gray-500 hover:text-gray-900 bg-black/[0.04] hover:bg-black/[0.08] border-black/[0.04] hover:border-black/[0.08]';
                     const blockBg = isDark ? '#1e1e2e' : '#eff1f5';
                     const codeTheme = isDark ? catppuccinMocha : catppuccinLatte;
                     const displayLanguage = language || 'text';
@@ -452,16 +427,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                           <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
                             <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>html</span>
                             <div className="flex items-center gap-2">
-                              <button
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={togglePreview}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                               >
                                 {showPreview ? <Code size={13} /> : <Eye size={13} />}
                                 <span>{showPreview ? 'Source' : 'Preview'}</span>
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleCopyCode(codeString, 'html')}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                                 title="Copy code"
                               >
                                 {copiedCode === 'html' ? (
@@ -475,7 +452,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                     <span>Copy</span>
                                   </>
                                 )}
-                              </button>
+                              </Button>
                             </div>
                           </div>
                           {showPreview ? (
@@ -518,9 +495,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                             <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               {language}
                             </span>
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleCopyCode(codeString, language)}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                               title="Copy code"
                             >
                               {isCopied ? (
@@ -534,7 +512,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                   <span>Copy</span>
                                 </>
                               )}
-                            </button>
+                            </Button>
                           </div>
                           <SyntaxHighlighter
                             language={language}
@@ -567,9 +545,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                             <span className="text-sm font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
                               text
                             </span>
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleCopyCode(codeString, 'text')}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium border rounded-lg transition-all duration-200 ${headerBtnClass}`}
                               title="Copy code"
                             >
                               {isCopied ? (
@@ -583,7 +562,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                   <span>Copy</span>
                                 </>
                               )}
-                            </button>
+                            </Button>
                           </div>
                           <pre
                             style={{
@@ -759,16 +738,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {citations
                             .map((annotation, idx) => (
-                              <a
+                              <Card
                                 key={idx}
-                                href={annotation.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="group flex items-start gap-3.5 px-4 py-3.5 rounded-xl transition-all duration-300 hover:-translate-y-0.5 no-underline"
+                                className="group flex items-start gap-3.5 px-4 py-3.5 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
                                 style={{
-                                  border: '1px solid var(--border-300)',
                                   background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
                                 }}
+                                onClick={() => window.open(annotation.url, '_blank', 'noopener,noreferrer')}
                                 onMouseEnter={(e) => {
                                   e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.15)';
                                   e.currentTarget.style.background = 'var(--surface-hover)';
@@ -813,7 +789,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                                   )}
                                 </div>
                                 <ExternalLink size={13} className="flex-shrink-0 mt-1 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" style={{ color: 'var(--text-500)' }} />
-                              </a>
+                              </Card>
                             ))}
                         </div>
                       )}
@@ -840,46 +816,42 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                   )}
                   {/* Action buttons */}
                   <div className="flex items-center gap-1 mt-3 pb-2 mb-2 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-all duration-300">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={handleCopyMessage}
-                      className="p-1.5 rounded-lg transition-all duration-200"
                       style={{ color: copiedMessage ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title={copiedMessage ? "Copied!" : "Copy message"}
-                      onMouseEnter={(e) => { if (!copiedMessage) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       {copiedMessage ? <Check size={15} /> : <Copy size={15} />}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleFeedback('good')}
-                      className="p-1.5 rounded-lg transition-all duration-200"
                       style={{ color: feedback === 'good' ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title="Good response"
-                      onMouseEnter={(e) => { if (!feedback) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <ThumbsUp size={15} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleFeedback('bad')}
-                      className="p-1.5 rounded-lg transition-all duration-200"
                       style={{ color: feedback === 'bad' ? 'var(--neon-color)' : 'var(--text-500)' }}
                       title="Bad response"
-                      onMouseEnter={(e) => { if (!feedback) e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <ThumbsDown size={15} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => onRegenerate?.(message.id)}
-                      className="p-1.5 rounded-lg transition-all duration-200"
                       style={{ color: 'var(--text-500)' }}
                       title="Regenerate response"
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <RefreshCw size={15} />
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}

@@ -2,6 +2,7 @@ import { runInNewContext } from 'vm';
 import * as cheerio from 'cheerio';
 import { chatCompletion, streamChatCompletion, readSSEStream, ChatMessage } from './mimoService';
 import { buildSpecSystemPrompt, buildSpecEditSystemPrompt } from './stitchSpecPrompt';
+import * as libraryService from './libraryService';
 
 export async function analyzeImages(images: any[], model?: string, provider?: string): Promise<string> {
   if (!images || images.length === 0) return '';
@@ -133,6 +134,14 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       edits: { type: 'array', description: 'Array of { "path": "json.path", "value": new_value } edits. Example: [{"path": "slides[0].elements[0].text", "value": "New Title"}]' },
     },
   },
+  {
+    name: 'search_library',
+    description: 'Search the component library for reusable components, templates, snippets, patterns, and agent tools. Returns matching components with their content.',
+    parameters: {
+      query: { type: 'string', description: 'Natural language search query' },
+      category: { type: 'string', description: 'Optional category filter: ui-widget, template, snippet, pattern, hook, util, agent-tool' },
+    },
+  },
 ];
 
 export function buildToolSystemPrompt(tools: string[]): string {
@@ -257,6 +266,26 @@ export async function executeTool(call: ToolCall, context?: Record<string, any>,
             context?.provider,
             onProgress,
           );
+        }
+        break;
+      }
+      case 'search_library': {
+        const query = call.arguments.query || call.arguments.description || '';
+        const category = call.arguments.category;
+        if (!query) {
+          result.output = 'Error: No search query provided.';
+          result.error = 'No query';
+        } else {
+          const results = await libraryService.searchComponents(query, 5);
+          const filtered = category ? results.filter(r => r.category === category) : results;
+          if (filtered.length === 0) {
+            result.output = `No components found in the library for "${query}".`;
+          } else {
+            const summary = filtered.map(r =>
+              `[${r.name}] (${r.category}, ${r.contentType}) — ${r.description}\nRelevance: ${(r.score * 100).toFixed(0)}%\nContent preview: ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`
+            ).join('\n\n');
+            result.output = `Found ${filtered.length} matching component(s):\n\n${summary}`;
+          }
         }
         break;
       }

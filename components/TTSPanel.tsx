@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Loader2 } from 'lucide-react';
 import { generateSpeech, BUILT_IN_VOICES } from '../services/apiService';
 import { ModelConfig } from '../types';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 interface TTSPanelProps {
   onNotification: (msg: string, type: 'success' | 'error') => void;
@@ -62,41 +67,42 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
 
       <div className="flex flex-col gap-4">
         <div>
-          <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Text to synthesize</label>
-          <textarea
+          <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Text to synthesize</Label>
+          <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to synthesize..."
             rows={5}
-            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none outline-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
+            className="w-full bg-gray-50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-4 py-3 resize-none rounded-xl text-sm transition-all duration-200 focus:bg-gray-100 dark:focus:bg-white/[0.04] border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
           />
         </div>
 
         <div className="flex gap-4">
           <div className="flex-1">
-            <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Voice</label>
-            <select
-              value={voice}
-              onChange={(e) => setVoice(e.target.value)}
-              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
-            >
-              {BUILT_IN_VOICES.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+            <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Voice</Label>
+            <Select value={voice} onValueChange={setVoice}>
+              <SelectTrigger className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl transition-all duration-200 border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12">
+                <SelectValue placeholder="Select voice" />
+              </SelectTrigger>
+              <SelectContent>
+                {BUILT_IN_VOICES.map((v) => (
+                  <SelectItem key={v} value={v}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex-1">
-            <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Style (optional)</label>
-            <input
+            <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Style (optional)</Label>
+            <Input
               value={style}
               onChange={(e) => setStyle(e.target.value)}
               placeholder="e.g. Cheerful, slow"
-              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 border border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
+              className="w-full bg-gray-50 dark:bg-white/[0.03] text-gray-900 dark:text-gray-200 text-sm px-4 py-3 rounded-xl transition-all duration-200 border-gray-200 dark:border-white/[0.04] focus:border-gray-300 dark:focus:border-white/12"
             />
           </div>
         </div>
 
-        <button
+        <Button
           onClick={handleGenerate}
           disabled={!canGenerate || isGenerating}
           className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -117,11 +123,11 @@ const TTSPanel: React.FC<TTSPanelProps> = ({ onNotification, theme = 'dark', mod
               Generate Speech
             </>
           )}
-        </button>
+        </Button>
 
         {audioUrl && (
           <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Output</label>
+            <Label className="block text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Output</Label>
             <audio ref={audioRef} src={audioUrl} controls className="w-full rounded-xl" />
           </div>
         )}

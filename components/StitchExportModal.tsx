@@ -1,8 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { X, Download, Image, FileText, Loader2, Check } from 'lucide-react';
+import { Download, Image, FileText, Loader2, Check } from 'lucide-react';
 import { toPng, toJpeg } from 'html-to-image';
 import { StitchProject, StitchBoard } from '../types';
 import { getLayoutDimensions } from '../services/stitchService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 interface StitchExportModalProps {
   project: StitchProject;
@@ -14,6 +17,7 @@ interface StitchExportModalProps {
 const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, onClose, onNotification }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
   const [exported, setExported] = useState(false);
 
   const isIgContent = project.projectType === 'ig-carousel' || project.projectType === 'ig-story';
@@ -96,11 +100,13 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
     if (!board.generatedHtml) return;
     setIsExporting(true);
     setExportProgress(`Exporting slide ${idx + 1}...`);
+    setProgressPercent(50);
 
     const blob = await renderHtmlToImage(board.generatedHtml, board, format);
     if (blob) {
       const safeName = project.title.replace(/\s+/g, '-').toLowerCase();
       downloadBlob(blob, `${safeName}-slide-${idx + 1}.${format}`);
+      setProgressPercent(100);
       onNotification?.('Export complete', 'success');
     } else {
       onNotification?.('Export failed', 'error');
@@ -108,12 +114,14 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
 
     setIsExporting(false);
     setExportProgress('');
+    setProgressPercent(0);
   };
 
   const handleExportAll = async (format: 'png' | 'jpeg') => {
     if (boardsWithHtml.length === 0) return;
     setIsExporting(true);
     setExported(false);
+    setProgressPercent(0);
 
     const safeName = project.title.replace(/\s+/g, '-').toLowerCase();
     let successCount = 0;
@@ -123,6 +131,7 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
       if (!b.generatedHtml) continue;
 
       setExportProgress(`Exporting slide ${i + 1} of ${project.boards.length}...`);
+      setProgressPercent(Math.round(((i + 1) / project.boards.length) * 100));
       const blob = await renderHtmlToImage(b.generatedHtml, b, format);
       if (blob) {
         downloadBlob(blob, `${safeName}-slide-${i + 1}.${format}`);
@@ -133,6 +142,7 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
 
     setIsExporting(false);
     setExportProgress('');
+    setProgressPercent(0);
     setExported(true);
     setTimeout(() => setExported(false), 3000);
 
@@ -157,56 +167,46 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
     onNotification?.('HTML exported', 'success');
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-      <div
-        className="rounded-2xl border w-full max-w-md mx-4 animate-fade-in"
-        style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border-300)' }}>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md" style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>
             Export {isIgContent ? 'for Instagram' : 'HTML'}
-          </h3>
-          <button onClick={onClose} className="p-1 rounded-lg transition-colors" style={{ color: 'var(--text-500)' }}>
-            <X size={16} />
-          </button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
-        {/* Content */}
-        <div className="px-5 py-4 space-y-4">
+        <div className="space-y-4">
           {isIgContent ? (
             <>
-              {/* Image format export */}
               <div>
                 <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-300)' }}>
                   Export as Images
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => handleExportAll('png')}
                     disabled={isExporting || boardsWithHtml.length === 0}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium transition-all disabled:opacity-30"
+                    className="gap-2 rounded-xl text-xs font-medium"
                     style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}
                   >
                     <Image size={14} />
                     All as PNG
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => handleExportAll('jpeg')}
                     disabled={isExporting || boardsWithHtml.length === 0}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium transition-all disabled:opacity-30"
+                    className="gap-2 rounded-xl text-xs font-medium"
                     style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)', border: '1px solid var(--border-300)' }}
                   >
                     <Image size={14} />
                     All as JPEG
-                  </button>
+                  </Button>
                 </div>
               </div>
 
-              {/* Individual slide export */}
               {project.boards.length > 1 && (
                 <div>
                   <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-300)' }}>
@@ -224,22 +224,26 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
                           {!b.generatedHtml && ' (empty)'}
                         </span>
                         <div className="flex gap-1">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleExportSingle(b, idx, 'png')}
                             disabled={!b.generatedHtml || isExporting}
-                            className="px-2 py-1 rounded text-[10px] font-medium transition-all disabled:opacity-20"
+                            className="px-2 py-1 rounded text-[10px] font-medium h-auto"
                             style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
                           >
                             PNG
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleExportSingle(b, idx, 'jpeg')}
                             disabled={!b.generatedHtml || isExporting}
-                            className="px-2 py-1 rounded text-[10px] font-medium transition-all disabled:opacity-20"
+                            className="px-2 py-1 rounded text-[10px] font-medium h-auto"
                             style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
                           >
                             JPEG
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -249,27 +253,29 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
             </>
           ) : null}
 
-          {/* HTML export (always available) */}
           <div>
             <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-300)' }}>
               Export as HTML
             </p>
-            <button
+            <Button
+              variant="outline"
               onClick={handleExportHtml}
               disabled={boardsWithHtml.length === 0}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium transition-all disabled:opacity-30"
+              className="w-full gap-2 rounded-xl text-xs font-medium"
               style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)', border: '1px solid var(--border-300)' }}
             >
               <FileText size={14} />
               Download HTML{project.boards.filter(b => b.generatedHtml).length > 1 ? ' (all slides)' : ''}
-            </button>
+            </Button>
           </div>
 
-          {/* Progress / status */}
           {isExporting && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-100)' }}>
-              <Loader2 size={12} className="animate-spin" style={{ color: 'var(--neon-color)' }} />
-              <span className="text-[11px]" style={{ color: 'var(--text-300)' }}>{exportProgress}</span>
+            <div className="space-y-2">
+              <Progress value={progressPercent} className="h-2" />
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-100)' }}>
+                <Loader2 size={12} className="animate-spin" style={{ color: 'var(--neon-color)' }} />
+                <span className="text-[11px]" style={{ color: 'var(--text-300)' }}>{exportProgress}</span>
+              </div>
             </div>
           )}
           {exported && (
@@ -279,8 +285,8 @@ const StitchExportModal: React.FC<StitchExportModalProps> = ({ project, isOpen, 
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

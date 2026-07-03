@@ -101,6 +101,31 @@ CREATE TABLE IF NOT EXISTS stitch_component_embeddings (
   embedding TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sce_component ON stitch_component_embeddings(component_id);
+
+-- General-purpose component library
+CREATE TABLE IF NOT EXISTS library_components (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  description TEXT,
+  tags TEXT,
+  content TEXT NOT NULL,
+  metadata TEXT,
+  thumbnail TEXT,
+  is_global INTEGER NOT NULL DEFAULT 1,
+  agent_accessible INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS library_embeddings (
+  id TEXT PRIMARY KEY,
+  component_id TEXT NOT NULL REFERENCES library_components(id) ON DELETE CASCADE,
+  chunk_text TEXT NOT NULL,
+  embedding TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_le_component ON library_embeddings(component_id);
 `;
 
 export const SEED_SQL = `

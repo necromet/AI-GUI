@@ -1,7 +1,12 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, User, BarChart3, Sun, Moon, Database, Puzzle, Home, FlaskConical, Layers } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package } from 'lucide-react';
 import { ChatSession, Mode, ConversationType } from '../types';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -35,7 +40,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const isChatMode = location.pathname.startsWith('/chat');
-  const currentMode: Mode = isChatMode ? 'chat' : 'experiments';
+  const isLibraryMode = location.pathname.startsWith('/library');
+  const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : 'experiments';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
@@ -54,10 +60,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   const lastWeekConvos = conversations.filter(c => c.updatedAt >= lastWeek.getTime() && c.updatedAt < yesterday.getTime());
   const olderConvos = conversations.filter(c => c.updatedAt < lastWeek.getTime());
 
-  const itemStyle = (isActive: boolean): React.CSSProperties => ({
-    backgroundColor: isActive ? 'var(--bg-300)' : 'transparent',
-    color: isActive ? 'var(--text-100)' : 'var(--text-500)',
-  });
+  const itemClassName = (isActive: boolean) =>
+    `w-full text-left flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-all duration-150 truncate ${
+      isActive
+        ? 'bg-[var(--bg-300)] text-[var(--text-100)]'
+        : 'text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)]'
+    }`;
+
+  const sidebarItemClassName =
+    'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)] transition-all duration-150';
 
   const renderConversation = (conv: ChatSession) => {
     const isActive = conv.dbConversationId === currentConversationId;
@@ -65,36 +76,22 @@ const Sidebar: React.FC<SidebarProps> = ({
       <li key={conv.id}>
         <div
           onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-          className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate group cursor-pointer relative"
-          style={itemStyle(isActive)}
-          onMouseEnter={(e) => {
-            if (!isActive) {
-              e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-              e.currentTarget.style.color = 'var(--text-100)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isActive) {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = 'var(--text-500)';
-            }
-          }}
+          className={`${itemClassName(isActive)} group cursor-pointer relative`}
         >
           <span className="truncate flex-1">
             {conv.title}
           </span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={(e) => {
               e.stopPropagation();
               conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-red-500/10 transition-all duration-150"
-            style={{ color: 'var(--text-500)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#f87171'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-500)'; }}
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-[var(--text-500)] hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
           >
             <Trash2 size={13} />
-          </button>
+          </Button>
         </div>
       </li>
     );
@@ -102,22 +99,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const sectionLabel = (text: string) => (
     <div className="px-3 pt-4 pb-2">
-      <span className="text-xs font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--text-500)' }}>
+      <span className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-500)]">
         {text}
       </span>
     </div>
   );
 
   const modeBadge = (
-    <span
-      className="text-xs font-medium px-2 py-0.5 rounded-full"
+    <Badge
+      variant="outline"
+      className="text-xs font-medium border-0 px-2 py-0.5"
       style={{
         backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
         color: 'var(--neon-color)',
       }}
     >
-      {currentMode === 'chat' ? 'Chat' : 'Lab'}
-    </span>
+      {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : 'Lab'}
+    </Badge>
   );
 
   return (
@@ -138,19 +136,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Header: Logo + Mode Badge + Close */}
         <div className="relative flex w-full items-center p-2 pt-2">
           <div className="flex items-center gap-2 pl-2 h-8">
-            <span className="font-semibold text-sm" style={{ color: 'var(--text-100)' }}>edward:labs</span>
+            <span className="font-semibold text-sm text-[var(--text-100)]">edward:labs</span>
             {modeBadge}
           </div>
           <div className="absolute flex items-center gap-1 right-3 top-2">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onToggle}
-              className="p-2 rounded-lg transition-all duration-150"
-              style={{ color: 'var(--text-500)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
+              className="h-8 w-8 text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)]"
             >
               <PanelLeftClose size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -161,70 +158,34 @@ const Sidebar: React.FC<SidebarProps> = ({
               {sectionLabel('Tools')}
               <ul className="space-y-0.5">
                 <li>
-                  <div
+                  <Button
+                    variant="ghost"
+                    className={itemClassName(activeView === 'rag')}
                     onClick={() => navigate('/experiments/rag')}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                    style={itemStyle(activeView === 'rag')}
-                    onMouseEnter={(e) => {
-                      if (activeView !== 'rag') {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                        e.currentTarget.style.color = 'var(--text-100)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeView !== 'rag') {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-500)';
-                      }
-                    }}
                   >
-                    <Database size={16} style={{ color: activeView === 'rag' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <Database size={16} className={activeView === 'rag' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
                     <span className="truncate">RAG</span>
-                  </div>
+                  </Button>
                 </li>
                 <li>
-                  <div
+                  <Button
+                    variant="ghost"
+                    className={itemClassName(activeView === 'plugin-agent')}
                     onClick={() => navigate('/experiments/plugin-agent')}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                    style={itemStyle(activeView === 'plugin-agent')}
-                    onMouseEnter={(e) => {
-                      if (activeView !== 'plugin-agent') {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                        e.currentTarget.style.color = 'var(--text-100)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeView !== 'plugin-agent') {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-500)';
-                      }
-                    }}
                   >
-                    <Puzzle size={16} style={{ color: activeView === 'plugin-agent' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <Puzzle size={16} className={activeView === 'plugin-agent' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
                     <span className="truncate">Plug-in Agent</span>
-                  </div>
+                  </Button>
                 </li>
                 <li>
-                  <div
+                  <Button
+                    variant="ghost"
+                    className={itemClassName(activeView === 'stitch')}
                     onClick={() => navigate('/experiments/stitch')}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 truncate cursor-pointer"
-                    style={itemStyle(activeView === 'stitch')}
-                    onMouseEnter={(e) => {
-                      if (activeView !== 'stitch') {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                        e.currentTarget.style.color = 'var(--text-100)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeView !== 'stitch') {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-500)';
-                      }
-                    }}
                   >
-                    <Layers size={16} style={{ color: activeView === 'stitch' ? 'var(--text-100)' : 'var(--text-500)' }} />
+                    <Layers size={16} className={activeView === 'stitch' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
                     <span className="truncate">Stitch</span>
-                  </div>
+                  </Button>
                 </li>
               </ul>
             </div>
@@ -233,24 +194,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             {activeView !== 'stitch' && (
               <>
                 <div className="px-2 pt-1">
-                  <button
+                  <Button
+                    variant="ghost"
+                    className={sidebarItemClassName}
                     onClick={onNewChat}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
-                    style={{ color: 'var(--text-100)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
                     <div
                       className="flex items-center justify-center rounded-full w-5 h-5 transition-all duration-200 group-hover:scale-110"
                       style={{ backgroundColor: 'var(--surface-hover)' }}
                     >
-                      <Plus size={14} style={{ color: 'var(--text-300)' }} />
+                      <Plus size={14} className="text-[var(--text-300)]" />
                     </div>
-                    <span className="font-medium">New chat</span>
-                  </button>
+                    <span>New chat</span>
+                  </Button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto scrollbar-hidden px-2 pt-2">
+                <ScrollArea className="flex-1 px-2 pt-2">
                   {todayConvos.length > 0 && (
                     <>
                       {sectionLabel('Today')}
@@ -288,41 +247,65 @@ const Sidebar: React.FC<SidebarProps> = ({
                   )}
 
                   {conversations.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-xs" style={{ color: 'var(--text-500)' }}>
+                    <div className="flex flex-col items-center justify-center py-8 text-xs text-[var(--text-500)]">
                       <p>No conversations yet</p>
                     </div>
                   )}
-                </div>
+                </ScrollArea>
               </>
             )}
+          </div>
+        ) : currentMode === 'library' ? (
+          /* Library mode: simple info sidebar */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-2 pt-2">
+              {sectionLabel('Library')}
+              <ul className="space-y-0.5">
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={itemClassName(true)}
+                    onClick={() => navigate('/library')}
+                  >
+                    <Package size={16} className="text-[var(--text-100)]" />
+                    <span className="truncate">All Components</span>
+                  </Button>
+                </li>
+              </ul>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+              <Package size={32} className="mb-3 text-[var(--text-500)]" />
+              <p className="text-xs font-medium mb-1 text-[var(--text-300)]">Component Library</p>
+              <p className="text-[10px] leading-relaxed text-[var(--text-500)]">
+                Browse, search, and manage reusable components. Use the AI agent to find or create components.
+              </p>
+            </div>
           </div>
         ) : (
           /* Chat mode: standard sidebar */
           <>
             {/* New Chat */}
             <div className="px-2 pt-1">
-              <button
+              <Button
+                variant="ghost"
+                className={sidebarItemClassName}
                 onClick={onNewChat}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
-                style={{ color: 'var(--text-100)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
                 <div
                   className="flex items-center justify-center rounded-full w-5 h-5 transition-all duration-200 group-hover:scale-110"
                   style={{ backgroundColor: 'var(--surface-hover)' }}
                 >
-                  <Plus size={14} style={{ color: 'var(--text-300)' }} />
+                  <Plus size={14} className="text-[var(--text-300)]" />
                 </div>
-                <span className="font-medium">New chat</span>
-                <span className="ml-auto text-xs opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: 'var(--text-500)' }}>
+                <span>New chat</span>
+                <span className="ml-auto text-xs opacity-0 group-hover:opacity-60 transition-opacity text-[var(--text-500)]">
                   Ctrl+⇧+O
                 </span>
-              </button>
+              </Button>
             </div>
 
             {/* Conversation History */}
-            <div className="flex-1 overflow-y-auto scrollbar-hidden px-2 pt-2">
+            <ScrollArea className="flex-1 px-2 pt-2">
               {todayConvos.length > 0 && (
                 <>
                   {sectionLabel('Today')}
@@ -360,78 +343,70 @@ const Sidebar: React.FC<SidebarProps> = ({
               )}
 
               {conversations.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-xs" style={{ color: 'var(--text-500)' }}>
+                <div className="flex flex-col items-center justify-center h-full text-xs text-[var(--text-500)]">
                   <p>No conversations yet</p>
                 </div>
               )}
-            </div>
+            </ScrollArea>
           </>
         )}
 
         {/* Footer */}
-        <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid var(--border-300)' }}>
-          <button
+        <div className="p-2 space-y-0.5">
+          <Separator className="mx-1 my-1 bg-[var(--border-300)]" />
+
+          <Button
+            variant="ghost"
+            className={sidebarItemClassName}
             onClick={() => navigate('/')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
-            style={{ color: 'var(--text-500)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
           >
             <Home size={16} />
-            <span className="font-medium">Back to selector</span>
-          </button>
+            <span>Back to selector</span>
+          </Button>
 
           {onOpenTokenStats && (
-            <button
+            <Button
+              variant="ghost"
+              className={sidebarItemClassName}
               onClick={onOpenTokenStats}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
-              style={{ color: 'var(--text-500)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
             >
               <BarChart3 size={16} />
-              <span className="font-medium">Token Stats</span>
-            </button>
+              <span>Token Stats</span>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant="ghost"
+            className={sidebarItemClassName}
             onClick={onOpenSettings}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
-            style={{ color: 'var(--text-500)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
           >
             <SettingsIcon size={16} />
-            <span className="font-medium">Settings</span>
-          </button>
+            <span>Settings</span>
+          </Button>
 
-          <button
+          <Button
+            variant="ghost"
+            className={sidebarItemClassName}
             onClick={onToggleTheme}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
-            style={{ color: 'var(--text-500)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            <span className="font-medium">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-          </button>
+            <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+          </Button>
 
-          <div className="mx-1 my-1" style={{ height: '1px', backgroundColor: 'var(--border-300)' }} />
+          <Separator className="mx-1 my-1 bg-[var(--border-300)]" />
 
           {/* User profile */}
-          <div
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-all duration-150"
-            style={{ color: 'var(--text-500)' }}
-          >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-              style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
-            >
-              E
-            </div>
+          <div className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback
+                className="text-sm font-bold bg-[var(--bg-300)] text-[var(--text-300)]"
+              >
+                E
+              </AvatarFallback>
+            </Avatar>
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="font-medium truncate" style={{ color: 'var(--text-100)' }}>Edward</span>
-              <span className="text-xs truncate" style={{ color: 'var(--text-500)' }}>
+              <span className="font-medium truncate text-[var(--text-100)]">Edward</span>
+              <span className="text-xs truncate text-[var(--text-500)]">
                 {currentModelName || 'MiMo V2.5'}
               </span>
             </div>

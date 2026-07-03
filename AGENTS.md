@@ -44,9 +44,13 @@ No lint, typecheck, test, or formatter scripts exist.
 
 ## Critical Quirks
 
-### Tailwind is CDN-only — no npm package
+### Tailwind CSS via npm + shadcn/ui
 
-`index.html` loads Tailwind via `<script src="https://cdn.tailwindcss.com">` with the full config inline. There is **no** `tailwindcss` npm package, no PostCSS config, no `tailwind.config.js`. All theme customization (colors, animations, fonts) lives in the `<script>` block in `index.html:12-78`. If you need to change Tailwind config, edit `index.html`.
+Tailwind CSS v4 is installed as an npm package (`tailwindcss` + `@tailwindcss/vite` plugin). The Vite plugin is configured in `vite.config.ts`. All Tailwind customization (theme, animations, CSS variables) lives in `src/globals.css` using the `@theme` directive. The `tailwindcss-animate` plugin provides shadcn/ui animation utilities.
+
+### shadcn/ui components
+
+All UI components follow the shadcn/ui pattern in `components/ui/`. There are 24 components: `avatar`, `badge`, `button`, `card`, `collapsible`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `sonner`, `switch`, `tabs`, `textarea`, `toggle`, `tooltip`, plus custom `code-editor-sheet`, `loader-2`, and `demo`. All use `cn()` from `lib/utils.ts`, `forwardRef`, and Radix UI primitives. Buttons have `cursor-pointer` by default.
 
 ### `Role.Assistant` = `'model'`, not `'assistant'`
 
@@ -90,7 +94,11 @@ Some keys use `edward:labs_` prefix (`edward:labs_fontSize`, `edward:labs_defaul
 - **Chat**: password `thelordismyshepherd` — session key `edward:labs_chat_session`
 - **Experiments**: password `ilacknothing` — session key `edward:labs_experiments_session`
 
-Both are checked in `components/ModeSelector.tsx` (InlinePasswordModal).
+Both are checked in `components/ModeSelector.tsx` (InlinePasswordModal, now using shadcn Dialog).
+
+### Notifications via sonner
+
+The app uses `sonner` for toast notifications (`toast.success()` / `toast.error()` from `sonner`). The `<Toaster />` component is rendered in `App.tsx`. The old custom `Notification` component file is kept but no longer used.
 
 ### Language detection
 

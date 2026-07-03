@@ -34,7 +34,7 @@ router.get('/projects/:id', (req: Request, res: Response) => {
 
 router.put('/projects/:id', (req: Request, res: Response) => {
   try {
-    const { title, description, project_type, boards_json, images_json, theme_json, full_design_spec_json, created_at, updated_at } = req.body;
+    const { title, description, project_type, boards_json, theme_json, full_design_spec_json, created_at, updated_at } = req.body;
     if (!title || boards_json === undefined) {
       res.status(400).json({ error: 'Missing required fields: title, boards_json' });
       return;
@@ -46,7 +46,6 @@ router.put('/projects/:id', (req: Request, res: Response) => {
       description,
       project_type: project_type || 'website',
       boards_json,
-      images_json: images_json || null,
       theme_json: theme_json || null,
       full_design_spec_json: full_design_spec_json || null,
       created_at: created_at || now,

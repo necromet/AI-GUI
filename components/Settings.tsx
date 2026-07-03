@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Moon, Sun, Plus, Trash2, Monitor, Cpu, Palette, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { Moon, Sun, Plus, Trash2, Monitor, Cpu, Palette, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 import { ModelConfig } from '../types';
 import { NEON_PRESETS, INDIVIDUAL_COLORS } from '../constants';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -56,7 +64,6 @@ const Settings: React.FC<SettingsProps> = ({
   const [newApiKey, setNewApiKey] = useState('');
   const [newProvider, setNewProvider] = useState('gemini');
   const [newMaxTokens, setNewMaxTokens] = useState('');
-  const [mounted, setMounted] = useState(false);
   const [showIndividualColors, setShowIndividualColors] = useState(false);
 
   useEffect(() => {
@@ -69,13 +76,8 @@ const Settings: React.FC<SettingsProps> = ({
       setNewProvider('gemini');
       setNewMaxTokens('');
       setMaxTokensInput(maxOutputTokens?.toString() || '');
-      requestAnimationFrame(() => setMounted(true));
-    } else {
-      setMounted(false);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handleSaveModel = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,62 +97,51 @@ const Settings: React.FC<SettingsProps> = ({
     setNewModelName(''); setNewModelId(''); setNewSystemPrompt(''); setNewApiKey(''); setNewProvider('gemini'); setNewMaxTokens('');
   };
 
-  const tabs: { id: Tab; label: string; icon: React.ComponentType<any> }[] = [
-    { id: 'general', label: 'General', icon: Monitor },
-    { id: 'models', label: 'Models', icon: Cpu },
-    { id: 'theme', label: 'Theme', icon: Palette },
-  ];
-
   const resetPassword = () => {
     sessionStorage.removeItem('edward:labs_session');
     window.location.reload();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
-      <div
-        className={`w-full max-w-2xl bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl flex flex-col overflow-hidden h-[600px] border border-gray-200 dark:border-white/[0.04] transition-all duration-300 ${mounted ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
-        style={{ boxShadow: '0 0 80px -20px rgba(var(--neon-rgb), 0.1), 0 25px 50px -12px rgba(0,0,0,0.5)' }}
-      >
-        {/* Top accent */}
-        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`, boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)` }} />
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl h-[600px] p-0 gap-0 overflow-hidden">
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px] z-10"
+          style={{
+            background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`,
+            boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)`
+          }}
+        />
 
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-white/[0.04]">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Settings</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-white/[0.06] rounded-xl transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        <DialogHeader className="p-5 pb-0">
+          <DialogTitle>Settings</DialogTitle>
+        </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-48 border-r border-gray-200 dark:border-white/[0.02] p-3 flex flex-col gap-1 bg-gray-50/50 dark:bg-transparent">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
-                style={{
-                  background: activeTab === id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                  color: activeTab === id ? 'var(--neon-color)' : undefined,
-                  border: activeTab === id ? '1px solid rgba(var(--neon-rgb), 0.08)' : '1px solid transparent',
-                }}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as Tab)}
+          className="flex flex-col flex-1 overflow-hidden"
+        >
+          <div className="px-5 pt-2">
+            <TabsList>
+              <TabsTrigger value="general" className="gap-2">
+                <Monitor size={14} />
+                General
+              </TabsTrigger>
+              <TabsTrigger value="models" className="gap-2">
+                <Cpu size={14} />
+                Models
+              </TabsTrigger>
+              <TabsTrigger value="theme" className="gap-2">
+                <Palette size={14} />
+                Theme
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            {/* General */}
-            {activeTab === 'general' && (
-              <div className="space-y-6 animate-fade-in">
+          <ScrollArea className="flex-1 overflow-hidden">
+            <div className="p-5">
+              <TabsContent value="general" className="mt-0 space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">Appearance</h3>
                   <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-white/[0.04] bg-gray-50 dark:bg-white/[0.02]">
@@ -161,43 +152,41 @@ const Settings: React.FC<SettingsProps> = ({
                         <Sun size={18} className="text-orange-500" />
                       )}
                       <div>
-                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Theme</div>
+                        <Label className="text-sm font-medium text-gray-800 dark:text-gray-200">Theme</Label>
                         <div className="text-xs text-gray-500">
                           {theme === 'dark' ? 'Neon Dark Mode' : 'Light Mode'}
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={onToggleTheme}
-                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
-                      style={{ backgroundColor: theme === 'dark' ? 'var(--neon-color)' : '#d1d5db' }}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-sm ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
+                    <Switch
+                      checked={theme === 'dark'}
+                      onCheckedChange={onToggleTheme}
+                    />
                   </div>
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Default Model</h3>
+                  <Label className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Default Model</Label>
                   <p className="text-xs text-gray-500 mb-3">Choose which model is selected when the app starts.</p>
-                  <select
-                    value={defaultModelId}
-                    onChange={(e) => onChangeDefaultModel(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white text-sm outline-none transition-all duration-200 focus:border-gray-300 dark:focus:border-white/12"
-                  >
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id} className="bg-white dark:bg-[#0a0a0a]">
-                        {model.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={defaultModelId} onValueChange={onChangeDefaultModel}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Output Token Limit</h3>
+                  <Label className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Output Token Limit</Label>
                   <p className="text-xs text-gray-500 mb-3">Limit the maximum number of tokens in AI responses. Leave empty for no limit.</p>
                   <div className="flex items-center gap-3">
-                    <input
+                    <Input
                       type="number"
                       value={maxTokensInput}
                       onChange={(e) => {
@@ -208,14 +197,14 @@ const Settings: React.FC<SettingsProps> = ({
                       placeholder="No limit"
                       min="1"
                       max="128000"
-                      className="w-48 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] rounded-xl px-3 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 outline-none text-sm transition-all duration-200 focus:border-gray-300 dark:focus:border-white/12"
+                      className="w-48"
                     />
                     <span className="text-xs text-gray-500">tokens</span>
                   </div>
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Font Size</h3>
+                  <Label className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Font Size</Label>
                   <p className="text-xs text-gray-500 mb-3">Adjust the font size across the application.</p>
                   <div className="flex items-center gap-2">
                     {[
@@ -225,24 +214,25 @@ const Settings: React.FC<SettingsProps> = ({
                       { id: 'lg', label: 'LG' },
                       { id: 'xl', label: 'XL' },
                     ].map((size) => (
-                      <button
+                      <Button
                         key={size.id}
+                        variant="outline"
+                        size="sm"
                         onClick={() => onChangeFontSize(size.id)}
-                        className="px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200"
                         style={{
-                          background: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                          borderColor: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.12)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.04)' : 'rgba(0,0,0,0.07)'),
+                          background: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.08)' : undefined,
+                          borderColor: fontSize === size.id ? 'rgba(var(--neon-rgb), 0.12)' : undefined,
                           color: fontSize === size.id ? 'var(--neon-color)' : undefined,
                         }}
                       >
                         {size.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Font Family</h3>
+                  <Label className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Font Family</Label>
                   <p className="text-xs text-gray-500 mb-3">Switch the app's font family. Preview each font below.</p>
                   <div className="grid grid-cols-1 gap-2">
                     {[
@@ -278,24 +268,22 @@ const Settings: React.FC<SettingsProps> = ({
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <Label className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider flex items-center gap-2">
                     <Shield size={14} />
                     Security
-                  </h3>
-                  <button
+                  </Label>
+                  <Button
+                    variant="outline"
                     onClick={resetPassword}
-                    className="px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-white/[0.06] text-gray-600 dark:text-gray-400 hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all duration-200"
+                    className="text-gray-600 dark:text-gray-400 hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5"
                   >
                     Lock Screen
-                  </button>
-                    <p className="text-xs text-gray-400 mt-2">You'll need to re-enter your password.</p>
+                  </Button>
+                  <p className="text-xs text-gray-400 mt-2">You'll need to re-enter your password.</p>
                 </section>
-              </div>
-            )}
+              </TabsContent>
 
-            {/* Models */}
-            {activeTab === 'models' && (
-              <div className="space-y-6 animate-fade-in">
+              <TabsContent value="models" className="mt-0 space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">Your Models</h3>
                   <div className="space-y-2">
@@ -326,23 +314,22 @@ const Settings: React.FC<SettingsProps> = ({
                           <div className="text-xs text-gray-500 font-mono mt-1">{model.id}</div>
                         </div>
                         {model.isCustom && (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => onDeleteModel(model.id)}
-                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100"
+                            className="text-gray-400 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <Trash2 size={14} />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     ))}
                   </div>
                 </section>
-              </div>
-            )}
+              </TabsContent>
 
-            {/* Theme */}
-            {activeTab === 'theme' && (
-              <div className="space-y-6 animate-fade-in">
+              <TabsContent value="theme" className="mt-0 space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 uppercase tracking-wider">Color Presets</h3>
                   <p className="text-xs text-gray-500 mb-4">Curated 3-color themes that adapt to dark and light mode. Colors auto-darken in light mode.</p>
@@ -445,12 +432,12 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                   )}
                 </section>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+              </TabsContent>
+            </div>
+          </ScrollArea>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 };
 

@@ -1,20 +1,21 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Wrench, Check, Undo2, Redo2, X, Copy, RefreshCw, Square, ArrowUp, ChevronLeft, Plus, Trash2, Package } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Square, ArrowUp, Plus, Package, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { StitchProject, StitchBoard, StitchLayout, StitchProjectType, StitchImageRef, ModelConfig } from '../types';
+import { StitchProject, StitchBoard, StitchLayout, StitchProjectType, ModelConfig } from '../types';
 import type { StitchDesignSpec, StitchSlideSpec } from '../types/stitchSpec';
 import { getLayoutDimensions } from '../lib/layoutUtils';
 import { renderSlide, renderAllSlides, validateDesignSpec } from '../services/stitchService';
 import { sendAgentMessage, ToolResult } from '../services/agentService';
 import * as db from '../services/apiDatabaseAdapter';
 import StitchPromptBar from './StitchPromptBar';
-import StitchImageManager from './StitchImageManager';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
 import { SquareLoader } from '@/components/ui/loader-2';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { StitchComponent } from '../types/stitchSpec';
 
 export interface StitchControls {
@@ -30,25 +31,28 @@ export interface StitchControls {
   onCopy: () => void;
   copied: boolean;
   hasLastPrompt: boolean;
+  onToggleLibrary: () => void;
+  isLibraryOpen: boolean;
 }
 
 interface StitchEditorProps {
   project: StitchProject;
   theme?: 'dark' | 'light';
   onNotification?: (msg: string, type: 'success' | 'error') => void;
-  onBack: () => void;
   onSave: (project: StitchProject) => void;
   modelConfig?: ModelConfig;
   models?: ModelConfig[];
   onControlsChange?: (controls: StitchControls | null) => void;
 }
 
-const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', onNotification, onBack, onSave, modelConfig, models, onControlsChange }) => {
+const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', onNotification, onSave, modelConfig, models, onControlsChange }) => {
   const [activeBoardIdx, setActiveBoardIdx] = useState(0);
   const board = project.boards[activeBoardIdx] || project.boards[0] || null;
   const layout = board?.layout || '16:9';
   const isCarousel = project.projectType === 'ig-carousel';
   const isIgContent = project.projectType === 'ig-carousel' || project.projectType === 'ig-story';
+  const isIgStory = project.projectType === 'ig-story';
+  const chatModels = models?.filter(m => (m.modelType || 'chat') === 'chat') || [];
   const [generatedHtml, setGeneratedHtml] = useState<string>(board?.generatedHtml || '');
   const [designSpec, setDesignSpec] = useState<StitchDesignSpec | null>(() => {
     if (isIgContent && project.fullDesignSpec) {
@@ -83,10 +87,11 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
   const [selectedLibraryComponents, setSelectedLibraryComponents] = useState<StitchComponent[]>([]);
+  const [selectedPalette, setSelectedPalette] = useState<{ name: string; colors: string[] } | null>(null);
   const [toolProgressText, setToolProgressText] = useState('');
   const [expandedToolProgress, setExpandedToolProgress] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const dims = getLayoutDimensions(layout);
 
@@ -221,13 +226,22 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
       content: m.role === 'user' ? m.content : `Applied design changes for: ${m.content}`,
     }));
 
+    const selectedImages = selectedLibraryComponents
+      .filter(c => c.category === 'image')
+      .map(c => ({
+        id: c.id,
+        label: c.name,
+        url: c.content,
+        mimeType: c.contentType === 'image-base64' ? 'image/png' : undefined,
+      }));
+
     const context: Record<string, any> = {
       layout,
       boardDescription: project.title,
       model: activeModel?.apiModelId || activeModel?.id,
       provider: activeModel?.provider,
       projectType: project.projectType,
-      images: project.images || [],
+      images: selectedImages,
     };
     if (generatedHtml) {
       context.currentHtml = generatedHtml;
@@ -235,11 +249,16 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
     if (isIgContent && designSpec) {
       context.currentSpec = designSpec;
     }
-    if (selectedLibraryComponents.length > 0) {
-      context.componentContext = selectedLibraryComponents.map(c => {
+    const nonImageComponents = selectedLibraryComponents.filter(c => c.category !== 'image');
+    if (nonImageComponents.length > 0) {
+      context.componentContext = nonImageComponents.map(c => {
         const snippet = c.specSnippet || c.content;
         return `### ${c.name} (${c.category})\n${c.description}\n\`\`\`${c.contentType}\n${snippet}\n\`\`\``;
       }).join('\n\n');
+    }
+    if (selectedPalette) {
+      context.colorPalette = selectedPalette.colors;
+      context.colorPaletteName = selectedPalette.name;
     }
     if (isCarousel && activeBoardIdx > 0) {
       const firstSlideHtml = project.boards[0]?.generatedHtml;
@@ -519,10 +538,17 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
     } catch {}
   };
 
-  const handleImagesChange = useCallback((images: StitchImageRef[]) => {
-    const updatedProject = { ...project, images, updatedAt: Date.now() };
-    onSave(updatedProject);
-  }, [project, onSave]);
+  const handlePaletteSelect = useCallback((palette: { name: string; colors: string[] }) => {
+    setSelectedPalette(palette);
+  }, []);
+
+  const handleLayoutSelect = useCallback((layout: StitchComponent) => {
+    setSelectedLibraryComponents(prev => {
+      const exists = prev.some(c => c.id === layout.id);
+      if (exists) return prev;
+      return [...prev, layout];
+    });
+  }, []);
 
   const handleAddSlide = useCallback(() => {
     if (!isCarousel || project.boards.length >= 10) return;
@@ -605,8 +631,10 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
       onCopy: handleCopy,
       copied,
       hasLastPrompt: !!lastPrompt,
+      onToggleLibrary: () => setShowLibrary(prev => !prev),
+      isLibraryOpen: showLibrary,
     });
-  }, [generatedHtml, isGenerating, project.title, onControlsChange, handleExport, viewMode, copied, lastPrompt, layout]);
+  }, [generatedHtml, isGenerating, project.title, onControlsChange, handleExport, viewMode, copied, lastPrompt, layout, showLibrary]);
 
   React.useEffect(() => {
     return () => { onControlsChange?.(null); };
@@ -618,322 +646,407 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
   return (
     <div className="flex h-full w-full">
       {showSidebar && (
-      /* Sidebar — chat interface (shown after first generation) */
       <div
-        className="flex flex-col flex-shrink-0 w-[288px] h-full overflow-hidden"
+        className="flex flex-col flex-shrink-0 w-[340px] h-full overflow-hidden"
         style={{
           borderRight: '1px solid var(--border-300)',
-          backgroundColor: 'var(--bg-200)',
+          backgroundColor: 'var(--bg-100)',
         }}
       >
-        {/* Slide navigator for carousels */}
+        {/* Slide selector — carousel only */}
         {isCarousel && project.boards.length > 1 && (
-          <div
-            className="flex-shrink-0 px-2 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hidden"
-            style={{ borderBottom: '1px solid var(--border-300)' }}
-          >
-            {project.boards.map((b, idx) => (
-              <div key={b.id} className="relative flex-shrink-0 group/slide">
-                <button
-                  onClick={() => setActiveBoardIdx(idx)}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all duration-200 whitespace-nowrap"
-                  style={{
-                    backgroundColor: activeBoardIdx === idx ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-100)',
-                    border: activeBoardIdx === idx ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                    color: activeBoardIdx === idx ? 'var(--neon-color)' : 'var(--text-500)',
-                  }}
-                >
-                  {b.generatedHtml ? '\u2713 ' : ''}{idx + 1}
-                </button>
-                {project.boards.length > 1 && (
+          <div className="flex-shrink-0 px-3 py-3 flex items-center gap-2 overflow-x-auto scrollbar-hidden" style={{ borderBottom: '1px solid var(--border-300)' }}>
+            {project.boards.map((b, idx) => {
+              const isActive = activeBoardIdx === idx;
+              const hasContent = !!b.generatedHtml;
+              const dims = getLayoutDimensions(b.layout);
+              return (
+                <div key={b.id} className="relative flex-shrink-0 group/slide">
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleRemoveSlide(idx); }}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center opacity-0 group-hover/slide:opacity-100 transition-opacity"
-                    style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '7px' }}
+                    onClick={() => setActiveBoardIdx(idx)}
+                    className="relative w-12 h-14 rounded-xl overflow-hidden transition-all duration-300 ease-out"
+                    style={{
+                      background: isActive
+                        ? `linear-gradient(135deg, rgba(var(--neon-rgb), 0.25), rgba(var(--neon-secondary-rgb), 0.15))`
+                        : 'var(--bg-200)',
+                      border: isActive ? 'none' : hasContent ? '1px solid var(--border-300)' : '1px dashed var(--border-300)',
+                      boxShadow: isActive ? '0 0 16px rgba(var(--neon-rgb), 0.2), inset 0 0 0 1.5px rgba(var(--neon-rgb), 0.5)' : 'none',
+                      transform: isActive ? 'scale(1.08)' : 'scale(1)',
+                    }}
                   >
-                    <X size={7} />
+                    {hasContent ? (
+                      <div className="absolute inset-0 overflow-hidden">
+                        <iframe
+                          srcDoc={b.generatedHtml}
+                          sandbox=""
+                          style={{
+                            width: `${dims.width}px`,
+                            height: `${dims.height}px`,
+                            border: '0',
+                            pointerEvents: 'none',
+                            transform: `translate(-50%, -50%) scale(${Math.max(48 / dims.width, 56 / dims.height) * 1.5})`,
+                            transformOrigin: 'center center',
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                          }}
+                          title={`Slide ${idx + 1}`}
+                        />
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-5 h-4 rounded-sm" style={{ border: `1px dashed ${isActive ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)'}` }} />
+                      </div>
+                    )}
+                    {!hasContent && (
+                      <span className="absolute inset-0 flex items-center justify-center z-10 text-xs font-bold" style={{
+                        color: isActive ? 'var(--neon-color)' : 'var(--text-300)',
+                      }}>
+                        {idx + 1}
+                      </span>
+                    )}
                   </button>
-                )}
-              </div>
-            ))}
+                  {project.boards.length > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemoveSlide(idx); }}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover/slide:opacity-100 transition-all duration-200 z-20"
+                      style={{ backgroundColor: '#ef4444', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+                    >
+                      <X size={8} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
             {project.boards.length < 10 && (
               <button
                 onClick={handleAddSlide}
-                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200"
-                style={{
-                  backgroundColor: 'var(--bg-100)',
-                  border: '1px dashed var(--border-300)',
-                  color: 'var(--text-500)',
-                }}
+                className="flex-shrink-0 w-12 h-14 rounded-xl flex flex-col items-center justify-center transition-all duration-200 hover:border-[var(--neon-color)]"
+                style={{ border: '1px dashed var(--border-300)', color: 'var(--text-500)' }}
               >
-                <Plus size={10} />
+                <Plus size={14} style={{ color: 'var(--neon-color)', opacity: 0.6 }} />
+                <span className="text-[9px] mt-0.5 font-medium" style={{ color: 'var(--text-500)' }}>Add</span>
               </button>
             )}
           </div>
         )}
 
-        {/* Image manager */}
-        <div className="flex-shrink-0 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <StitchImageManager
-              images={project.images || []}
-              onChange={handleImagesChange}
-              theme={theme}
-            />
-            <button
-              onClick={() => setShowLibrary(!showLibrary)}
-              className="flex-shrink-0 p-1.5 rounded-lg transition-all duration-200"
-              style={{
-                backgroundColor: showLibrary ? 'rgba(var(--neon-rgb), 0.2)' : 'transparent',
-                border: showLibrary ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                color: showLibrary ? 'var(--neon-color)' : 'var(--text-500)',
-              }}
-              title="Component Library"
-            >
-              <Package size={14} />
-            </button>
-          </div>
-          {selectedLibraryComponents.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {selectedLibraryComponents.map(c => (
-                <span key={c.id} className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}>
-                  {c.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Library panel */}
-        {showLibrary && (
-          <div className="flex-shrink-0 max-h-[300px] overflow-hidden" style={{ borderBottom: '1px solid var(--border-300)' }}>
-            <StitchLibrary
-              projectType={project.projectType}
-              theme={theme}
-              onComponentsSelected={setSelectedLibraryComponents}
-              onNotification={onNotification}
-            />
-          </div>
-        )}
-
         {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5 relative">
-          {chatMessages.map((msg, idx) => (
-            <div key={idx} className="group/msg animate-message-in">
-              {msg.role === 'user' ? (
-                <div
-                  className="rounded-xl px-3 py-2.5 text-xs leading-relaxed prose prose-invert max-w-none [&>p]:mb-1 [&>p]:last:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-2 [&>pre]:text-[11px] [&>code]:text-[11px] [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-xs [&>table]:text-[11px]"
-                  style={{
-                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                    color: 'var(--text-100)',
-                    border: '1px solid rgba(var(--neon-rgb), 0.15)',
-                  }}
-                >
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.content}</ReactMarkdown>
-                </div>
-              ) : (
-                <div
-                  className="rounded-xl overflow-hidden transition-all"
-                  style={{
-                    backgroundColor: 'var(--bg-300)',
-                    border: '1px solid var(--border-300)',
-                  }}
-                >
-                  {msg.thinking && (
-                    <div style={{ borderBottom: '1px solid var(--border-300)' }}>
-                      <button
-                        onClick={() => {
-                          setExpandedThinking(prev => {
-                            const next = new Set(prev);
-                            if (next.has(idx)) next.delete(idx); else next.add(idx);
-                            return next;
-                          });
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
-                        style={{ color: 'var(--text-300)' }}
-                      >
-                        <Brain size={12} style={{ color: 'var(--neon-color)' }} />
-                        <span className="text-xs font-semibold flex-1">Reasoning</span>
-                        {expandedThinking.has(idx) ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                      </button>
-                      {expandedThinking.has(idx) && (
-                        <div
-                          className="px-3 pb-2 max-h-40 overflow-y-auto text-xs leading-relaxed italic opacity-70"
-                          style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderLeft: '2px solid var(--border-200)', marginLeft: '12px', paddingLeft: '8px' }}
-                        >
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.thinking}</ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {msg.responseText && msg.responseText.trim() && (
-                    <div className="px-3 py-2.5">
-                      <div className="text-xs leading-relaxed prose prose-invert max-w-none [&>p]:mb-1 [&>p]:last:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-2 [&>pre]:text-[11px] [&>code]:text-[11px]" style={{ color: 'var(--text-100)' }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.responseText}</ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
-                  {/* Action buttons on hover */}
-                  <div className="flex items-center gap-0.5 px-2 py-1.5 opacity-0 group-hover/msg:opacity-100 transition-opacity" style={{ borderTop: '1px solid var(--border-300)' }}>
-                    <button
-                      onClick={() => handleCopyMessage(msg.responseText || msg.content, idx)}
-                      className="p-1 rounded transition-colors"
-                      style={{ color: copiedMsgIdx === idx ? 'var(--neon-color)' : 'var(--text-500)' }}
-                      title="Copy message"
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-200)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                    >
-                      {copiedMsgIdx === idx ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!isGenerating && lastPrompt) handleGenerate(lastPrompt);
-                      }}
-                      className="p-1 rounded transition-colors"
-                      style={{ color: 'var(--text-500)' }}
-                      title="Regenerate"
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-200)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                    >
-                      <RefreshCw size={12} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {isGenerating && (
-            <div className="rounded-xl px-3 py-2.5 animate-message-in" style={{ backgroundColor: 'var(--bg-300)', border: '1px solid var(--border-300)' }}>
-              {!activeToolCalls.length && !streamingHtml && (
-                <div className="flex items-center gap-2 mb-1">
-                  {[0, 1, 2].map(i => (
-                    <div
-                      key={i}
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{
-                        backgroundColor: 'var(--text-500)',
-                        animation: `pulse-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                      }}
-                    />
-                  ))}
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Thinking...</span>
-                </div>
-              )}
-              {activeToolCalls.length > 0 && (
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Loader2 size={12} className="animate-spin" style={{ color: 'var(--neon-color)' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>
-                    {activeToolCalls[activeToolCalls.length - 1].name === 'edit_html'
-                      ? 'Applying edits...'
-                      : activeToolCalls[activeToolCalls.length - 1].name === 'generate_spec' || activeToolCalls[activeToolCalls.length - 1].name === 'edit_spec'
-                        ? 'Composing design...'
-                        : 'Generating HTML...'}
-                  </span>
-                </div>
-              )}
-              {activeToolCalls.length > 0 && (
-                <div className="mt-1 space-y-1">
-                  {activeToolCalls.map((tc, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <Wrench size={10} style={{ color: 'var(--neon-color)' }} />
-                      <span className="text-[10px] font-medium" style={{ color: 'var(--text-500)' }}>
-                        {tc.name.replace(/_/g, ' ')}
-                      </span>
-                      {tc.output ? (
-                        <Check size={10} style={{ color: '#4ade80' }} />
-                      ) : (
-                        <Loader2 size={10} className="animate-spin" style={{ color: 'var(--neon-color)' }} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {editSummary && (
-                <div className="mt-1.5 text-[10px] font-mono leading-relaxed" style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap' }}>
-                  {editSummary}
-                </div>
-              )}
-              {toolProgressText && activeToolCalls.some(tc => !tc.output) && (
-                <div className="mt-2" style={{ borderTop: '1px solid var(--border-300)', paddingTop: '6px' }}>
-                  <button
-                    onClick={() => setExpandedToolProgress(prev => !prev)}
-                    className="flex items-center gap-1.5 w-full text-left"
+        <ScrollArea className="flex-1">
+          <div className="px-3 py-3 space-y-2">
+            {/* Context chips */}
+            {(selectedLibraryComponents.length > 0 || selectedPalette) && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {selectedPalette && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer"
+                    style={{
+                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                      color: 'var(--neon-color)',
+                      border: '1px solid rgba(var(--neon-rgb), 0.2)',
+                    }}
+                    onClick={() => setSelectedPalette(null)}
                   >
-                    <Eye size={10} style={{ color: 'var(--neon-color)' }} />
-                    <span className="text-[10px] font-semibold flex-1" style={{ color: 'var(--text-500)' }}>
-                      {activeToolCalls[activeToolCalls.length - 1]?.name?.includes('spec')
-                        ? `Composing spec... ${toolProgressText.length.toLocaleString()} chars`
-                        : `Generating HTML... ${toolProgressText.length.toLocaleString()} chars`}
+                    <span className="flex gap-px">
+                      {selectedPalette.colors.slice(0, 3).map((c, i) => (
+                        <span key={i} className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: c }} />
+                      ))}
                     </span>
-                    {expandedToolProgress ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-                  </button>
-                  {expandedToolProgress && (
-                    <div className="mt-1 max-h-32 overflow-y-auto text-[10px] font-mono leading-relaxed"
-                      style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {toolProgressText.slice(-2000)}
-                    </div>
-                  )}
-                </div>
-              )}
-              {thinkingText && (
-                <div className="mt-2" style={{ borderTop: '1px solid var(--border-300)', paddingTop: '6px' }}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Brain size={10} style={{ color: 'var(--neon-color)' }} />
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-500)' }}>Reasoning</span>
-                  </div>
-                  <div className="max-h-24 overflow-y-auto text-xs leading-relaxed italic opacity-70"
-                    style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {thinkingText}
-                  </div>
-                </div>
-              )}
-              {streamingHtml && (
-                <div className="mt-2" style={{ borderTop: '1px solid var(--border-300)', paddingTop: '6px' }}>
-                  <div className="flex items-center gap-1.5">
-                    <Eye size={10} style={{ color: 'var(--neon-color)' }} />
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-500)' }}>
-                      {streamingHtml.length.toLocaleString()} characters generated
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Chat input */}
-        <div className="flex-shrink-0 relative">
-          <div className="px-2.5 py-2" style={{ backgroundColor: 'var(--bg-200)' }}>
-            {models && models.filter(m => (m.modelType || 'chat') === 'chat').length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto scrollbar-hidden mb-1.5 pb-0.5">
-                {models.filter(m => (m.modelType || 'chat') === 'chat').map(model => {
-                  const isActive = selectedModelId === model.id;
-                  return (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => setSelectedModelId(model.id)}
-                      className="flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-medium transition-all duration-200 whitespace-nowrap"
-                      style={{
-                        backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
-                        border: isActive ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                        color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
-                      }}
-                    >
-                      {model.name}
-                    </button>
-                  );
-                })}
+                    {selectedPalette.name}
+                    <X size={7} />
+                  </span>
+                )}
+                {selectedLibraryComponents.map(c => (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium"
+                    style={{
+                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                      color: 'var(--neon-color)',
+                      border: '1px solid rgba(var(--neon-rgb), 0.2)',
+                    }}
+                  >
+                    {c.name}
+                  </span>
+                ))}
               </div>
             )}
+
+            {/* Empty state */}
+            {chatMessages.length === 0 && !isGenerating && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div
+                  className="w-12 h-12 rounded-2xl mb-4 flex items-center justify-center"
+                  style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}
+                >
+                  <Sparkles size={20} style={{ color: 'var(--neon-color)' }} />
+                </div>
+                <p className="text-base font-semibold mb-1.5" style={{ color: 'var(--text-100)' }}>
+                  {isCarousel ? `Design slide ${activeBoardIdx + 1}` : 'Start a design'}
+                </p>
+                <p className="text-sm leading-relaxed mb-5" style={{ color: 'var(--text-500)' }}>
+                  Describe what you want to build and the AI will generate it
+                </p>
+                <div className="flex flex-col gap-1.5 w-full">
+                  {(isCarousel
+                    ? ['Bold product showcase with gradient background', 'Clean tips list with numbered steps', 'Eye-catching before and after comparison']
+                    : isIgStory
+                      ? ['Story with poll sticker and bold text', 'Countdown announcement with gradient', 'Minimal quote on dark background']
+                      : ['Modern SaaS landing page with hero section', 'Pricing table with 3 tiers', 'Portfolio grid with hover effects']
+                  ).map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setSidebarInput(suggestion); }}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                      style={{
+                        backgroundColor: 'var(--bg-100)',
+                        color: 'var(--text-300)',
+                        border: '1px solid var(--border-300)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
+                        e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border-300)';
+                        e.currentTarget.style.backgroundColor = 'var(--bg-100)';
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Chat messages */}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className="animate-message-in">
+                {msg.role === 'user' ? (
+                  <div className="flex justify-end">
+                    <div
+                      className="max-w-[85%] rounded-2xl rounded-br-md px-3 py-2 text-sm leading-relaxed prose prose-invert max-w-none [&>p]:mb-0.5 [&>p]:last:mb-0 [&>ul]:my-0.5 [&>ol]:my-0.5 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-1 [&>pre]:text-xs [&>code]:text-xs"
+                      style={{
+                        backgroundColor: 'rgba(var(--neon-rgb), 0.12)',
+                        color: 'var(--text-100)',
+                      }}
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.content}</ReactMarkdown>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="group/msg">
+                    <div className="flex items-start gap-2">
+                      <div
+                        className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center mt-0.5"
+                        style={{ background: 'rgba(var(--neon-rgb), 0.12)' }}
+                      >
+                        <Sparkles size={10} style={{ color: 'var(--neon-color)' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {msg.thinking && (
+                          <div className="mb-1.5">
+                            <button
+                              onClick={() => {
+                                setExpandedThinking(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(idx)) next.delete(idx); else next.add(idx);
+                                  return next;
+                                });
+                              }}
+                              className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+                              style={{ color: 'var(--text-500)' }}
+                            >
+                              <Brain size={10} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
+                              <span>Reasoning</span>
+                              {expandedThinking.has(idx) ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+                            </button>
+                            <div
+                              className="overflow-hidden transition-all duration-300"
+                              style={{
+                                maxHeight: expandedThinking.has(idx) ? '200px' : '0',
+                                opacity: expandedThinking.has(idx) ? 1 : 0,
+                              }}
+                            >
+                              <div
+                                className="mt-1 pl-2.5 text-sm leading-relaxed italic"
+                                style={{
+                                  color: 'var(--text-500)',
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-word',
+                                  borderLeft: '2px solid rgba(var(--neon-rgb), 0.2)',
+                                }}
+                              >
+                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.thinking}</ReactMarkdown>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {msg.responseText && msg.responseText.trim() && (
+                          <div className="text-sm leading-relaxed prose prose-invert max-w-none [&>p]:mb-0.5 [&>p]:last:mb-0 [&>ul]:my-0.5 [&>ol]:my-0.5 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-1 [&>pre]:text-xs [&>code]:text-xs" style={{ color: 'var(--text-100)' }}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.responseText}</ReactMarkdown>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
+                          <button
+                            onClick={() => handleCopyMessage(msg.responseText || msg.content, idx)}
+                            className="p-1 rounded transition-colors"
+                            style={{ color: copiedMsgIdx === idx ? 'var(--neon-color)' : 'var(--text-500)' }}
+                          >
+                            {copiedMsgIdx === idx ? <Check size={10} /> : <Copy size={10} />}
+                          </button>
+                          <button
+                            onClick={() => { if (!isGenerating && lastPrompt) handleGenerate(lastPrompt); }}
+                            className="p-1 rounded transition-colors"
+                            style={{ color: 'var(--text-500)' }}
+                          >
+                            <RefreshCw size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {isGenerating && (
+              <div className="animate-message-in">
+                <div className="flex items-start gap-2">
+                  <div
+                    className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center"
+                    style={{ background: 'rgba(var(--neon-rgb), 0.12)' }}
+                  >
+                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--neon-color)' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {!activeToolCalls.length && !streamingHtml && !thinkingText && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium" style={{ color: 'var(--text-500)' }}>Thinking</span>
+                        <span className="flex gap-0.5">
+                          {[0, 1, 2].map(i => (
+                            <span
+                              key={i}
+                              className="w-1 h-1 rounded-full inline-block"
+                              style={{
+                                backgroundColor: 'var(--text-500)',
+                                animation: `pulse-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
+                              }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                    )}
+                    {activeToolCalls.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        {activeToolCalls.map((tc, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: tc.output ? 'rgba(74, 222, 128, 0.1)' : 'rgba(var(--neon-rgb), 0.08)',
+                              color: tc.output ? '#4ade80' : 'var(--text-300)',
+                              border: `1px solid ${tc.output ? 'rgba(74, 222, 128, 0.2)' : 'var(--border-300)'}`,
+                            }}
+                          >
+                            {tc.output ? <Check size={8} /> : <Loader2 size={8} className="animate-spin" />}
+                            {tc.name.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {editSummary && (
+                      <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap' }}>
+                        {editSummary}
+                      </p>
+                    )}
+                    {thinkingText && !activeToolCalls.some(tc => !tc.output) && (
+                      <div className="mb-1">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <Brain size={10} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Reasoning</span>
+                        </div>
+                        <div
+                          className="max-h-16 overflow-y-auto text-xs leading-relaxed italic pl-2"
+                          style={{
+                            color: 'var(--text-500)',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            borderLeft: '2px solid rgba(var(--neon-rgb), 0.15)',
+                          }}
+                        >
+                          {thinkingText}
+                        </div>
+                      </div>
+                    )}
+                    {streamingHtml && (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Eye size={9} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
+                        <span className="text-xs" style={{ color: 'var(--text-500)' }}>
+                          {streamingHtml.length.toLocaleString()} chars
+                        </span>
+                        <div className="flex-1 h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-300)' }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              backgroundColor: 'var(--neon-color)',
+                              width: `${Math.min(100, (streamingHtml.length / 5000) * 100)}%`,
+                              transition: 'width 0.3s ease',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+        </ScrollArea>
+
+        {/* Bottom toolbar + Input */}
+        <div className="flex-shrink-0" style={{ borderTop: '1px solid var(--border-300)' }}>
+          {/* Toolbar */}
+          <div className="px-3 pt-1.5 pb-0.5 flex items-center gap-0.5">
+            <div className="flex-1" />
+            {chatModels.length > 1 && (
+              <Select value={selectedModelId} onValueChange={setSelectedModelId}>
+                <SelectTrigger
+                  className="h-7 w-auto min-w-0 border-0 text-xs font-medium px-1.5 gap-0.5"
+                  style={{ backgroundColor: 'transparent', color: 'var(--text-500)' }}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {chatModels.map(model => (
+                    <SelectItem key={model.id} value={model.id} className="text-xs">
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="px-3 pb-3 pt-1">
             <div
-              className="flex items-end gap-1.5 rounded-xl px-2.5 py-1.5"
+              className="flex items-end gap-2 rounded-xl px-3 py-2 transition-all duration-200"
               style={{
-                backgroundColor: 'var(--bg-100)',
+                backgroundColor: 'var(--bg-200)',
                 border: '1px solid var(--border-300)',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
+                e.currentTarget.style.boxShadow = '0 0 0 2px rgba(var(--neon-rgb), 0.06)';
+              }}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  e.currentTarget.style.borderColor = 'var(--border-300)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }
               }}
             >
               <textarea
@@ -952,9 +1065,9 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
                 placeholder={
                   chatMessages.length === 0
                     ? (isCarousel ? `Describe slide ${activeBoardIdx + 1}...` : 'Describe your design...')
-                    : (isCarousel ? `Modify slide ${activeBoardIdx + 1}...` : 'Modify the design...')
+                    : 'Describe changes...'
                 }
-                className="flex-1 bg-transparent text-xs outline-none resize-none min-h-[18px] max-h-[120px] leading-snug"
+                className="flex-1 bg-transparent text-sm outline-none resize-none min-h-[18px] max-h-[100px] leading-snug placeholder:opacity-50"
                 style={{ color: 'var(--text-100)' }}
                 disabled={isGenerating}
                 rows={1}
@@ -962,13 +1075,10 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
               {isGenerating ? (
                 <button
                   onClick={handleStopGeneration}
-                  className="p-1.5 rounded-lg transition-colors flex-shrink-0"
+                  className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
                   style={{ color: '#ef4444' }}
-                  title="Stop generation"
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
-                  <Square size={14} className="fill-current" />
+                  <Square size={12} className="fill-current" />
                 </button>
               ) : (
                 <button
@@ -979,13 +1089,16 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
                     }
                   }}
                   disabled={!sidebarInput.trim()}
-                  className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 flex-shrink-0"
-                  style={{
-                    backgroundColor: sidebarInput.trim() ? 'var(--neon-color)' : 'transparent',
-                    color: sidebarInput.trim() ? '#000' : 'var(--text-500)',
+                  className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-200"
+                  style={sidebarInput.trim() ? {
+                    backgroundColor: 'var(--neon-color)',
+                    color: '#000',
+                  } : {
+                    color: 'var(--text-500)',
+                    opacity: 0.4,
                   }}
                 >
-                  <ArrowUp size={14} />
+                  <ArrowUp size={12} />
                 </button>
               )}
             </div>
@@ -1075,72 +1188,173 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
               <p className="text-xs" style={{ color: 'var(--text-500)' }}>{isIgContent ? 'The AI is building your design spec' : 'The AI is building your design'}</p>
             </div>
           ) : (
-            <div className="w-full max-w-2xl mx-auto py-12 px-4">
-              <div className="text-center mb-6">
+            <div className="w-full max-w-2xl mx-auto py-8 px-4">
+              {/* Ambient glow */}
+              <div className="relative flex flex-col items-center text-center mb-8">
                 <div
-                  className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}
+                  className="absolute -top-16 w-48 h-48 rounded-full opacity-15 blur-3xl pointer-events-none"
+                  style={{ background: `radial-gradient(circle, var(--neon-color), transparent 70%)` }}
+                />
+
+                {/* Project type badge */}
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide mb-5 animate-fade-in"
+                  style={{
+                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                    color: 'var(--neon-color)',
+                    border: '1px solid rgba(var(--neon-rgb), 0.2)',
+                    animationDelay: '0ms',
+                    opacity: 0,
+                    animationFillMode: 'forwards',
+                  }}
                 >
-                  <Eye size={24} style={{ color: 'var(--neon-color)' }} />
-                </div>
-                <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-100)' }}>Create your design</p>
-                <p className="text-xs" style={{ color: 'var(--text-500)' }}>Select styles below and describe what you want to build</p>
-                {isCarousel && (
-                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--neon-color)' }}>
-                    Carousel: {project.boards.length} slides at 4:5 (Slide {activeBoardIdx + 1})
-                  </p>
-                )}
-                {project.projectType === 'ig-story' && (
-                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--neon-color)' }}>
-                    Instagram Story/Reel at 9:16
-                  </p>
-                )}
+                  {isCarousel ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
+                      {project.boards[0]?.layout || '4:5'} · Carousel · {project.boards.length} slides
+                    </>
+                  ) : isIgStory ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
+                      9:16 · Story / Reel
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
+                      {project.boards[0]?.layout || '16:9'} · Website
+                    </>
+                  )}
+                </span>
+
+                {/* Headline */}
+                <h2
+                  className="text-xl font-bold mb-2 animate-fade-in"
+                  style={{ color: 'var(--text-100)', animationDelay: '60ms', opacity: 0, animationFillMode: 'forwards' }}
+                >
+                  {isCarousel ? `Design slide ${activeBoardIdx + 1}` : 'Create your design'}
+                </h2>
+                <p
+                  className="text-sm leading-relaxed animate-fade-in"
+                  style={{ color: 'var(--text-500)', animationDelay: '120ms', opacity: 0, animationFillMode: 'forwards' }}
+                >
+                  Describe what you want to build and the AI will generate it
+                </p>
               </div>
 
-              {/* Slide navigator for carousels in empty state */}
+              {/* Slide stepper — carousel only */}
               {isCarousel && project.boards.length > 1 && (
-                <div className="flex items-center justify-center gap-1.5 mb-4">
-                  {project.boards.map((b, idx) => (
-                    <button
-                      key={b.id}
-                      onClick={() => setActiveBoardIdx(idx)}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all duration-200"
-                      style={{
-                        backgroundColor: activeBoardIdx === idx ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
-                        border: activeBoardIdx === idx ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                        color: activeBoardIdx === idx ? 'var(--neon-color)' : 'var(--text-500)',
-                      }}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-center gap-0 mb-6 animate-fade-in" style={{ animationDelay: '180ms', opacity: 0, animationFillMode: 'forwards' }}>
+                  {project.boards.map((b, idx) => {
+                    const isActive = activeBoardIdx === idx;
+                    const hasContent = !!b.generatedHtml;
+                    return (
+                      <React.Fragment key={b.id}>
+                        <button
+                          onClick={() => setActiveBoardIdx(idx)}
+                          className="relative flex items-center justify-center transition-all duration-300 ease-out"
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            background: isActive
+                              ? `linear-gradient(135deg, rgba(var(--neon-rgb), 0.3), rgba(var(--neon-secondary-rgb), 0.2))`
+                              : 'var(--bg-200)',
+                            border: 'none',
+                            boxShadow: isActive ? '0 0 12px rgba(var(--neon-rgb), 0.2), inset 0 0 0 1.5px rgba(var(--neon-rgb), 0.5)' : 'inset 0 0 0 1px var(--border-300)',
+                            transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                          }}
+                        >
+                          <span className="text-xs font-bold" style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-500)' }}>
+                            {idx + 1}
+                          </span>
+                        </button>
+                        {idx < project.boards.length - 1 && (
+                          <div className="w-4 h-px flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Image manager in empty state */}
-              <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
-                <StitchImageManager
-                  images={project.images || []}
-                  onChange={handleImagesChange}
+              {/* Prompt bar */}
+              <div className="animate-fade-in" style={{ animationDelay: '240ms', opacity: 0, animationFillMode: 'forwards' }}>
+                <StitchPromptBar
+                  onGenerate={(prompt) => { handleGenerate(prompt); }}
+                  isGenerating={isGenerating}
                   theme={theme}
+                  models={models}
+                  selectedModelId={selectedModelId}
+                  onModelChange={setSelectedModelId}
+                  initialActiveChips={activeStyleChips}
+                  onActiveChipsChange={setActiveStyleChips}
+                  projectType={project.projectType}
                 />
               </div>
 
-              <StitchPromptBar
-                onGenerate={(prompt) => { handleGenerate(prompt); }}
-                isGenerating={isGenerating}
-                theme={theme}
-                models={models}
-                selectedModelId={selectedModelId}
-                onModelChange={setSelectedModelId}
-                initialActiveChips={activeStyleChips}
-                onActiveChipsChange={setActiveStyleChips}
-                projectType={project.projectType}
-              />
+              {/* Quick-start suggestions */}
+              <div className="mt-6 animate-fade-in" style={{ animationDelay: '360ms', opacity: 0, animationFillMode: 'forwards' }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5 text-center" style={{ color: 'var(--text-500)' }}>
+                  Quick start
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(isCarousel
+                    ? ['Bold product showcase with gradient background', 'Clean tips list with numbered steps', 'Eye-catching before and after comparison']
+                    : isIgStory
+                      ? ['Story with poll sticker and bold text', 'Countdown announcement with gradient', 'Minimal quote on dark background']
+                      : ['Modern SaaS landing page with hero section', 'Pricing table with 3 tiers', 'Portfolio grid with hover effects']
+                  ).map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setSidebarInput(suggestion); }}
+                      className="group/suggestion text-left px-3.5 py-3 rounded-xl text-xs leading-relaxed transition-all duration-300"
+                      style={{
+                        backgroundColor: 'var(--bg-200)',
+                        color: 'var(--text-300)',
+                        border: '1px solid var(--border-300)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
+                        e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.04)';
+                        e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--neon-rgb), 0.06)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border-300)';
+                        e.currentTarget.style.backgroundColor = 'var(--bg-200)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Right sidebar — Library */}
+      {showLibrary && (
+        <div
+          className="flex flex-col flex-shrink-0 w-[320px] h-full overflow-hidden animate-fade-in"
+          style={{
+            borderLeft: '1px solid var(--border-300)',
+            backgroundColor: 'var(--bg-100)',
+          }}
+        >
+          <StitchLibrary
+            projectType={project.projectType}
+            theme={theme}
+            onComponentsSelected={setSelectedLibraryComponents}
+            onNotification={onNotification}
+            onPaletteSelect={handlePaletteSelect}
+            onLayoutSelect={handleLayoutSelect}
+          />
+        </div>
+      )}
 
       <StitchExportModal
         project={project}

@@ -4,6 +4,10 @@ import { StitchProject, StitchBoard, StitchLayout, StitchProjectType, ModelConfi
 import * as db from '../services/apiDatabaseAdapter';
 import { createNewProject, createNewBoard, stitchProjectToDB, stitchDBToProject } from '../services/stitchService';
 import StitchEditor, { StitchControls } from './StitchEditor';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 interface StitchPanelProps {
   theme?: 'dark' | 'light';
@@ -127,7 +131,6 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
         project={activeProject}
         theme={theme}
         onNotification={onNotification}
-        onBack={() => { setActiveProject(null); onProjectChange?.(null); }}
         onSave={handleSaveProject}
         modelConfig={modelConfig}
         models={models}
@@ -148,218 +151,228 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
             <p className="text-xs" style={{ color: 'var(--text-500)' }}>AI-powered HTML generator</p>
           </div>
         </div>
-        <button
+        <Button
           onClick={() => setIsCreating(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200"
+          className="gap-2 rounded-xl"
           style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
         >
           <Plus size={16} />
           New Project
-        </button>
+        </Button>
       </div>
 
       {isCreating && (
-        <div
-          className="rounded-2xl border p-6 animate-fade-in"
+        <Card
+          className="rounded-2xl animate-fade-in"
           style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}
         >
-          {!selectedType ? (
-            <>
-              <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-100)' }}>Create New Project</h3>
-              <p className="text-xs mb-4" style={{ color: 'var(--text-500)' }}>What do you want to create?</p>
-              <div className="mb-4">
-                <input
-                  type="text"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Enter project name..."
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200"
-                  style={{
-                    backgroundColor: 'var(--bg-100)',
-                    border: '1px solid var(--border-300)',
-                    color: 'var(--text-100)',
-                  }}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {PROJECT_TYPES.map(pt => (
-                  <button
-                    key={pt.value}
-                    onClick={() => setSelectedType(pt.value)}
-                    className="p-5 rounded-xl text-center transition-all duration-200 flex flex-col items-center gap-2"
+          <CardContent className="p-6">
+            {!selectedType ? (
+              <>
+                <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-100)' }}>Create New Project</h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--text-500)' }}>What do you want to create?</p>
+                <div className="mb-4">
+                  <Input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Enter project name..."
+                    className="rounded-xl"
                     style={{
                       backgroundColor: 'var(--bg-100)',
                       border: '1px solid var(--border-300)',
-                      color: 'var(--text-300)',
+                      color: 'var(--text-100)',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.4)';
-                      e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.08)';
-                      e.currentTarget.style.color = 'var(--neon-color)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--border-300)';
-                      e.currentTarget.style.backgroundColor = 'var(--bg-100)';
-                      e.currentTarget.style.color = 'var(--text-300)';
-                    }}
-                  >
-                    <div style={{ color: 'var(--neon-color)' }}>{pt.icon}</div>
-                    <div className="text-sm font-semibold">{pt.label}</div>
-                    <div className="text-[10px] leading-tight" style={{ color: 'var(--text-500)' }}>{pt.desc}</div>
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={resetCreation}
-                className="px-4 py-2 rounded-xl text-sm transition-all duration-200"
-                style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 mb-1">
-                <button
-                  onClick={() => setSelectedType(null)}
-                  className="text-xs transition-colors"
-                  style={{ color: 'var(--neon-color)' }}
-                >
-                  &larr; Back
-                </button>
-              </div>
-              <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-100)' }}>
-                {PROJECT_TYPES.find(p => p.value === selectedType)?.label}
-              </h3>
-              <p className="text-xs mb-4" style={{ color: 'var(--text-500)' }}>
-                {PROJECT_TYPES.find(p => p.value === selectedType)?.desc}
-              </p>
-              <div className="mb-4">
-                <input
-                  type="text"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Enter project name..."
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200"
-                  style={{
-                    backgroundColor: 'var(--bg-100)',
-                    border: '1px solid var(--border-300)',
-                    color: 'var(--text-100)',
-                  }}
-                />
-              </div>
-
-              {selectedType === 'website' && (
-                <>
-                  <p className="text-xs mb-3" style={{ color: 'var(--text-500)' }}>Choose a Layout</p>
-                  {['Social', 'Web'].map(category => (
-                    <div key={category} className="mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-500)' }}>
-                        {category}
-                      </span>
-                      <div className="flex gap-3">
-                        {LAYOUT_OPTIONS.filter(o => o.category === category).map(opt => (
-                          <button
-                            key={opt.value}
-                            onClick={() => handleCreateProject('website', opt.value)}
-                            className="flex-1 p-4 rounded-xl text-center transition-all duration-200"
-                            style={{
-                              backgroundColor: 'var(--bg-100)',
-                              border: '1px solid var(--border-300)',
-                              color: 'var(--text-300)',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.4)';
-                              e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.08)';
-                              e.currentTarget.style.color = 'var(--neon-color)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = 'var(--border-300)';
-                              e.currentTarget.style.backgroundColor = 'var(--bg-100)';
-                              e.currentTarget.style.color = 'var(--text-300)';
-                            }}
-                          >
-                            <div className="text-sm font-semibold">{opt.label}</div>
-                            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-500)' }}>{opt.desc}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {PROJECT_TYPES.map(pt => (
+                    <Button
+                      key={pt.value}
+                      variant="outline"
+                      onClick={() => setSelectedType(pt.value)}
+                      className="p-5 rounded-xl h-auto flex-col gap-2"
+                      style={{
+                        backgroundColor: 'var(--bg-100)',
+                        borderColor: 'var(--border-300)',
+                        color: 'var(--text-300)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.4)';
+                        e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.08)';
+                        e.currentTarget.style.color = 'var(--neon-color)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border-300)';
+                        e.currentTarget.style.backgroundColor = 'var(--bg-100)';
+                        e.currentTarget.style.color = 'var(--text-300)';
+                      }}
+                    >
+                      <div style={{ color: 'var(--neon-color)' }}>{pt.icon}</div>
+                      <div className="text-sm font-semibold">{pt.label}</div>
+                      <div className="text-[10px] leading-tight" style={{ color: 'var(--text-500)' }}>{pt.desc}</div>
+                    </Button>
                   ))}
-                </>
-              )}
-
-              {selectedType === 'ig-carousel' && (
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={resetCreation}
+                  className="rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedType(null)}
+                    className="text-xs h-auto p-0"
+                    style={{ color: 'var(--neon-color)' }}
+                  >
+                    &larr; Back
+                  </Button>
+                </div>
+                <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-100)' }}>
+                  {PROJECT_TYPES.find(p => p.value === selectedType)?.label}
+                </h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--text-500)' }}>
+                  {PROJECT_TYPES.find(p => p.value === selectedType)?.desc}
+                </p>
                 <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs" style={{ color: 'var(--text-500)' }}>Layout:</span>
-                    <span
-                      className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
-                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}
-                    >
-                      4:5 (1080 x 1350)
-                    </span>
-                  </div>
-                  <p className="text-xs mb-2" style={{ color: 'var(--text-500)' }}>Number of slides</p>
-                  <div className="flex gap-2">
-                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                      <button
-                        key={n}
-                        onClick={() => setSlideCount(n)}
-                        className="w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200"
-                        style={{
-                          backgroundColor: slideCount === n ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-100)',
-                          border: slideCount === n ? '1px solid rgba(var(--neon-rgb), 0.4)' : '1px solid var(--border-300)',
-                          color: slideCount === n ? 'var(--neon-color)' : 'var(--text-500)',
-                        }}
-                      >
-                        {n}
-                      </button>
+                  <Input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Enter project name..."
+                    className="rounded-xl"
+                    style={{
+                      backgroundColor: 'var(--bg-100)',
+                      border: '1px solid var(--border-300)',
+                      color: 'var(--text-100)',
+                    }}
+                  />
+                </div>
+
+                {selectedType === 'website' && (
+                  <>
+                    <p className="text-xs mb-3" style={{ color: 'var(--text-500)' }}>Choose a Layout</p>
+                    {['Social', 'Web'].map(category => (
+                      <div key={category} className="mb-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-500)' }}>
+                          {category}
+                        </span>
+                        <div className="flex gap-3">
+                          {LAYOUT_OPTIONS.filter(o => o.category === category).map(opt => (
+                            <Button
+                              key={opt.value}
+                              variant="outline"
+                              onClick={() => handleCreateProject('website', opt.value)}
+                              className="flex-1 p-4 rounded-xl h-auto"
+                              style={{
+                                backgroundColor: 'var(--bg-100)',
+                                borderColor: 'var(--border-300)',
+                                color: 'var(--text-300)',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.4)';
+                                e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.08)';
+                                e.currentTarget.style.color = 'var(--neon-color)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--border-300)';
+                                e.currentTarget.style.backgroundColor = 'var(--bg-100)';
+                                e.currentTarget.style.color = 'var(--text-300)';
+                              }}
+                            >
+                              <div className="text-center">
+                                <div className="text-sm font-semibold">{opt.label}</div>
+                                <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-500)' }}>{opt.desc}</div>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </div>
-                  <button
-                    onClick={() => handleCreateProject('ig-carousel', '4:5')}
-                    className="mt-4 w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
-                    style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
-                  >
-                    Create Carousel ({slideCount} slides)
-                  </button>
-                </div>
-              )}
+                  </>
+                )}
 
-              {selectedType === 'ig-story' && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs" style={{ color: 'var(--text-500)' }}>Layout:</span>
-                    <span
-                      className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
-                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}
+                {selectedType === 'ig-carousel' && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs" style={{ color: 'var(--text-500)' }}>Layout:</span>
+                      <Badge
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                        style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}
+                      >
+                        4:5 (1080 x 1350)
+                      </Badge>
+                    </div>
+                    <p className="text-xs mb-2" style={{ color: 'var(--text-500)' }}>Number of slides</p>
+                    <div className="flex gap-2">
+                      {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                        <Button
+                          key={n}
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setSlideCount(n)}
+                          className="w-10 h-10 rounded-lg text-sm font-medium"
+                          style={{
+                            backgroundColor: slideCount === n ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-100)',
+                            borderColor: slideCount === n ? 'rgba(var(--neon-rgb), 0.4)' : 'var(--border-300)',
+                            color: slideCount === n ? 'var(--neon-color)' : 'var(--text-500)',
+                          }}
+                        >
+                          {n}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      onClick={() => handleCreateProject('ig-carousel', '4:5')}
+                      className="mt-4 w-full py-2.5 rounded-xl"
+                      style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
                     >
-                      9:16 (1080 x 1920)
-                    </span>
+                      Create Carousel ({slideCount} slides)
+                    </Button>
                   </div>
-                  <button
-                    onClick={() => handleCreateProject('ig-story', '9:16')}
-                    className="w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
-                    style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
-                  >
-                    Create Story
-                  </button>
-                </div>
-              )}
+                )}
 
-              <button
-                onClick={resetCreation}
-                className="mt-2 px-4 py-2 rounded-xl text-sm transition-all duration-200"
-                style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
+                {selectedType === 'ig-story' && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs" style={{ color: 'var(--text-500)' }}>Layout:</span>
+                      <Badge
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                        style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)', border: '1px solid rgba(var(--neon-rgb), 0.3)' }}
+                      >
+                        9:16 (1080 x 1920)
+                      </Badge>
+                    </div>
+                    <Button
+                      onClick={() => handleCreateProject('ig-story', '9:16')}
+                      className="w-full py-2.5 rounded-xl"
+                      style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+                    >
+                      Create Story
+                    </Button>
+                  </div>
+                )}
+
+                <Button
+                  variant="secondary"
+                  onClick={resetCreation}
+                  className="mt-2 rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {isLoading ? (
@@ -367,21 +380,23 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
           <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border-300)', borderTopColor: 'var(--neon-color)' }} />
         </div>
       ) : projects.length === 0 && !isCreating ? (
-        <div
-          className="rounded-2xl border p-12 text-center"
+        <Card
+          className="rounded-2xl"
           style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}
         >
-          <Layers size={48} className="mx-auto mb-4" style={{ color: 'var(--text-500)' }} />
-          <p className="text-sm mb-2" style={{ color: 'var(--text-300)' }}>No projects yet</p>
-          <p className="text-xs" style={{ color: 'var(--text-500)' }}>Create your first HTML design project to get started</p>
-        </div>
+          <CardContent className="p-12 text-center">
+            <Layers size={48} className="mx-auto mb-4" style={{ color: 'var(--text-500)' }} />
+            <p className="text-sm mb-2" style={{ color: 'var(--text-300)' }}>No projects yet</p>
+            <p className="text-xs" style={{ color: 'var(--text-500)' }}>Create your first HTML design project to get started</p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((project, idx) => (
-            <div
+            <Card
               key={project.id}
               onClick={() => { setActiveProject(project); onProjectChange?.(project); }}
-              className="group rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden animate-fade-in"
+              className="group rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden animate-fade-in"
               style={{
                 backgroundColor: 'var(--bg-200)',
                 borderColor: 'var(--border-300)',
@@ -414,40 +429,45 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
                   </div>
                 )}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={(e) => handleDeleteProject(project.id, e)}
-                    className="p-1.5 rounded-lg transition-colors"
+                    className="h-7 w-7 p-1.5 rounded-lg"
                     style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#f87171' }}
                   >
                     <Trash2 size={14} />
-                  </button>
+                  </Button>
                 </div>
                 <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-                  <span
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full border-0"
                     style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff' }}
                   >
                     {project.boards[0]?.layout || '16:9'}
-                  </span>
+                  </Badge>
                   {project.projectType === 'ig-carousel' && (
-                    <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                    <Badge
+                      variant="default"
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full border-0"
                       style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.6)', color: '#fff' }}
                     >
                       {project.boards.length} slides
-                    </span>
+                    </Badge>
                   )}
                   {project.projectType === 'ig-story' && (
-                    <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                    <Badge
+                      variant="default"
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full border-0"
                       style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.6)', color: '#fff' }}
                     >
                       Story
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </div>
-              <div className="p-4">
+              <CardContent className="p-4">
                 <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>
                   {project.title}
                 </h3>
@@ -459,8 +479,8 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
                     {new Date(project.updatedAt).toLocaleDateString()}
                   </span>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

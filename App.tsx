@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check } from 'lucide-react';
+import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
@@ -12,7 +12,12 @@ import ModelSelect from './components/ModelSelect';
 import Settings from './components/Settings';
 import TokenUsageStats from './components/TokenUsageStats';
 import ModeSelector from './components/ModeSelector';
-import Notification, { NotificationType } from './components/Notification';
+import { toast } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Card } from '@/components/ui/card';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
 import VoiceClonePanel from './components/VoiceClonePanel';
@@ -21,6 +26,7 @@ import PluginAgentPanel from './components/PluginAgentPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
+import LibraryPanel from './components/LibraryPanel';
 import { StitchControls } from './components/StitchEditor';
 
 
@@ -62,7 +68,8 @@ const App: React.FC = () => {
   const isSelector = location.pathname === '/';
   const isChatMode = location.pathname.startsWith('/chat');
   const isExperimentsMode = location.pathname.startsWith('/experiments');
-  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : 'experiments';
+  const isLibraryMode = location.pathname.startsWith('/library');
+  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : 'library';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
@@ -80,6 +87,9 @@ const App: React.FC = () => {
   });
   const [isExperimentsAuthenticated, setIsExperimentsAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_experiments_session');
+  });
+  const [isLibraryAuthenticated, setIsLibraryAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_library_session');
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [input, setInput] = useState('');
@@ -119,7 +129,6 @@ const App: React.FC = () => {
   
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
-  const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
   const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
@@ -153,7 +162,7 @@ const App: React.FC = () => {
     fetch('/api/health').then(r => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
     }).catch(() => {
-      setNotification({ message: 'Backend server is not reachable. Chat, TTS, and ASR will not work.', type: 'error' });
+      toast.error('Backend server is not reachable. Chat, TTS, and ASR will not work.');
     });
   }, []);
 
@@ -212,11 +221,7 @@ const App: React.FC = () => {
     }
   }, [maxOutputTokens]);
 
-  useEffect(() => {
-    if (location.pathname.startsWith('/experiments/stitch')) {
-      setIsSidebarOpen(false);
-    }
-  }, [location.pathname]);
+
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -371,10 +376,10 @@ const App: React.FC = () => {
         true
       );
       setModels([...models, { ...newModel, dbModelId }]);
-      setNotification({ message: `Model "${newModel.name}" added!`, type: 'success' });
+      toast.success(`Model "${newModel.name}" added!`);
     } catch (error) {
       console.error('Error adding model:', error);
-      setNotification({ message: `Failed to add model "${newModel.name}".`, type: 'error' });
+      toast.error(`Failed to add model "${newModel.name}".`);
     }
   };
 
@@ -557,16 +562,16 @@ const App: React.FC = () => {
           const isThinkingDisabled = errorMsg.includes('thinking');
           if (isWebSearchDisabled) {
             setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            setNotification({ message: 'Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.', type: 'error' });
+            toast.error('Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.');
           } else if (isThinkingDisabled && options?.think) {
             setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            setNotification({ message: 'Deep Thinking is not available for this model or account.', type: 'error' });
+            toast.error('Deep Thinking is not available for this model or account.');
           } else if (isNoImageEndpoint) {
             setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            setNotification({ message: 'This model does not support image input. Try a different model or remove the image.', type: 'error' });
+            toast.error('This model does not support image input. Try a different model or remove the image.');
           } else if (isQuota) {
             setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            setNotification({ message: 'Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.', type: 'error' });
+            toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
           } else {
             const displayMsg = `**Error:** ${errorMsg}`;
             setMessages(prev => prev.map(msg => {
@@ -714,13 +719,13 @@ const App: React.FC = () => {
         const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
         if (isWebSearchDisabled) {
           setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          setNotification({ message: 'Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.', type: 'error' });
+          toast.error('Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.');
         } else if (isNoImageEndpoint) {
           setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          setNotification({ message: 'This model does not support image input. Try a different model or remove the image.', type: 'error' });
+          toast.error('This model does not support image input. Try a different model or remove the image.');
         } else if (isQuota) {
           setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          setNotification({ message: 'Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.', type: 'error' });
+          toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
         } else {
           const displayMsg = `**Error:** ${errorMsg}`;
           setMessages(prev => prev.map(msg => {
@@ -739,10 +744,7 @@ const App: React.FC = () => {
 
   const handleFeedback = (messageId: string, feedback: 'good' | 'bad') => {
     console.log(`Feedback for message ${messageId}: ${feedback}`);
-    setNotification({
-      message: `Thank you for your ${feedback === 'good' ? 'positive' : ''} feedback!`,
-      type: 'success'
-    });
+    toast.success(`Thank you for your ${feedback === 'good' ? 'positive' : ''} feedback!`);
   };
 
   const handleReattach = useCallback((data: string, name: string, mimeType: string) => {
@@ -758,7 +760,7 @@ const App: React.FC = () => {
     const fileName = name || `image-${Date.now()}.${ext}`;
     const file = new File([blob], fileName, { type: mimeType });
     setPendingFiles(prev => [...prev, file]);
-    setNotification({ message: `Image attached to input`, type: 'success' });
+    toast.success('Image attached to input');
   }, []);
 
   useEffect(() => {
@@ -812,8 +814,10 @@ const App: React.FC = () => {
       <ModeSelector
         isChatAuthenticated={isChatAuthenticated}
         isExperimentsAuthenticated={isExperimentsAuthenticated}
+        isLibraryAuthenticated={isLibraryAuthenticated}
         onSelectChat={() => navigate('/chat')}
         onSelectExperiments={() => navigate('/experiments')}
+        onSelectLibrary={() => navigate('/library')}
         onUnlockChat={() => {
           setIsChatAuthenticated(true);
           sessionStorage.setItem('edward:labs_chat_session', 'true');
@@ -821,6 +825,10 @@ const App: React.FC = () => {
         onUnlockExperiments={() => {
           setIsExperimentsAuthenticated(true);
           sessionStorage.setItem('edward:labs_experiments_session', 'true');
+        }}
+        onUnlockLibrary={() => {
+          setIsLibraryAuthenticated(true);
+          sessionStorage.setItem('edward:labs_library_session', 'true');
         }}
       />
     );
@@ -869,109 +877,116 @@ const App: React.FC = () => {
         {/* Top bar */}
         <div className="flex items-center p-2 md:p-4 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 mr-2 rounded-lg transition-all duration-200"
-              style={{ color: 'var(--text-500)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
+              className="mr-2 text-[var(--text-500)] hover:text-[var(--text-100)]"
             >
               <PanelLeft size={20} />
-            </button>
+            </Button>
           )}
           {location.pathname.startsWith('/experiments/stitch') && stitchControls ? (
             <>
-              <button
-                onClick={() => { setStitchActiveProject(null); navigate('/experiments/stitch'); }}
-                className="p-2 rounded-lg transition-all duration-150"
-                style={{ color: 'var(--text-500)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-100)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <div className="flex items-center gap-2">
-                <Layers size={16} style={{ color: 'var(--neon-color)' }} />
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>{stitchControls.projectTitle}</span>
-                <span
-                  className="px-2 py-0.5 rounded text-xs font-medium"
-                  style={{
-                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                    color: 'var(--neon-color)',
-                    border: '1px solid rgba(var(--neon-rgb), 0.2)',
-                  }}
+              <div className="flex items-center gap-2 min-w-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => { setStitchActiveProject(null); navigate('/experiments/stitch'); }}
+                  className="text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
                 >
-                  {stitchControls.layout || '16:9'}
-                </span>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                {stitchControls.hasHtml && (
-                  <button
-                    onClick={stitchControls.onViewModeToggle}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  <ArrowLeft size={18} />
+                </Button>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Layers size={16} className="flex-shrink-0" style={{ color: 'var(--neon-color)' }} />
+                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{stitchControls.projectTitle}</span>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] flex-shrink-0"
                     style={{
-                      backgroundColor: 'var(--bg-200)',
-                      color: 'var(--text-300)',
-                      border: '1px solid var(--border-300)',
+                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                      color: 'var(--neon-color)',
+                      borderColor: 'rgba(var(--neon-rgb), 0.2)',
                     }}
+                  >
+                    {stitchControls.layout || '16:9'}
+                  </Badge>
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                {stitchControls.hasHtml && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={stitchControls.onViewModeToggle}
+                    className="h-7 gap-1.5 text-xs"
+                    style={{ color: 'var(--text-300)' }}
                   >
                     {stitchControls.viewMode === 'preview' ? <Code size={12} /> : <Eye size={12} />}
                     {stitchControls.viewMode === 'preview' ? 'Source' : 'Preview'}
-                  </button>
+                  </Button>
                 )}
                 {!stitchControls.isGenerating && stitchControls.hasLastPrompt && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={stitchControls.onRegenerate}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
-                    style={{
-                      backgroundColor: 'var(--bg-200)',
-                      color: 'var(--text-300)',
-                      border: '1px solid var(--border-300)',
-                    }}
+                    className="h-7 gap-1.5 text-xs"
+                    style={{ color: 'var(--text-300)' }}
                   >
                     <RotateCcw size={12} />
                     Regenerate
-                  </button>
+                  </Button>
                 )}
                 {stitchControls.isGenerating && (
-                  <button
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={stitchControls.onStopGeneration}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
-                    style={{
-                      backgroundColor: 'rgba(239,68,68,0.15)',
-                      color: '#f87171',
-                      border: '1px solid rgba(239,68,68,0.3)',
-                    }}
+                    className="h-7 gap-1.5 text-xs"
                   >
                     Stop
-                  </button>
+                  </Button>
                 )}
+                <Separator orientation="vertical" className="h-5 mx-0.5" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={stitchControls.onToggleLibrary}
+                  className="h-7 gap-1.5 text-xs"
+                  style={{
+                    color: stitchControls.isLibraryOpen ? 'var(--neon-color)' : 'var(--text-300)',
+                    backgroundColor: stitchControls.isLibraryOpen ? 'rgba(var(--neon-rgb), 0.1)' : undefined,
+                  }}
+                >
+                  <Package size={12} />
+                  Library
+                </Button>
                 {stitchControls.hasHtml && !stitchControls.isGenerating && (
                   <>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={stitchControls.onExport}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        backgroundColor: 'var(--bg-200)',
-                        color: 'var(--text-300)',
-                        border: '1px solid var(--border-300)',
-                      }}
+                      className="h-7 gap-1.5 text-xs"
+                      style={{ color: 'var(--text-300)' }}
                     >
                       <Download size={12} />
-                      HTML
-                    </button>
-                    <button
+                      Export
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={stitchControls.onCopy}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      className="h-7 gap-1.5 text-xs"
                       style={{
                         backgroundColor: 'rgba(var(--neon-rgb), 0.15)',
                         color: 'var(--neon-color)',
-                        border: '1px solid rgba(var(--neon-rgb), 0.3)',
+                        borderColor: 'rgba(var(--neon-rgb), 0.3)',
                       }}
                     >
                       {stitchControls.copied ? <Check size={12} /> : <Copy size={12} />}
                       {stitchControls.copied ? 'Copied' : 'Copy'}
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -985,15 +1000,14 @@ const App: React.FC = () => {
                 <span className="font-semibold text-sm" style={{ color: 'var(--text-300)' }}>edward:labs</span>
               </div>
               <div className="ml-auto flex items-center gap-2">
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={handleNewChat}
-                  className="md:hidden p-2 rounded-lg transition-colors"
-                  style={{ color: 'var(--text-500)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  className="md:hidden text-[var(--text-500)]"
                 >
                   <SquarePen size={18} />
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -1018,25 +1032,13 @@ const App: React.FC = () => {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
                         {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                          <button
+                          <Card
                             key={i}
                             onClick={() => setInput(suggestion)}
-                            className="group rounded-xl p-4 text-left transition-all duration-200"
-                            style={{
-                              backgroundColor: 'var(--bg-200)',
-                              border: '1px solid var(--border-300)',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-200)';
-                              e.currentTarget.style.borderColor = 'var(--border-300)';
-                            }}
+                            className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]"
                           >
                             <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                          </button>
+                          </Card>
                         ))}
                       </div>
                     </div>
@@ -1051,13 +1053,13 @@ const App: React.FC = () => {
                 ) : (
                   <div className="h-full flex items-center justify-center p-6">
                     {modelType === 'tts' ? (
-                      <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <TTSPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'tts-voicedesign' ? (
-                      <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <VoiceDesignPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'tts-voiceclone' ? (
-                      <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <VoiceClonePanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'asr' ? (
-                      <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <ASRPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : null}
                   </div>
                 )}
@@ -1079,25 +1081,13 @@ const App: React.FC = () => {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
                         {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                          <button
+                          <Card
                             key={i}
                             onClick={() => setInput(suggestion)}
-                            className="group rounded-xl p-4 text-left transition-all duration-200"
-                            style={{
-                              backgroundColor: 'var(--bg-200)',
-                              border: '1px solid var(--border-300)',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-300)';
-                              e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.12)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--bg-200)';
-                              e.currentTarget.style.borderColor = 'var(--border-300)';
-                            }}
+                            className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]"
                           >
                             <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                          </button>
+                          </Card>
                         ))}
                       </div>
                     </div>
@@ -1112,13 +1102,13 @@ const App: React.FC = () => {
                 ) : (
                   <div className="h-full flex items-center justify-center p-6">
                     {modelType === 'tts' ? (
-                      <TTSPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <TTSPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'tts-voicedesign' ? (
-                      <VoiceDesignPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <VoiceDesignPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'tts-voiceclone' ? (
-                      <VoiceClonePanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <VoiceClonePanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : modelType === 'asr' ? (
-                      <ASRPanel onNotification={(msg, type) => setNotification({ message: msg, type })} theme={theme} modelConfig={selectedModelConfig} />
+                      <ASRPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
                     ) : null}
                   </div>
                 )}
@@ -1132,7 +1122,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     models={models}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     conversationId={experimentConversationId}
                     onConversationChange={setExperimentConversationId}
                   />
@@ -1146,7 +1136,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     models={models}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     conversationId={experimentConversationId}
                     onConversationChange={setExperimentConversationId}
                   />
@@ -1160,7 +1150,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     models={models}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     conversationId={experimentConversationId}
                     onConversationChange={setExperimentConversationId}
                   />
@@ -1174,7 +1164,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     models={models}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     conversationId={experimentConversationId}
                     onConversationChange={setExperimentConversationId}
                   />
@@ -1187,7 +1177,7 @@ const App: React.FC = () => {
                   <StitchPanel
                     key={stitchResetKey}
                     theme={theme}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     modelConfig={selectedModelConfig}
                     models={models}
                     onProjectChange={(project) => {
@@ -1209,7 +1199,7 @@ const App: React.FC = () => {
                   <StitchPanel
                     key={stitchResetKey}
                     theme={theme}
-                    onNotification={(msg, type) => setNotification({ message: msg, type })}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                     modelConfig={selectedModelConfig}
                     models={models}
                     initialProjectId={stitchProjectId}
@@ -1222,6 +1212,28 @@ const App: React.FC = () => {
                       }
                     }}
                     onControlsChange={setStitchControls}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="/library" element={
+              <RequireAuth isAuth={isLibraryAuthenticated}>
+                <div className="h-full overflow-auto">
+                  <LibraryPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
+                  />
+                </div>
+              </RequireAuth>
+            } />
+            <Route path="/library/:componentId" element={
+              <RequireAuth isAuth={isLibraryAuthenticated}>
+                <div className="h-full overflow-auto">
+                  <LibraryPanel
+                    theme={theme}
+                    modelConfig={selectedModelConfig}
+                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                   />
                 </div>
               </RequireAuth>
@@ -1281,9 +1293,7 @@ const App: React.FC = () => {
 
         <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 
-        {notification && (
-          <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />
-        )}
+        <Toaster />
       </main>
     </div>
   );

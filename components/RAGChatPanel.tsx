@@ -5,6 +5,11 @@ import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
 import * as db from '../services/apiDatabaseAdapter';
 import { uploadDocument, listDocuments, deleteDocument, queryRAG, RAGDocument, RAGSource } from '../services/ragService';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -88,7 +93,7 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
     }
     const newId = await db.createConversation(dbModel!.id!, null, 'rag');
     onConversationChange(newId);
-    await db.getConversations(); // refresh
+    await db.getConversations();
     return newId;
   };
 
@@ -218,33 +223,36 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>RAG</h2>
-            <p className="text-[10px]" style={{ color: 'var(--text-500)' }}>
+            <Badge variant="secondary" className="text-[10px] mt-0.5">
               {documents.length} document{documents.length !== 1 ? 's' : ''} indexed
-            </p>
+            </Badge>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant={showDocs ? 'default' : 'outline'}
+            size="sm"
             onClick={() => setShowDocs(!showDocs)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-            style={{
-              backgroundColor: showDocs ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
-              color: showDocs ? 'var(--neon-color)' : 'var(--text-300)',
-              border: `1px solid ${showDocs ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)'}`,
-            }}
+            className="gap-1.5 text-xs"
+            style={showDocs ? {
+              backgroundColor: 'rgba(var(--neon-rgb), 0.15)',
+              color: 'var(--neon-color)',
+              borderColor: 'rgba(var(--neon-rgb), 0.3)',
+            } : undefined}
           >
             <FileText size={12} />
             Documents
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
+            className="gap-1.5 text-xs"
             style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
           >
             {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
             Upload
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -256,42 +264,49 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
         </div>
       </div>
 
+      <Separator />
+
       {/* Document list panel */}
       {showDocs && (
-        <div
-          className="mx-4 mb-3 rounded-xl p-3 max-h-48 overflow-y-auto"
-          style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
-        >
-          {documents.length === 0 ? (
-            <p className="text-xs text-center" style={{ color: 'var(--text-500)' }}>No documents uploaded yet</p>
-          ) : (
-            <div className="space-y-2">
-              {documents.map(doc => (
-                <div key={doc.id} className="flex items-center gap-2 group">
-                  <FileText size={12} style={{ color: 'var(--text-500)' }} />
-                  <span className="flex-1 text-xs truncate" style={{ color: 'var(--text-300)' }}>{doc.name}</span>
-                  <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>{doc.chunkCount} chunks</span>
-                  <button
-                    onClick={() => handleDeleteDoc(doc.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
-                    style={{ color: '#f87171' }}
-                  >
-                    <Trash2 size={10} />
-                  </button>
+        <Card className="mx-4 mb-3">
+          <CardContent className="p-3">
+            {documents.length === 0 ? (
+              <p className="text-xs text-center text-muted-foreground">No documents uploaded yet</p>
+            ) : (
+              <ScrollArea className="max-h-44">
+                <div className="space-y-2 pr-3">
+                  {documents.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-2 group">
+                      <FileText size={12} className="text-muted-foreground" />
+                      <span className="flex-1 text-xs truncate" style={{ color: 'var(--text-300)' }}>{doc.name}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {doc.chunkCount} chunks
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteDoc(doc.id)}
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ color: '#f87171' }}
+                      >
+                        <Trash2 size={10} />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 pb-52">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
-            <Database size={40} style={{ color: 'var(--text-500)' }} className="mb-4" />
+            <Database size={40} className="mb-4 text-muted-foreground" />
             <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>RAG Chat</p>
-            <p className="text-xs max-w-sm" style={{ color: 'var(--text-500)' }}>
+            <p className="text-xs max-w-sm text-muted-foreground">
               Upload documents and ask questions. The AI will retrieve relevant context before answering.
             </p>
           </div>

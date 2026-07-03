@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, FlaskConical, Lock, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { MessageSquare, FlaskConical, Lock, CheckCircle2, ArrowRight, Package } from 'lucide-react';
 import NeuralBackground from './NeuralBackground';
 import { TextGlitch } from './TextGlitch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 const CHAT_PASSWORD = 'thelordismyshepherd';
 const EXPERIMENTS_PASSWORD = 'ilacknothing';
+const LIBRARY_PASSWORD = 'psalm23';
 
 interface InlinePasswordModalProps {
   isOpen: boolean;
@@ -43,65 +47,31 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-sm mx-4 p-6 rounded-2xl border animate-fade-in"
-        style={{
-          backgroundColor: 'var(--bg-200)',
-          borderColor: 'var(--border-300)',
-          boxShadow: '0 0 40px rgba(var(--neon-rgb), 0.1)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-lg transition-colors"
-          style={{ color: 'var(--text-500)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-        >
-          <X size={16} />
-        </button>
-
-        <div className="text-center mb-6">
-          <h3 className="text-lg font-semibold" style={{ color: 'var(--text-100)' }}>
-            {title}
-          </h3>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-500)' }}>
-            {subtitle}
-          </p>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader className="text-center">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{subtitle}</DialogDescription>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input
+          <Input
             ref={inputRef}
             type="password"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setError(''); }}
             placeholder="Password"
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200"
-            style={{
-              backgroundColor: 'var(--bg-100)',
-              border: '1px solid var(--border-300)',
-              color: 'var(--text-100)',
-            }}
           />
 
           {error && (
             <p className="text-sm animate-shake" style={{ color: '#f87171' }}>{error}</p>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={isLoading || !password.trim()}
-            className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full"
             style={{
               backgroundColor: 'var(--neon-color)',
               color: '#000',
@@ -115,33 +85,40 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
                 <ArrowRight size={16} />
               </>
             )}
-          </button>
+          </Button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 interface ModeSelectorProps {
   isChatAuthenticated: boolean;
   isExperimentsAuthenticated: boolean;
+  isLibraryAuthenticated: boolean;
   onSelectChat: () => void;
   onSelectExperiments: () => void;
+  onSelectLibrary: () => void;
   onUnlockChat: () => void;
   onUnlockExperiments: () => void;
+  onUnlockLibrary: () => void;
 }
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({
   isChatAuthenticated,
   isExperimentsAuthenticated,
+  isLibraryAuthenticated,
   onSelectChat,
   onSelectExperiments,
+  onSelectLibrary,
   onUnlockChat,
   onUnlockExperiments,
+  onUnlockLibrary,
 }) => {
   const [neonColor, setNeonColor] = useState('#f87171');
   const [showChatPasswordModal, setShowChatPasswordModal] = useState(false);
   const [showExperimentsPasswordModal, setShowExperimentsPasswordModal] = useState(false);
+  const [showLibraryPasswordModal, setShowLibraryPasswordModal] = useState(false);
 
   useEffect(() => {
     const color = getComputedStyle(document.documentElement).getPropertyValue('--neon-color').trim();
@@ -164,6 +141,14 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
+  const handleLibraryClick = () => {
+    if (isLibraryAuthenticated) {
+      onSelectLibrary();
+    } else {
+      setShowLibraryPasswordModal(true);
+    }
+  };
+
   const handleChatPasswordSuccess = () => {
     onUnlockChat();
     onSelectChat();
@@ -174,6 +159,12 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     onUnlockExperiments();
     onSelectExperiments();
     setShowExperimentsPasswordModal(false);
+  };
+
+  const handleLibraryPasswordSuccess = () => {
+    onUnlockLibrary();
+    onSelectLibrary();
+    setShowLibraryPasswordModal(false);
   };
 
   const cards = [
@@ -193,13 +184,21 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       locked: !isExperimentsAuthenticated,
       onClick: handleExperimentsClick,
     },
+    {
+      id: 'library' as const,
+      icon: Package,
+      title: 'Library',
+      description: 'Component library with AI agent — reusable widgets, templates, and tools',
+      locked: !isLibraryAuthenticated,
+      onClick: handleLibraryClick,
+    },
   ];
 
   return (
     <div className="relative flex min-h-screen items-center justify-center">
       <NeuralBackground className="absolute inset-0 z-0" color={neonColor} trailOpacity={0.12} particleCount={600} speed={0.8} />
 
-      <div className="relative z-10 w-full max-w-2xl mx-4 px-4">
+      <div className="relative z-10 w-full max-w-4xl mx-4 px-4">
         <div className="text-center mb-12">
           <TextGlitch text="EDWARD:LABS" />
           <p className="text-base mt-4" style={{ color: 'var(--text-500)' }}>
@@ -207,7 +206,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           {cards.map((card, index) => (
             <button
               key={card.id}
@@ -273,6 +272,15 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
         onSuccess={handleExperimentsPasswordSuccess}
         onClose={() => setShowExperimentsPasswordModal(false)}
         correctPassword={EXPERIMENTS_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showLibraryPasswordModal}
+        title="Unlock Library"
+        subtitle="Enter your password to access the component library"
+        onSuccess={handleLibraryPasswordSuccess}
+        onClose={() => setShowLibraryPasswordModal(false)}
+        correctPassword={LIBRARY_PASSWORD}
       />
     </div>
   );
