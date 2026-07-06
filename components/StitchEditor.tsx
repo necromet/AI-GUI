@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Square, ArrowUp, Plus, Package, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Plus, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -16,6 +16,7 @@ import { CodeEditor } from '@/components/ui/code-editor-sheet';
 import { SquareLoader } from '@/components/ui/loader-2';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChatInput, ChatInputTextArea, ChatInputSubmit } from '@/components/ui/chat-input';
 import type { StitchComponent } from '../types/stitchSpec';
 
 export interface StitchControls {
@@ -85,7 +86,6 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
   const [sourceOriginalHtml, setSourceOriginalHtml] = useState<string>('');
   const editorRef = useRef<any>(null);
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedLibraryComponents, setSelectedLibraryComponents] = useState<StitchComponent[]>([]);
   const [selectedPalette, setSelectedPalette] = useState<{ name: string; colors: string[] } | null>(null);
@@ -579,15 +579,6 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
     }
   }, [isCarousel, project, onSave, activeBoardIdx]);
 
-  useEffect(() => {
-    if (!textareaRef.current) return;
-    const el = textareaRef.current;
-    el.style.height = 'auto';
-    requestAnimationFrame(() => {
-      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-    });
-  }, [sidebarInput]);
-
   const handleCancelEdits = useCallback(() => {
     setEditedHtml(sourceOriginalHtml);
     if (editorRef.current) {
@@ -1032,76 +1023,29 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
 
           {/* Input */}
           <div className="px-3 pb-3 pt-1">
-            <div
-              className="flex items-end gap-2 rounded-xl px-3 py-2 transition-all duration-200"
-              style={{
-                backgroundColor: 'var(--bg-200)',
-                border: '1px solid var(--border-300)',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
-                e.currentTarget.style.boxShadow = '0 0 0 2px rgba(var(--neon-rgb), 0.06)';
-              }}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  e.currentTarget.style.borderColor = 'var(--border-300)';
-                  e.currentTarget.style.boxShadow = 'none';
+            <ChatInput
+              value={sidebarInput}
+              onChange={(e) => setSidebarInput(e.target.value)}
+              onSubmit={() => {
+                if (sidebarInput.trim() && !isGenerating) {
+                  handleGenerate(sidebarInput.trim());
+                  setSidebarInput('');
                 }
               }}
+              loading={isGenerating}
+              onStop={handleStopGeneration}
+              rows={1}
             >
-              <textarea
-                ref={textareaRef}
-                value={sidebarInput}
-                onChange={(e) => setSidebarInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (sidebarInput.trim() && !isGenerating) {
-                      handleGenerate(sidebarInput.trim());
-                      setSidebarInput('');
-                    }
-                  }
-                }}
+              <ChatInputTextArea
                 placeholder={
                   chatMessages.length === 0
                     ? (isCarousel ? `Describe slide ${activeBoardIdx + 1}...` : 'Describe your design...')
                     : 'Describe changes...'
                 }
-                className="flex-1 bg-transparent text-sm outline-none resize-none min-h-[18px] max-h-[100px] leading-snug placeholder:opacity-50"
-                style={{ color: 'var(--text-100)' }}
                 disabled={isGenerating}
-                rows={1}
               />
-              {isGenerating ? (
-                <button
-                  onClick={handleStopGeneration}
-                  className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
-                  style={{ color: '#ef4444' }}
-                >
-                  <Square size={12} className="fill-current" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (sidebarInput.trim() && !isGenerating) {
-                      handleGenerate(sidebarInput.trim());
-                      setSidebarInput('');
-                    }
-                  }}
-                  disabled={!sidebarInput.trim()}
-                  className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-200"
-                  style={sidebarInput.trim() ? {
-                    backgroundColor: 'var(--neon-color)',
-                    color: '#000',
-                  } : {
-                    color: 'var(--text-500)',
-                    opacity: 0.4,
-                  }}
-                >
-                  <ArrowUp size={12} />
-                </button>
-              )}
-            </div>
+              <ChatInputSubmit />
+            </ChatInput>
           </div>
         </div>
       </div>

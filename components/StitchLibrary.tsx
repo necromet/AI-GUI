@@ -21,15 +21,15 @@ interface StitchLibraryProps {
 }
 
 const CATEGORIES = [
-  { key: 'all', label: 'All', icon: <Package className="h-3 w-3" /> },
-  { key: 'section', label: 'Sections', icon: <Layers className="h-3 w-3" /> },
-  { key: 'component', label: 'Components', icon: <LayoutGrid className="h-3 w-3" /> },
-  { key: 'image', label: 'Images', icon: <ImageIcon className="h-3 w-3" /> },
-  { key: 'palette', label: 'Palettes', icon: <Palette className="h-3 w-3" /> },
-  { key: 'layout', label: 'Layouts', icon: <Layout className="h-3 w-3" /> },
-  { key: 'icon', label: 'Icons', icon: <ImageIcon className="h-3 w-3" /> },
-  { key: 'svg', label: 'SVGs', icon: <Code className="h-3 w-3" /> },
-  { key: 'template', label: 'Templates', icon: <Layers className="h-3 w-3" /> },
+  { key: 'all', label: 'All', icon: <Package className="h-3.5 w-3.5" /> },
+  { key: 'section', label: 'Sections', icon: <Layers className="h-3.5 w-3.5" /> },
+  { key: 'component', label: 'Components', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+  { key: 'image', label: 'Images', icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { key: 'palette', label: 'Palettes', icon: <Palette className="h-3.5 w-3.5" /> },
+  { key: 'layout', label: 'Layouts', icon: <Layout className="h-3.5 w-3.5" /> },
+  { key: 'icon', label: 'Icons', icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { key: 'svg', label: 'SVGs', icon: <Code className="h-3.5 w-3.5" /> },
+  { key: 'template', label: 'Templates', icon: <Layers className="h-3.5 w-3.5" /> },
 ];
 
 const PALETTE_PRESETS: { name: string; colors: string[] }[] = [
@@ -257,29 +257,29 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
               backgroundColor: 'var(--bg-300)',
             }}
           />
-          <CardContent className="p-2 flex items-start gap-2">
+          <CardContent className="p-2.5 flex items-start gap-2.5">
             <div className="flex-shrink-0 mt-0.5">
               {isSelected ? (
-                <Check size={12} style={{ color: 'var(--neon-color)' }} />
+                <Check size={14} style={{ color: 'var(--neon-color)' }} />
               ) : (
-                <div className="w-3 h-3 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
+                <div className="w-3.5 h-3.5 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
-                <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 rounded-full">image</Badge>
+                <span className="text-sm font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full">image</Badge>
                 {score !== undefined && (
-                  <span className="text-[9px] px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
+                  <span className="text-[10px] px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
                     {(score * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
-              <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
               {comp.tags.length > 0 && (
                 <div className="flex gap-1 mt-1 flex-wrap">
                   {comp.tags.slice(0, 3).map(tag => (
-                    <Badge key={tag} variant="outline" className="text-[8px] px-1 py-0.5">{tag}</Badge>
+                    <Badge key={tag} variant="outline" className="text-[9px] px-1.5 py-0.5">{tag}</Badge>
                   ))}
                 </div>
               )}
@@ -288,10 +288,10 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-7 w-7"
                 onClick={e => { e.stopPropagation(); handleDelete(comp.id); }}
               >
-                <Trash2 size={10} className="text-destructive" />
+                <Trash2 size={12} className="text-destructive" />
               </Button>
             </div>
           </CardContent>
@@ -311,13 +311,13 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             borderColor: isSelected ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)',
           }}
         >
-          <CardContent className="p-2">
+          <CardContent className="p-2.5">
             <div className="flex items-center gap-2 mb-1.5">
               <div className="flex gap-0.5 flex-shrink-0">
                 {colors.slice(0, 6).map((color, i) => (
                   <div
                     key={i}
-                    className="w-5 h-5 rounded-md border"
+                    className="w-6 h-6 rounded-md border"
                     style={{ backgroundColor: color, borderColor: 'rgba(255,255,255,0.1)' }}
                     title={color}
                   />
@@ -325,21 +325,21 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
               </div>
               <div className="flex-1 min-w-0 flex items-center gap-1.5">
                 {isSelected ? (
-                  <Check size={12} style={{ color: 'var(--neon-color)' }} />
+                  <Check size={14} style={{ color: 'var(--neon-color)' }} />
                 ) : (
-                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ border: '1px solid var(--border-300)' }} />
+                  <div className="w-3.5 h-3.5 rounded-sm flex-shrink-0" style={{ border: '1px solid var(--border-300)' }} />
                 )}
-                <span className="text-xs font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
-                <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0">palette</Badge>
+                <span className="text-sm font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">palette</Badge>
               </div>
             </div>
-            <p className="text-[10px] truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
-            <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <p className="text-xs truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
+            <div className="flex items-center gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
               {onPaletteSelect && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-5 px-1.5 text-[9px]"
+                  className="h-6 px-2 text-[10px]"
                   onClick={e => {
                     e.stopPropagation();
                     onPaletteSelect({ name: comp.name, colors });
@@ -352,10 +352,10 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5"
+                className="h-6 w-6"
                 onClick={e => { e.stopPropagation(); handleDelete(comp.id); }}
               >
-                <Trash2 size={9} className="text-destructive" />
+                <Trash2 size={11} className="text-destructive" />
               </Button>
             </div>
           </CardContent>
@@ -374,30 +374,30 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             borderColor: isSelected ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)',
           }}
         >
-          <CardContent className="p-2 flex items-start gap-2">
+          <CardContent className="p-2.5 flex items-start gap-2.5">
             <div className="flex-shrink-0 mt-0.5">
               {isSelected ? (
-                <Check size={12} style={{ color: 'var(--neon-color)' }} />
+                <Check size={14} style={{ color: 'var(--neon-color)' }} />
               ) : (
-                <div className="w-3 h-3 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
+                <div className="w-3.5 h-3.5 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <Layout size={10} style={{ color: 'var(--neon-color)' }} />
-                <span className="text-xs font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
-                <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 rounded-full">layout</Badge>
+                <Layout size={12} style={{ color: 'var(--neon-color)' }} />
+                <span className="text-sm font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full">layout</Badge>
               </div>
-              <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
               {comp.specSnippet && (
-                <p className="text-[9px] mt-0.5 font-mono truncate" style={{ color: 'var(--text-500)', opacity: 0.6 }}>
+                <p className="text-[10px] mt-0.5 font-mono truncate" style={{ color: 'var(--text-500)', opacity: 0.6 }}>
                   {comp.specSnippet}
                 </p>
               )}
               {comp.tags.length > 0 && (
                 <div className="flex gap-1 mt-1 flex-wrap">
                   {comp.tags.slice(0, 3).map(tag => (
-                    <Badge key={tag} variant="outline" className="text-[8px] px-1 py-0.5">{tag}</Badge>
+                    <Badge key={tag} variant="outline" className="text-[9px] px-1.5 py-0.5">{tag}</Badge>
                   ))}
                 </div>
               )}
@@ -407,7 +407,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="h-7 w-7"
                   onClick={e => {
                     e.stopPropagation();
                     onLayoutSelect(comp);
@@ -415,16 +415,16 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                   }}
                   title="Use as template"
                 >
-                  <Plus size={10} style={{ color: 'var(--neon-color)' }} />
+                  <Plus size={12} style={{ color: 'var(--neon-color)' }} />
                 </Button>
               )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-7 w-7"
                 onClick={e => { e.stopPropagation(); handleDelete(comp.id); }}
               >
-                <Trash2 size={10} className="text-destructive" />
+                <Trash2 size={12} className="text-destructive" />
               </Button>
             </div>
           </CardContent>
@@ -443,31 +443,31 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
           borderColor: isSelected ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)',
         }}
       >
-        <CardContent className="p-2 flex items-start gap-2">
+        <CardContent className="p-2.5 flex items-start gap-2.5">
           <div className="flex-shrink-0 mt-0.5">
             {isSelected ? (
-              <Check size={12} style={{ color: 'var(--neon-color)' }} />
+              <Check size={14} style={{ color: 'var(--neon-color)' }} />
             ) : (
-              <div className="w-3 h-3 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
+              <div className="w-3.5 h-3.5 rounded-sm" style={{ border: '1px solid var(--border-300)' }} />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 rounded-full">
+              <span className="text-sm font-medium truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded-full">
                 {comp.category}
               </Badge>
               {score !== undefined && (
-                <span className="text-[9px] px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
+                <span className="text-[10px] px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
                   {(score * 100).toFixed(0)}%
                 </span>
               )}
             </div>
-            <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
+            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
             {comp.tags.length > 0 && (
               <div className="flex gap-1 mt-1 flex-wrap">
                 {comp.tags.slice(0, 3).map(tag => (
-                  <Badge key={tag} variant="outline" className="text-[8px] px-1 py-0.5">
+                  <Badge key={tag} variant="outline" className="text-[9px] px-1.5 py-0.5">
                     {tag}
                   </Badge>
                 ))}
@@ -477,10 +477,10 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
             onClick={e => { e.stopPropagation(); handleDelete(comp.id); }}
           >
-            <Trash2 size={10} className="text-destructive" />
+            <Trash2 size={12} className="text-destructive" />
           </Button>
         </CardContent>
       </Card>
@@ -490,17 +490,17 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
+      <div className="flex items-center justify-between px-3 py-2.5" style={{ borderBottom: '1px solid var(--border-300)' }}>
         <div className="flex items-center gap-2">
-          <Package size={14} style={{ color: 'var(--neon-color)' }} />
-          <span className="text-xs font-semibold" style={{ color: 'var(--text-100)' }}>Library</span>
+          <Package size={16} style={{ color: 'var(--neon-color)' }} />
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>Library</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleReindex} title="Reindex embeddings">
-            <RefreshCw size={12} style={{ color: 'var(--text-500)' }} />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleReindex} title="Reindex embeddings">
+            <RefreshCw size={14} style={{ color: 'var(--text-500)' }} />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openAddDialog()} title="Add component">
-            <Plus size={12} style={{ color: 'var(--neon-color)' }} />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openAddDialog()} title="Add component">
+            <Plus size={14} style={{ color: 'var(--neon-color)' }} />
           </Button>
         </div>
       </div>
@@ -508,24 +508,24 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
       {/* Search */}
       <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
         <div className="flex items-center gap-1.5">
-          <div className="flex-1 flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)' }}>
-            <Search size={12} style={{ color: 'var(--text-500)' }} />
+          <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)' }}>
+            <Search size={14} style={{ color: 'var(--text-500)' }} />
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="Search library..."
-              className="h-6 border-0 bg-transparent text-xs focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
+              className="h-7 border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
               style={{ color: 'var(--text-100)' }}
             />
             {searchQuery && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-4 w-4 p-0"
+                className="h-5 w-5 p-0"
                 onClick={() => { setSearchQuery(''); loadComponents(); }}
               >
-                <X size={10} style={{ color: 'var(--text-500)' }} />
+                <X size={12} style={{ color: 'var(--text-500)' }} />
               </Button>
             )}
           </div>
@@ -539,7 +539,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             key={cat.key}
             variant={activeCategory === cat.key ? 'secondary' : 'ghost'}
             size="sm"
-            className="h-6 px-2 text-[10px] font-medium gap-1 flex-shrink-0"
+            className="h-7 px-2.5 text-xs font-medium gap-1.5 flex-shrink-0"
             onClick={() => setActiveCategory(cat.key)}
             style={{
               backgroundColor: activeCategory === cat.key ? 'rgba(var(--neon-rgb), 0.2)' : undefined,
@@ -562,7 +562,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="comp-name" className="text-xs">Name</Label>
+              <Label htmlFor="comp-name" className="text-sm">Name</Label>
               <Input
                 id="comp-name"
                 value={addCategory === 'image' ? imageLabelInput : newComponent.name}
@@ -571,7 +571,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                   else setNewComponent(prev => ({ ...prev, name: e.target.value }));
                 }}
                 placeholder={addCategory === 'image' ? 'Image label (e.g. hero-photo)' : 'Component name'}
-                className="h-8 text-xs"
+                className="h-9 text-sm"
               />
             </div>
 
@@ -579,7 +579,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             {addCategory !== 'image' && addCategory !== 'palette' && (
               <div className="flex gap-2">
                 <div className="flex-1 space-y-1.5">
-                  <Label htmlFor="comp-category" className="text-xs">Category</Label>
+                  <Label htmlFor="comp-category" className="text-sm">Category</Label>
                   <select
                     id="comp-category"
                     value={newComponent.category}
@@ -592,7 +592,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                         contentType: cat === 'palette' ? 'colors' : cat === 'image' ? 'image-url' : 'json',
                       }));
                     }}
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="section">Section</option>
                     <option value="component">Component</option>
@@ -605,12 +605,12 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                   </select>
                 </div>
                 <div className="flex-1 space-y-1.5">
-                  <Label htmlFor="comp-content-type" className="text-xs">Content Type</Label>
+                  <Label htmlFor="comp-content-type" className="text-sm">Content Type</Label>
                   <select
                     id="comp-content-type"
                     value={newComponent.contentType}
                     onChange={e => setNewComponent(prev => ({ ...prev, contentType: e.target.value as any }))}
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="json">JSON Spec</option>
                     <option value="html">HTML</option>
@@ -622,25 +622,25 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
 
             {/* Description — for all types */}
             <div className="space-y-1.5">
-              <Label htmlFor="comp-desc" className="text-xs">Description</Label>
+              <Label htmlFor="comp-desc" className="text-sm">Description</Label>
               <Input
                 id="comp-desc"
                 value={newComponent.description}
                 onChange={e => setNewComponent(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Description (for search)"
-                className="h-8 text-xs"
+                className="h-9 text-sm"
               />
             </div>
 
             {/* Tags — for all types */}
             <div className="space-y-1.5">
-              <Label htmlFor="comp-tags" className="text-xs">Tags</Label>
+              <Label htmlFor="comp-tags" className="text-sm">Tags</Label>
               <Input
                 id="comp-tags"
                 value={newComponent.tags}
                 onChange={e => setNewComponent(prev => ({ ...prev, tags: e.target.value }))}
                 placeholder="Tags (comma-separated)"
-                className="h-8 text-xs"
+                className="h-9 text-sm"
               />
             </div>
 
@@ -648,12 +648,12 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             {addCategory === 'image' && (
               <div className="space-y-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Image URL</Label>
+                  <Label className="text-sm">Image URL</Label>
                   <Input
                     value={imageUrlInput}
                     onChange={e => setImageUrlInput(e.target.value)}
                     placeholder="Paste image URL..."
-                    className="h-8 text-xs"
+                    className="h-9 text-sm"
                     onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
                   />
                 </div>
@@ -661,10 +661,10 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="h-7 px-3 text-[11px] font-medium"
+                    className="h-8 px-3 text-xs font-medium"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload size={10} className="mr-1" />
+                    <Upload size={12} className="mr-1" />
                     Upload File
                   </Button>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageFileUpload} className="hidden" />
@@ -674,7 +674,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                         className="w-8 h-8 rounded bg-cover bg-center flex-shrink-0"
                         style={{ backgroundImage: `url(${imageUrlInput})`, backgroundColor: 'var(--bg-300)' }}
                       />
-                      <span className="text-[10px] truncate" style={{ color: 'var(--text-500)' }}>Preview</span>
+                      <span className="text-xs truncate" style={{ color: 'var(--text-500)' }}>Preview</span>
                     </div>
                   )}
                 </div>
@@ -684,7 +684,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             {/* Palette-specific: color picker */}
             {addCategory === 'palette' && (
               <div className="space-y-2">
-                <Label className="text-xs">Colors</Label>
+                <Label className="text-sm">Colors</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {paletteColors.map((color, i) => (
                     <div key={i} className="relative group/color">
@@ -717,7 +717,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2 text-[10px]"
+                      className="h-8 px-2 text-xs"
                       onClick={() => {
                         if (paletteColors.length < 8) {
                           setPaletteColors(prev => [...prev, newColorInput]);
@@ -736,7 +736,7 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
                       key={preset.name}
                       variant="ghost"
                       size="sm"
-                      className="h-5 px-1.5 text-[8px] gap-0.5"
+                      className="h-6 px-2 text-[9px] gap-1"
                       onClick={() => {
                         setPaletteColors(preset.colors);
                         if (!imageLabelInput && !newComponent.name) {
@@ -759,13 +759,13 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             {/* Content textarea — for non-image, non-palette */}
             {addCategory !== 'image' && addCategory !== 'palette' && (
               <div className="space-y-1.5">
-                <Label htmlFor="comp-content" className="text-xs">Content</Label>
+                <Label htmlFor="comp-content" className="text-sm">Content</Label>
                 <Textarea
                   id="comp-content"
                   value={newComponent.content}
                   onChange={e => setNewComponent(prev => ({ ...prev, content: e.target.value }))}
                   placeholder="Content (HTML, SVG, or JSON)"
-                  className="h-20 text-xs font-mono resize-none"
+                  className="h-24 text-sm font-mono resize-none"
                 />
               </div>
             )}
@@ -774,14 +774,14 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs"
+                className="h-9 text-sm"
                 onClick={() => { setIsAdding(false); resetAddForm(); }}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
-                className="h-8 text-xs"
+                className="h-9 text-sm"
                 onClick={handleAdd}
                 disabled={
                   addCategory === 'image'
@@ -807,16 +807,16 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
             </div>
           ) : components.length === 0 ? (
             <div className="text-center py-8">
-              <Package size={24} className="mx-auto mb-2" style={{ color: 'var(--text-500)' }} />
-              <p className="text-xs" style={{ color: 'var(--text-500)' }}>No components found</p>
+              <Package size={28} className="mx-auto mb-2" style={{ color: 'var(--text-500)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-500)' }}>No components found</p>
               <Button
                 variant="ghost"
                 size="sm"
-                className="mt-2 h-6 text-[10px]"
+                className="mt-2 h-7 text-xs"
                 style={{ color: 'var(--neon-color)' }}
                 onClick={() => openAddDialog(activeCategory === 'all' ? undefined : activeCategory)}
               >
-                <Plus size={10} className="mr-1" />
+                <Plus size={12} className="mr-1" />
                 Add {activeCategory === 'all' ? 'component' : activeCategory}
               </Button>
             </div>
@@ -829,13 +829,13 @@ const StitchLibrary: React.FC<StitchLibraryProps> = ({
       {/* Selection footer */}
       {selectedIds.size > 0 && (
         <div className="px-3 py-2 flex items-center justify-between" style={{ borderTop: '1px solid var(--border-300)', backgroundColor: 'var(--bg-200)' }}>
-          <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-500)' }}>
             {selectedIds.size} component{selectedIds.size > 1 ? 's' : ''} selected
           </span>
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-7 text-xs px-2.5"
             onClick={() => setSelectedIds(new Set())}
           >
             Clear

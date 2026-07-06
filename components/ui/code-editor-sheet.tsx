@@ -1,13 +1,12 @@
 "use client";
 
 import * as React from "react";
-import ace from "ace-builds/src-noconflict/ace";
-import AceEditor from "react-ace";
+import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import { Code2, Save, RotateCcw } from "lucide-react";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -17,29 +16,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import "ace-builds/src-noconflict/ext-searchbox";
-import "ace-builds/src-noconflict/ext-language_tools";
-import "ace-builds/src-noconflict/mode-css";
-import "ace-builds/src-noconflict/mode-javascript";
-import "ace-builds/src-noconflict/mode-typescript";
-import "ace-builds/src-noconflict/mode-html";
-import "ace-builds/src-noconflict/mode-json";
-import "ace-builds/src-noconflict/mode-python";
-import "ace-builds/src-noconflict/mode-java";
-import "ace-builds/src-noconflict/mode-c_cpp";
-import "ace-builds/src-noconflict/mode-ruby";
-import "ace-builds/src-noconflict/mode-php";
-import "ace-builds/src-noconflict/mode-sql";
-import "ace-builds/src-noconflict/mode-markdown";
-import "ace-builds/src-noconflict/mode-golang";
-import "ace-builds/src-noconflict/mode-rust";
-import "ace-builds/src-noconflict/mode-lua";
-import "ace-builds/src-noconflict/theme-tomorrow";
-import "ace-builds/src-noconflict/theme-tomorrow_night";
+loader.config({
+  paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" },
+});
 
-ace.config.set("basePath", "https://cdn.jsdelivr.net/npm/ace-builds@1.44.0/src-noconflict/");
-
-// Types
 export type CodeLanguage =
   | "css"
   | "javascript"
@@ -57,6 +37,24 @@ export type CodeLanguage =
   | "rust"
   | "lua";
 
+const ACE_TO_MONACO: Record<string, string> = {
+  css: "css",
+  javascript: "javascript",
+  typescript: "typescript",
+  html: "html",
+  json: "json",
+  python: "python",
+  java: "java",
+  c_cpp: "cpp",
+  ruby: "ruby",
+  php: "php",
+  sql: "sql",
+  markdown: "markdown",
+  golang: "go",
+  rust: "rust",
+  lua: "lua",
+};
+
 interface LanguageOption {
   value: CodeLanguage;
   label: string;
@@ -73,7 +71,6 @@ interface CodeEditorProps {
   placeholder?: string;
 }
 
-// Constants
 const LANGUAGE_OPTIONS: LanguageOption[] = [
   { value: "css", label: "CSS", extension: ".css" },
   { value: "javascript", label: "JavaScript", extension: ".js" },
@@ -110,9 +107,7 @@ const PLACEHOLDERS: Record<CodeLanguage, string> = {
   lua: `-- Hello World in Lua\nprint("Hello, World!")`,
 };
 
-// Custom theme hook — replaces next-themes useTheme.
-// Reads the existing `html.dark` class used by this project's theme system.
-const useAceTheme = () => {
+function useMonacoTheme() {
   const [isDark, setIsDark] = React.useState(() =>
     document.documentElement.classList.contains("dark")
   );
@@ -128,10 +123,9 @@ const useAceTheme = () => {
     return () => observer.disconnect();
   }, []);
 
-  return isDark ? "tomorrow_night" : "tomorrow";
-};
+  return isDark ? "vs-dark" : "vs";
+}
 
-// Components
 function CodeEditorSheet({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -310,62 +304,85 @@ function CodeEditor({
   onBlur,
   onLoad,
   placeholder,
-  ...props
 }: CodeEditorProps) {
-  const theme = useAceTheme();
-  const handleLoad = React.useCallback((editor: any) => {
-    editor.commands.addCommand({
-      name: "find",
-      bindKey: { win: "Ctrl-F", mac: "Command-F" },
-      exec: (ed: any) => {
-        if (ed.searchBox) {
-          ed.searchBox.show();
-        } else {
-          ace.config.loadModule("ace/ext/searchbox", () => {
-            ace.require("ace/ext/searchbox").Search(editor);
-          });
+  const theme = useMonacoTheme();
+  const editorRef = React.useRef<any>(null);
+
+  const handleMount: OnMount = React.useCallback(
+    (editor, monaco) => {
+      editorRef.current = editor;
+
+      if (placeholder && !value) {
+        const model = editor.getModel();
+        if (model) {
+          monaco.editor.setModelLanguage(model, ACE_TO_MONACO[language] || language);
         }
-      },
-      readOnly: true,
-    });
-    onLoad?.(editor);
-  }, [onLoad]);
+      }
+
+      const wrapper = {
+        ...editor,
+        undo: () => editor.trigger("keyboard", "undo", null),
+        redo: () => editor.trigger("keyboard", "redo", null),
+        getSession: () => ({
+          getUndoManager: () => ({
+            reset: () => {
+              const model = editor.getModel();
+              if (model) {
+                (model as any)._commandManager?.clear?.();
+              }
+            },
+          }),
+        }),
+      };
+
+      onLoad?.(wrapper);
+    },
+    [onLoad, placeholder, value, language]
+  );
+
+  const monacoLanguage = ACE_TO_MONACO[language] || language;
 
   return (
     <div
       data-slot="code-editor"
-      className={cn("flex-1 relative", className)}
-      {...props}
+      className={cn("flex-1 relative min-h-0", className)}
     >
-      <AceEditor
-        mode={language}
-        theme={theme}
+      <Editor
+        language={monacoLanguage}
         value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        onLoad={handleLoad}
-        name="code-editor"
-        width="100%"
-        height="100%"
-        fontSize={14}
-        showPrintMargin={false}
-        showGutter={true}
-        highlightActiveLine={true}
-        setOptions={{
-          enableBasicAutocompletion: true,
-          enableLiveAutocompletion: true,
-          enableSnippets: true,
-          showLineNumbers: true,
+        theme={theme}
+        onChange={(val) => onChange?.(val || "")}
+        onMount={handleMount}
+        loading={
+          <div className="flex items-center justify-center h-full">
+            <span className="text-sm" style={{ color: "var(--text-500)" }}>
+              Loading editor...
+            </span>
+          </div>
+        }
+        options={{
+          fontSize: 14,
+          fontFamily:
+            "'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+          fontLigatures: true,
+          lineNumbers: "on",
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
           tabSize: 2,
-          useWorker: false,
-          wrap: true,
-          fontFamily:
-            "'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
-        }}
-        placeholder={placeholder || PLACEHOLDERS[language]}
-        style={{
-          fontFamily:
-            "'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+          automaticLayout: true,
+          padding: { top: 8, bottom: 8 },
+          suggest: {
+            showKeywords: true,
+            showSnippets: true,
+          },
+          quickSuggestions: true,
+          bracketPairColorization: { enabled: true },
+          smoothScrolling: true,
+          cursorSmoothCaretAnimation: "on",
+          renderLineHighlight: "all",
+          folding: true,
+          links: true,
         }}
       />
     </div>

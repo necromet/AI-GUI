@@ -52,22 +52,38 @@ router.get('/components/:id', (req: Request, res: Response) => {
 
 router.post('/components', async (req: Request, res: Response) => {
   try {
-    const { name, category, contentType, description, tags, content, metadata, thumbnail, isGlobal, agentAccessible } = req.body;
-    if (!name || !category || !contentType || !content) {
-      res.status(400).json({ error: 'Missing required fields: name, category, contentType, content' });
+    const { name, category, contentType, description, tags, content, metadata, thumbnail, isGlobal, agentAccessible, files } = req.body;
+    if (!name || !category) {
+      res.status(400).json({ error: 'Missing required fields: name, category' });
       return;
     }
+
+    let primaryContent = content || '';
+    let primaryContentType = contentType || 'html';
+
+    if (files && files.length > 0) {
+      const entryFile = files.find((f: any) => f.isEntry) || files.find((f: any) => f.filename.endsWith('.html')) || files[0];
+      primaryContent = entryFile.content;
+      primaryContentType = entryFile.contentType;
+    }
+
+    if (!primaryContent) {
+      res.status(400).json({ error: 'Missing content: provide content or files' });
+      return;
+    }
+
     const component = await library.addComponent({
       name,
       category,
-      contentType,
+      contentType: primaryContentType,
       description: description || '',
       tags: tags || [],
-      content,
+      content: primaryContent,
       metadata,
       thumbnail,
       isGlobal: isGlobal !== false,
       agentAccessible: agentAccessible !== false,
+      files: files || undefined,
     });
     res.json({ component });
   } catch (error: any) {
@@ -164,6 +180,9 @@ When the user asks for a component:
 Available categories: ui-widget, template, snippet, pattern, hook, util, agent-tool
 Content types: tsx, html, css, js, json, markdown
 
+Components support MULTIPLE files. Each component can have several files (e.g., index.html + style.css + script.js).
+One file must be marked as the entry point (isEntry: true).
+
 Be concise. When showing results, list component names with a one-line description each.
 When creating a component, output a JSON block with the component details:
 
@@ -171,10 +190,25 @@ When creating a component, output a JSON block with the component details:
 {
   "name": "Component Name",
   "category": "ui-widget",
-  "contentType": "tsx",
   "description": "What it does",
   "tags": ["tag1", "tag2"],
-  "content": "the actual code"
+  "files": [
+    { "filename": "index.html", "contentType": "html", "content": "<!DOCTYPE html>...", "isEntry": true },
+    { "filename": "style.css", "contentType": "css", "content": "body { ... }" },
+    { "filename": "script.js", "contentType": "js", "content": "console.log('hello')" }
+  ]
+}
+\`\`\`
+
+For simple single-file components, you can also use the legacy format:
+\`\`\`component
+{
+  "name": "Component Name",
+  "category": "snippet",
+  "contentType": "js",
+  "description": "What it does",
+  "tags": ["tag1"],
+  "content": "const x = 1;"
 }
 \`\`\``;
 
@@ -233,16 +267,18 @@ router.post('/agent/chat', async (req: Request, res: Response) => {
     while ((match = componentRegex.exec(fullResponse)) !== null) {
       try {
         const compData = JSON.parse(match[1].trim());
-        if (compData.name && compData.content) {
+        if (compData.name) {
+          const hasFiles = compData.files && Array.isArray(compData.files) && compData.files.length > 0;
           const created = await library.addComponent({
             name: compData.name,
             category: compData.category || 'snippet',
-            contentType: compData.contentType || 'js',
+            contentType: compData.contentType || (hasFiles ? compData.files[0].contentType : 'js'),
             description: compData.description || '',
             tags: compData.tags || [],
-            content: compData.content,
+            content: compData.content || (hasFiles ? compData.files[0].content : ''),
             isGlobal: true,
             agentAccessible: true,
+            files: hasFiles ? compData.files : undefined,
           });
           res.write(`data: ${JSON.stringify({ component_created: created })}\n\n`);
         }

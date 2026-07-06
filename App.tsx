@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package } from 'lucide-react';
+import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, Bot } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
-import Sidebar from './components/Sidebar';
+import Sidebar, { type SidebarPanel } from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModelSelect from './components/ModelSelect';
-import Settings from './components/Settings';
-import TokenUsageStats from './components/TokenUsageStats';
 import ModeSelector from './components/ModeSelector';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
@@ -26,7 +24,7 @@ import PluginAgentPanel from './components/PluginAgentPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
-import LibraryPanel from './components/LibraryPanel';
+import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { StitchControls } from './components/StitchEditor';
 
 
@@ -50,10 +48,12 @@ const fileToAttachment = (file: File): Promise<Attachment> => {
 export const FONT_SIZE_MAP: Record<string, number> = { xs: 16, sm: 17, base: 18, lg: 20, xl: 22 };
 
 export const FONT_FAMILY_MAP: Record<string, string> = {
-  default: "'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
+  default: "'Plus Jakarta Sans', 'Google Sans', 'Open Sans', 'Fredoka', 'Comfortaa', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
+  'plus-jakarta-sans': "'Plus Jakarta Sans', sans-serif",
+  'google-sans': "'Google Sans', sans-serif",
+  'open-sans': "'Open Sans', sans-serif",
   fredoka: "'Fredoka', sans-serif",
   comfortaa: "'Comfortaa', sans-serif",
-  'google-sans': "'Google Sans', sans-serif",
 };
 
 const RequireAuth: React.FC<{ isAuth: boolean; children: React.ReactNode }> = ({ isAuth, children }) => {
@@ -96,8 +96,7 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isTokenStatsOpen, setIsTokenStatsOpen] = useState(false);
+  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('none');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSize, setFontSize] = useState<string>(() => {
     return localStorage.getItem('edward:labs_fontSize') || 'base';
@@ -132,6 +131,7 @@ const App: React.FC = () => {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
   const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
+  const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [stitchResetKey, setStitchResetKey] = useState(0);
   const [experimentConversationId, setExperimentConversationId] = useState<number | null>(null);
 
@@ -485,9 +485,9 @@ const App: React.FC = () => {
             const chunkUsageMetadata = (chunk as any).usageMetadata;
             if (chunkUsageMetadata) {
               usageMetadata = {
-                promptTokens: chunkUsageMetadata.promptTokenCount || 0,
-                candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
-                totalTokens: chunkUsageMetadata.totalTokenCount || 0
+                promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
+                candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
+                totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0
               };
             }
 
@@ -650,9 +650,9 @@ const App: React.FC = () => {
         const chunkUsageMetadata = (chunk as any).usageMetadata;
         if (chunkUsageMetadata) {
           usageMetadata = {
-            promptTokens: chunkUsageMetadata.promptTokenCount || 0,
-            candidatesTokens: chunkUsageMetadata.candidatesTokenCount || 0,
-            totalTokens: chunkUsageMetadata.totalTokenCount || 0
+            promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
+            candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
+            totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0
           };
         }
 
@@ -871,9 +871,29 @@ const App: React.FC = () => {
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         currentModelName={selectedModelConfig.name}
+        sidebarPanel={sidebarPanel}
+        onSidebarPanelChange={setSidebarPanel}
+        settingsProps={{
+          neonColor,
+          onChangeNeonColor: (color) => { setNeonColor(color); setNeonPreset(''); },
+          neonPreset,
+          onChangeNeonPreset: setNeonPreset,
+          models,
+          onAddModel: handleAddModel,
+          onDeleteModel: handleDeleteModel,
+          defaultModelId,
+          onChangeDefaultModel: handleChangeDefaultModel,
+          maxOutputTokens,
+          onChangeMaxOutputTokens: setMaxOutputTokens,
+          fontSize,
+          onChangeFontSize: setFontSize,
+          fontFamily,
+          onChangeFontFamily: setFontFamily,
+        }}
+        availableModels={models}
       />
 
-      <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
+      <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)', paddingRight: libraryControls?.showAgent ? 288 : 0 }}>
         {/* Top bar */}
         <div className="flex items-center p-2 md:p-4 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
@@ -988,6 +1008,58 @@ const App: React.FC = () => {
                       {stitchControls.copied ? 'Copied' : 'Copy'}
                     </Button>
                   </>
+                )}
+              </div>
+            </>
+          ) : libraryControls ? (
+            <>
+              <div className="flex items-center gap-2 min-w-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={libraryControls.onBack}
+                  className="text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
+                >
+                  <ArrowLeft size={18} />
+                </Button>
+                <div className="p-2 rounded-xl flex-shrink-0" style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}>
+                  <Package size={20} style={{ color: 'var(--neon-color)' }} />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{libraryControls.componentName}</span>
+                    {libraryControls.componentTags.slice(0, 3).map(tag => (
+                      <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                  {libraryControls.componentDescription && (
+                    <span className="text-xs truncate" style={{ color: 'var(--text-500)' }}>{libraryControls.componentDescription}</span>
+                  )}
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                {libraryControls.isDirty && (
+                  <Button size="sm" onClick={libraryControls.onSave} disabled={libraryControls.isSaving} style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
+                    {libraryControls.isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+                {!libraryControls.showAgent && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 rounded-xl"
+                    onClick={libraryControls.onToggleAgent}
+                    style={{
+                      backgroundColor: 'var(--bg-200)',
+                      color: 'var(--text-300)',
+                      borderColor: 'var(--border-300)',
+                    }}
+                  >
+                    <Bot size={14} />
+                    Agent
+                  </Button>
                 )}
               </div>
             </>
@@ -1184,6 +1256,7 @@ const App: React.FC = () => {
                       setStitchActiveProject(project);
                       if (project) {
                         navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                        setIsSidebarOpen(false);
                       } else {
                         navigate('/experiments/stitch', { replace: true });
                       }
@@ -1207,6 +1280,7 @@ const App: React.FC = () => {
                       setStitchActiveProject(project);
                       if (project) {
                         navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                        setIsSidebarOpen(false);
                       } else {
                         navigate('/experiments/stitch', { replace: true });
                       }
@@ -1223,6 +1297,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
+                    onControlsChange={setLibraryControls}
                   />
                 </div>
               </RequireAuth>
@@ -1234,6 +1309,7 @@ const App: React.FC = () => {
                     theme={theme}
                     modelConfig={selectedModelConfig}
                     onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
+                    onControlsChange={setLibraryControls}
                   />
                 </div>
               </RequireAuth>
@@ -1268,30 +1344,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
-        <Settings 
-          isOpen={isSettingsOpen} 
-          onClose={() => setIsSettingsOpen(false)}
-          theme={theme}
-          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          neonColor={neonColor}
-          onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
-          neonPreset={neonPreset}
-          onChangeNeonPreset={(preset) => { setNeonPreset(preset); }}
-          models={models}
-          onAddModel={handleAddModel}
-          onDeleteModel={handleDeleteModel}
-          defaultModelId={defaultModelId}
-          onChangeDefaultModel={handleChangeDefaultModel}
-          maxOutputTokens={maxOutputTokens}
-          onChangeMaxOutputTokens={setMaxOutputTokens}
-          fontSize={fontSize}
-          onChangeFontSize={setFontSize}
-          fontFamily={fontFamily}
-          onChangeFontFamily={setFontFamily}
-        />
-
-        <TokenUsageStats isOpen={isTokenStatsOpen} onClose={() => setIsTokenStatsOpen(false)} availableModels={models} />
 
         <Toaster />
       </main>

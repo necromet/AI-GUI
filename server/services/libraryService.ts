@@ -15,6 +15,19 @@ export interface LibraryComponent {
   agentAccessible: boolean;
   createdAt: string;
   updatedAt: string;
+  files?: LibraryComponentFile[];
+}
+
+export interface LibraryComponentFile {
+  id: string;
+  componentId: string;
+  filename: string;
+  contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  content: string;
+  sortOrder: number;
+  isEntry: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LibraryComponentWithScore extends LibraryComponent {
@@ -23,6 +36,20 @@ export interface LibraryComponentWithScore extends LibraryComponent {
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
+}
+
+function rowToFile(row: any): LibraryComponentFile {
+  return {
+    id: row.id,
+    componentId: row.component_id,
+    filename: row.filename,
+    contentType: row.content_type,
+    content: row.content,
+    sortOrder: row.sort_order,
+    isEntry: row.is_entry === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function rowToComponent(row: any): LibraryComponent {
@@ -43,7 +70,71 @@ function rowToComponent(row: any): LibraryComponent {
   };
 }
 
-export async function addComponent(component: Omit<LibraryComponent, 'id' | 'createdAt' | 'updatedAt'>): Promise<LibraryComponent> {
+export function getComponentFiles(componentId: string): LibraryComponentFile[] {
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM library_component_files WHERE component_id = ? ORDER BY sort_order ASC').all(componentId) as any[];
+  return rows.map(rowToFile);
+}
+
+export function addComponentFile(file: Omit<LibraryComponentFile, 'id' | 'createdAt' | 'updatedAt'>): LibraryComponentFile {
+  const db = getDatabase();
+  const id = generateId();
+  const now = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO library_component_files (id, component_id, filename, content_type, content, sort_order, is_entry, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    file.componentId,
+    file.filename,
+    file.contentType,
+    file.content,
+    file.sortOrder,
+    file.isEntry ? 1 : 0,
+    now,
+    now,
+  );
+
+  return { ...file, id, createdAt: now, updatedAt: now };
+}
+
+export function updateComponentFile(id: string, updates: Partial<Omit<LibraryComponentFile, 'id' | 'componentId' | 'createdAt' | 'updatedAt'>>): LibraryComponentFile | undefined {
+  const db = getDatabase();
+  const existing = db.prepare('SELECT * FROM library_component_files WHERE id = ?').get(id) as any;
+  if (!existing) return undefined;
+
+  const now = new Date().toISOString();
+  const merged = rowToFile({ ...existing, ...updates, updated_at: now });
+
+  db.prepare(
+    `UPDATE library_component_files SET filename = ?, content_type = ?, content = ?, sort_order = ?, is_entry = ?, updated_at = ? WHERE id = ?`
+  ).run(
+    merged.filename,
+    merged.contentType,
+    merged.content,
+    merged.sortOrder,
+    merged.isEntry ? 1 : 0,
+    now,
+    id,
+  );
+
+  return { ...merged, updatedAt: now };
+}
+
+export function deleteComponentFile(id: string): boolean {
+  const db = getDatabase();
+  const result = db.prepare('DELETE FROM library_component_files WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
+export function replaceComponentFiles(componentId: string, files: Omit<LibraryComponentFile, 'id' | 'componentId' | 'createdAt' | 'updatedAt'>[]): LibraryComponentFile[] {
+  const db = getDatabase();
+  db.prepare('DELETE FROM library_component_files WHERE component_id = ?').run(componentId);
+  return files.map((f, i) => addComponentFile({ ...f, componentId, sortOrder: f.sortOrder ?? i }));
+}
+
+export async function addComponent(component: Omit<LibraryComponent, 'id' | 'createdAt' | 'updatedAt'> & { files?: Omit<LibraryComponentFile, 'id' | 'componentId' | 'createdAt' | 'updatedAt'>[] }): Promise<LibraryComponent> {
   const db = getDatabase();
   const id = generateId();
   const now = new Date().toISOString();
@@ -67,6 +158,34 @@ export async function addComponent(component: Omit<LibraryComponent, 'id' | 'cre
     now,
   );
 
+  const createdFiles: LibraryComponentFile[] = [];
+  if (component.files && component.files.length > 0) {
+    for (let i = 0; i < component.files.length; i++) {
+      const f = component.files[i];
+      createdFiles.push(addComponentFile({
+        componentId: id,
+        filename: f.filename,
+        contentType: f.contentType,
+        content: f.content,
+        sortOrder: f.sortOrder ?? i,
+        isEntry: f.isEntry ?? (i === 0),
+      }));
+    }
+  } else {
+    const FILENAME_MAP: Record<string, string> = {
+      html: 'index.html', tsx: 'Component.tsx', css: 'style.css', js: 'script.js', ts: 'script.ts', json: 'data.json', markdown: 'README.md',
+    };
+    const filename = FILENAME_MAP[component.contentType] || `file.${component.contentType}`;
+    createdFiles.push(addComponentFile({
+      componentId: id,
+      filename,
+      contentType: component.contentType,
+      content: component.content,
+      sortOrder: 0,
+      isEntry: true,
+    }));
+  }
+
   const embedText = [component.name, component.description, component.tags.join(' '), component.category].join(' ');
   const embedding = await getEmbedding(embedText);
 
@@ -79,6 +198,7 @@ export async function addComponent(component: Omit<LibraryComponent, 'id' | 'cre
     id,
     createdAt: now,
     updatedAt: now,
+    files: createdFiles,
   };
 }
 
@@ -98,22 +218,30 @@ export function listComponents(filters?: { category?: string; agentAccessibleOnl
   query += ' ORDER BY updated_at DESC';
 
   const rows = db.prepare(query).all(...params) as any[];
-  return rows.map(rowToComponent);
+  return rows.map(row => {
+    const comp = rowToComponent(row);
+    comp.files = getComponentFiles(comp.id);
+    return comp;
+  });
 }
 
 export function getComponent(id: string): LibraryComponent | undefined {
   const db = getDatabase();
   const row = db.prepare('SELECT * FROM library_components WHERE id = ?').get(id) as any;
-  return row ? rowToComponent(row) : undefined;
+  if (!row) return undefined;
+  const comp = rowToComponent(row);
+  comp.files = getComponentFiles(comp.id);
+  return comp;
 }
 
-export function updateComponent(id: string, updates: Partial<Omit<LibraryComponent, 'id' | 'createdAt' | 'updatedAt'>>): LibraryComponent | undefined {
+export function updateComponent(id: string, updates: Partial<Omit<LibraryComponent, 'id' | 'createdAt' | 'updatedAt'>> & { files?: Omit<LibraryComponentFile, 'id' | 'componentId' | 'createdAt' | 'updatedAt'>[] }): LibraryComponent | undefined {
   const db = getDatabase();
   const existing = getComponent(id);
   if (!existing) return undefined;
 
   const now = new Date().toISOString();
-  const merged = { ...existing, ...updates, updatedAt: now };
+  const { files, ...componentUpdates } = updates;
+  const merged = { ...existing, ...componentUpdates, updatedAt: now };
 
   db.prepare(
     `UPDATE library_components SET name = ?, category = ?, content_type = ?, description = ?, tags = ?, content = ?, metadata = ?, thumbnail = ?, is_global = ?, agent_accessible = ?, updated_at = ? WHERE id = ?`
@@ -132,6 +260,11 @@ export function updateComponent(id: string, updates: Partial<Omit<LibraryCompone
     id,
   );
 
+  let updatedFiles: LibraryComponentFile[] | undefined;
+  if (files) {
+    updatedFiles = replaceComponentFiles(id, files);
+  }
+
   const embedText = [merged.name, merged.description, merged.tags.join(' '), merged.category].join(' ');
   getEmbedding(embedText).then(embedding => {
     const db2 = getDatabase();
@@ -141,7 +274,7 @@ export function updateComponent(id: string, updates: Partial<Omit<LibraryCompone
     ).run(generateId(), id, embedText, JSON.stringify(embedding));
   }).catch(err => console.error('[library] Failed to update embedding:', err.message));
 
-  return merged;
+  return { ...merged, files: updatedFiles ?? existing.files };
 }
 
 export function deleteComponent(id: string): boolean {
@@ -175,7 +308,11 @@ export async function searchComponents(query: string, topK: number = 10, agentAc
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK).map(s => ({ ...s.component, score: s.score }));
+  return scored.slice(0, topK).map(s => {
+    const comp = { ...s.component, score: s.score };
+    comp.files = getComponentFiles(comp.id);
+    return comp;
+  });
 }
 
 export async function reindexAll(): Promise<number> {

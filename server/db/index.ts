@@ -23,6 +23,7 @@ export function getDatabase(): Database.Database {
   db.exec(SEED_SQL);
 
   migrate(db);
+  migrateLibraryFiles(db);
 
   console.log(`[db] SQLite database initialized at ${DB_PATH}`);
   return db;
@@ -47,6 +48,33 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('full_design_spec_json')) {
     db.exec('ALTER TABLE stitch_projects ADD COLUMN full_design_spec_json TEXT');
     console.log('[db] Migration: added full_design_spec_json to stitch_projects');
+  }
+}
+
+const FILENAME_MAP: Record<string, string> = {
+  html: 'index.html',
+  tsx: 'Component.tsx',
+  css: 'style.css',
+  js: 'script.js',
+  ts: 'script.ts',
+  json: 'data.json',
+  markdown: 'README.md',
+};
+
+function migrateLibraryFiles(db: Database.Database): void {
+  const components = db.prepare('SELECT id, content_type FROM library_components').all() as { id: string; content_type: string }[];
+  for (const comp of components) {
+    const existing = db.prepare('SELECT id FROM library_component_files WHERE component_id = ?').get(comp.id) as any;
+    if (!existing) {
+      const filename = FILENAME_MAP[comp.content_type] || `file.${comp.content_type}`;
+      const content = (db.prepare('SELECT content FROM library_components WHERE id = ?').get(comp.id) as any).content;
+      const now = new Date().toISOString();
+      const fileId = Math.random().toString(36).substring(2, 15);
+      db.prepare(
+        'INSERT INTO library_component_files (id, component_id, filename, content_type, content, sort_order, is_entry, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)'
+      ).run(fileId, comp.id, filename, comp.content_type, content, now, now);
+      console.log(`[db] Migration: created file ${filename} for component ${comp.id}`);
+    }
   }
 }
 

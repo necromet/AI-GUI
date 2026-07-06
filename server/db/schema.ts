@@ -126,6 +126,20 @@ CREATE TABLE IF NOT EXISTS library_embeddings (
   embedding TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_le_component ON library_embeddings(component_id);
+
+-- Library component files (multi-file support)
+CREATE TABLE IF NOT EXISTS library_component_files (
+  id TEXT PRIMARY KEY,
+  component_id TEXT NOT NULL REFERENCES library_components(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  content TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_entry INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_lcf_component ON library_component_files(component_id);
 `;
 
 export const SEED_SQL = `

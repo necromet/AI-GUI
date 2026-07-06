@@ -70,6 +70,19 @@ export interface LibraryComponent {
   agentAccessible: boolean;
   createdAt: string;
   updatedAt: string;
+  files?: LibraryComponentFile[];
+}
+
+export interface LibraryComponentFile {
+  id: string;
+  componentId: string;
+  filename: string;
+  contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  content: string;
+  sortOrder: number;
+  isEntry: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LibraryComponentWithScore extends LibraryComponent {

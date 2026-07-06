@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package } from 'lucide-react';
-import { ChatSession, Mode, ConversationType } from '../types';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft } from 'lucide-react';
+import { ChatSession, Mode, ConversationType, ModelConfig } from '../types';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import SidebarSettingsPanel from './SidebarSettingsPanel';
+import SidebarTokenStatsPanel from './SidebarTokenStatsPanel';
+
+export type SidebarPanel = 'none' | 'settings' | 'token-stats';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,6 +25,26 @@ interface SidebarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   currentModelName?: string;
+  sidebarPanel: SidebarPanel;
+  onSidebarPanelChange: (panel: SidebarPanel) => void;
+  settingsProps: {
+    neonColor: string;
+    onChangeNeonColor: (color: string) => void;
+    neonPreset: string;
+    onChangeNeonPreset: (preset: string) => void;
+    models: ModelConfig[];
+    onAddModel: (model: ModelConfig) => void;
+    onDeleteModel: (id: string) => void;
+    defaultModelId: string;
+    onChangeDefaultModel: (id: string) => void;
+    maxOutputTokens: number | undefined;
+    onChangeMaxOutputTokens: (value: number | undefined) => void;
+    fontSize: string;
+    onChangeFontSize: (size: string) => void;
+    fontFamily: string;
+    onChangeFontFamily: (family: string) => void;
+  };
+  availableModels: ModelConfig[];
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -36,6 +60,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   theme,
   onToggleTheme,
   currentModelName,
+  sidebarPanel,
+  onSidebarPanelChange,
+  settingsProps,
+  availableModels,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -151,7 +179,45 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {currentMode === 'experiments' ? (
+        {sidebarPanel === 'settings' ? (
+          /* Settings panel */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onSidebarPanelChange('none')}
+                className="h-7 w-7 text-[var(--text-500)] hover:text-[var(--text-100)]"
+              >
+                <ArrowLeft size={14} />
+              </Button>
+              <SettingsIcon size={14} style={{ color: 'var(--neon-color)' }} />
+              <span className="text-xs font-semibold text-[var(--text-100)]">Settings</span>
+            </div>
+            <SidebarSettingsPanel
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              {...settingsProps}
+            />
+          </div>
+        ) : sidebarPanel === 'token-stats' ? (
+          /* Token Stats panel */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onSidebarPanelChange('none')}
+                className="h-7 w-7 text-[var(--text-500)] hover:text-[var(--text-100)]"
+              >
+                <ArrowLeft size={14} />
+              </Button>
+              <BarChart3 size={14} style={{ color: 'var(--neon-color)' }} />
+              <span className="text-xs font-semibold text-[var(--text-100)]">Token Stats</span>
+            </div>
+            <SidebarTokenStatsPanel availableModels={availableModels} />
+          </div>
+        ) : currentMode === 'experiments' ? (
           /* Experiments mode: tool navigation + conversation history */
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-2 pt-2">
@@ -267,16 +333,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                     className={itemClassName(true)}
                     onClick={() => navigate('/library')}
                   >
-                    <Package size={16} className="text-[var(--text-100)]" />
-                    <span className="truncate">All Components</span>
+                    <Package size={18} className="text-[var(--text-100)]" />
+                    <span className="truncate text-base">All Components</span>
                   </Button>
                 </li>
               </ul>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-              <Package size={32} className="mb-3 text-[var(--text-500)]" />
-              <p className="text-xs font-medium mb-1 text-[var(--text-300)]">Component Library</p>
-              <p className="text-[10px] leading-relaxed text-[var(--text-500)]">
+              <Package size={36} className="mb-3 text-[var(--text-500)]" />
+              <p className="text-sm font-medium mb-1 text-[var(--text-300)]">Component Library</p>
+              <p className="text-xs leading-relaxed text-[var(--text-500)]">
                 Browse, search, and manage reusable components. Use the AI agent to find or create components.
               </p>
             </div>
@@ -368,7 +434,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Button
               variant="ghost"
               className={sidebarItemClassName}
-              onClick={onOpenTokenStats}
+              onClick={() => onSidebarPanelChange('token-stats')}
             >
               <BarChart3 size={16} />
               <span>Token Stats</span>
@@ -378,7 +444,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Button
             variant="ghost"
             className={sidebarItemClassName}
-            onClick={onOpenSettings}
+            onClick={() => onSidebarPanelChange('settings')}
           >
             <SettingsIcon size={16} />
             <span>Settings</span>

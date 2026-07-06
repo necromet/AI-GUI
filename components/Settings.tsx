@@ -31,6 +31,7 @@ interface SettingsProps {
   onChangeFontSize: (size: string) => void;
   fontFamily: string;
   onChangeFontFamily: (family: string) => void;
+  inline?: boolean;
 }
 
 type Tab = 'general' | 'models' | 'theme';
@@ -54,7 +55,8 @@ const Settings: React.FC<SettingsProps> = ({
   fontSize,
   onChangeFontSize,
   fontFamily,
-  onChangeFontFamily
+  onChangeFontFamily,
+  inline = false,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [maxTokensInput, setMaxTokensInput] = useState(maxOutputTokens?.toString() || '');
@@ -102,45 +104,32 @@ const Settings: React.FC<SettingsProps> = ({
     window.location.reload();
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl h-[600px] p-0 gap-0 overflow-hidden">
-        <div
-          className="absolute top-0 left-0 right-0 h-[2px] z-10"
-          style={{
-            background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`,
-            boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)`
-          }}
-        />
+  const settingsContent = (
+    <>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as Tab)}
+        className="flex flex-col flex-1 overflow-hidden"
+      >
+        <div className={inline ? "px-1 pt-2" : "px-5 pt-2"}>
+          <TabsList>
+            <TabsTrigger value="general" className="gap-2">
+              <Monitor size={14} />
+              General
+            </TabsTrigger>
+            <TabsTrigger value="models" className="gap-2">
+              <Cpu size={14} />
+              Models
+            </TabsTrigger>
+            <TabsTrigger value="theme" className="gap-2">
+              <Palette size={14} />
+              Theme
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <DialogHeader className="p-5 pb-0">
-          <DialogTitle>Settings</DialogTitle>
-        </DialogHeader>
-
-        <Tabs
-          value={activeTab}
-          onValueChange={(v) => setActiveTab(v as Tab)}
-          className="flex flex-col flex-1 overflow-hidden"
-        >
-          <div className="px-5 pt-2">
-            <TabsList>
-              <TabsTrigger value="general" className="gap-2">
-                <Monitor size={14} />
-                General
-              </TabsTrigger>
-              <TabsTrigger value="models" className="gap-2">
-                <Cpu size={14} />
-                Models
-              </TabsTrigger>
-              <TabsTrigger value="theme" className="gap-2">
-                <Palette size={14} />
-                Theme
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <ScrollArea className="flex-1 overflow-hidden">
-            <div className="p-5">
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className={inline ? "p-3" : "p-5"}>
               <TabsContent value="general" className="mt-0 space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">Appearance</h3>
@@ -237,11 +226,24 @@ const Settings: React.FC<SettingsProps> = ({
                   <div className="grid grid-cols-1 gap-2">
                     {[
                       { id: 'default', name: 'Default', sample: 'The quick brown fox jumps over the lazy dog' },
+                      { id: 'plus-jakarta-sans', name: 'Plus Jakarta Sans', sample: 'The quick brown fox jumps over the lazy dog' },
+                      { id: 'google-sans', name: 'Google Sans', sample: 'The quick brown fox jumps over the lazy dog' },
+                      { id: 'open-sans', name: 'Open Sans', sample: 'The quick brown fox jumps over the lazy dog' },
                       { id: 'fredoka', name: 'Fredoka', sample: 'The quick brown fox jumps over the lazy dog' },
                       { id: 'comfortaa', name: 'Comfortaa', sample: 'The quick brown fox jumps over the lazy dog' },
-                      { id: 'google-sans', name: 'Google Sans', sample: 'The quick brown fox jumps over the lazy dog' },
                     ].map((font) => {
                       const isActive = fontFamily === font.id;
+                      const fontCss = font.id === 'default'
+                        ? "'Plus Jakarta Sans', 'Google Sans', 'Open Sans', ui-sans-serif, system-ui"
+                        : font.id === 'plus-jakarta-sans'
+                          ? "'Plus Jakarta Sans', sans-serif"
+                          : font.id === 'google-sans'
+                            ? "'Google Sans', sans-serif"
+                            : font.id === 'open-sans'
+                              ? "'Open Sans', sans-serif"
+                              : font.id === 'fredoka'
+                                ? "'Fredoka', sans-serif"
+                                : "'Comfortaa', sans-serif";
                       return (
                         <button
                           key={font.id}
@@ -250,13 +252,7 @@ const Settings: React.FC<SettingsProps> = ({
                           style={{
                             background: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
                             borderColor: isActive ? 'rgba(var(--neon-rgb), 0.12)' : (theme === 'dark' ? 'rgba(var(--neon-rgb), 0.04)' : 'rgba(0,0,0,0.07)'),
-                            fontFamily: font.id === 'default'
-                              ? "'Fredoka', 'Comfortaa', 'Google Sans', ui-sans-serif, system-ui"
-                              : font.id === 'fredoka'
-                                ? "'Fredoka', sans-serif"
-                                : font.id === 'comfortaa'
-                                  ? "'Comfortaa', sans-serif"
-                                  : "'Google Sans', sans-serif",
+                            fontFamily: fontCss,
                           }}
                         >
                           <div className="text-sm font-medium" style={{ color: isActive ? 'var(--neon-color)' : undefined }}>{font.name}</div>
@@ -436,6 +432,28 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
           </ScrollArea>
         </Tabs>
+    </>
+  );
+
+  if (inline) {
+    if (!isOpen) return null;
+    return settingsContent;
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl h-[600px] p-0 gap-0 overflow-hidden">
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px] z-10"
+          style={{
+            background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`,
+            boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)`
+          }}
+        />
+        <DialogHeader className="p-5 pb-0">
+          <DialogTitle>Settings</DialogTitle>
+        </DialogHeader>
+        {settingsContent}
       </DialogContent>
     </Dialog>
   );

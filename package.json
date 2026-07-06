@@ -20,6 +20,7 @@
     "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-avatar": "^1.2.1",
     "@radix-ui/react-collapsible": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.17",

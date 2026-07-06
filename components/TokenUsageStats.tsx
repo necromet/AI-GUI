@@ -84,6 +84,7 @@ interface TokenUsageStatsProps {
   isOpen: boolean;
   onClose: () => void;
   availableModels?: ModelConfig[];
+  inline?: boolean;
 }
 
 interface OverallStats {
@@ -140,7 +141,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, availableModels = [] }) => {
+const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, availableModels = [], inline = false }) => {
   const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
   const [modelStats, setModelStats] = useState<ModelStats[]>([]);
   const [dateStats, setDateStats] = useState<DateStats[]>([]);
@@ -181,28 +182,10 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
   };
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 [&>[data-slot=dialog-close]]:hidden">
-        <div className="absolute top-0 left-0 right-0 h-[2px] rounded-t-lg z-10" style={{ background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`, boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)` }} />
-
-        <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200 dark:border-white/[0.04] space-y-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(var(--neon-rgb), 0.08)', border: '1px solid rgba(var(--neon-rgb), 0.1)' }}>
-              <Activity className="h-6 w-6" style={{ color: 'var(--neon-color)' }} />
-            </div>
-            <div>
-              <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">Token Usage</DialogTitle>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-0.5">Monitor API consumption and patterns</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 text-gray-400 hover:text-gray-600 dark:hover:text-white">
-            <X className="h-5 w-5" />
-          </Button>
-        </DialogHeader>
-
+  const statsContent = (
+    <>
         <Tabs value={selectedView} onValueChange={(v) => setSelectedView(v as typeof selectedView)} className="flex flex-col flex-1 overflow-hidden">
-          <div className="px-6 pt-4">
+          <div className={inline ? "px-3 pt-3" : "px-6 pt-4"}>
             <TabsList className="bg-transparent gap-1 h-auto p-0">
               {[
                 { id: 'overview' as const, label: 'Overview', icon: TrendingUp },
@@ -537,11 +520,38 @@ const TokenUsageStats: React.FC<TokenUsageStatsProps> = ({ isOpen, onClose, avai
           </div>
         </Tabs>
 
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-white/[0.04] bg-gray-50/50 dark:bg-white/[0.01]">
+        <div className={inline ? "px-3 py-2" : "px-6 py-4 border-t border-gray-200 dark:border-white/[0.04] bg-gray-50/50 dark:bg-white/[0.01]"}>
           <p className="text-[11px] text-gray-400 text-center">
             Token counts are estimates based on stored conversation history. Actual API billing may vary.
           </p>
         </div>
+    </>
+  );
+
+  if (inline) {
+    if (!isOpen) return null;
+    return statsContent;
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 [&>[data-slot=dialog-close]]:hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] rounded-t-lg z-10" style={{ background: `linear-gradient(90deg, transparent, var(--neon-color), transparent)`, boxShadow: `0 0 20px rgba(var(--neon-rgb), 0.5)` }} />
+        <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200 dark:border-white/[0.04] space-y-0">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(var(--neon-rgb), 0.08)', border: '1px solid rgba(var(--neon-rgb), 0.1)' }}>
+              <Activity className="h-6 w-6" style={{ color: 'var(--neon-color)' }} />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">Token Usage</DialogTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-0.5">Monitor API consumption and patterns</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 text-gray-400 hover:text-gray-600 dark:hover:text-white">
+            <X className="h-5 w-5" />
+          </Button>
+        </DialogHeader>
+        {statsContent}
       </DialogContent>
     </Dialog>
   );

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Plus, Trash2, X, Package, Layers, Code, LayoutGrid, RefreshCw, Eye, Copy, Check, ChevronDown, ChevronRight, Bot, Send, Sparkles } from 'lucide-react';
-import { LibraryComponent, LibraryComponentWithScore, Role, Message, ModelConfig } from '../types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Search, Plus, Trash2, X, Package, Layers, Code, LayoutGrid, RefreshCw, Eye, Copy, Check, Bot, Send, Sparkles, FileCode, FileText, FileJson, FileType, Undo2, Redo2, ArrowLeft, Upload, PanelLeftClose } from 'lucide-react';
+import { LibraryComponent, LibraryComponentFile, ModelConfig } from '../types';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { CodeEditor } from '@/components/ui/code-editor-sheet';
 
 const CATEGORIES = [
   { key: 'all', label: 'All', icon: <Package size={12} /> },
@@ -42,13 +43,110 @@ const CONTENT_TYPES = [
   { value: 'markdown', label: 'Markdown' },
 ];
 
+const FILENAME_MAP: Record<string, string> = {
+  html: 'index.html', tsx: 'Component.tsx', css: 'style.css', js: 'script.js', ts: 'script.ts', json: 'data.json', markdown: 'README.md',
+};
+
+const EXT_TO_CONTENT_TYPE: Record<string, string> = {
+  html: 'html', htm: 'html',
+  css: 'css',
+  js: 'javascript', jsx: 'javascript',
+  ts: 'typescript', tsx: 'tsx',
+  json: 'json',
+  md: 'markdown', markdown: 'markdown',
+  py: 'python',
+  java: 'java',
+  cpp: 'c_cpp', c: 'c_cpp', h: 'c_cpp',
+  rb: 'ruby',
+  php: 'php',
+  sql: 'sql',
+  go: 'golang',
+  rs: 'rust',
+  lua: 'lua',
+};
+
+function deriveContentType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  return EXT_TO_CONTENT_TYPE[ext] || 'js';
+}
+
+const ACE_MODE_MAP: Record<string, string> = {
+  html: 'html', css: 'css', js: 'javascript', ts: 'typescript', tsx: 'typescript', json: 'json', markdown: 'markdown',
+};
+
+const ACE_LANG_MAP: Record<string, 'html' | 'css' | 'javascript' | 'typescript' | 'json' | 'markdown'> = {
+  html: 'html', css: 'css', js: 'javascript', ts: 'typescript', tsx: 'typescript', json: 'json', markdown: 'markdown',
+};
+
+function getFileIcon(filename: string) {
+  if (filename.endsWith('.html')) return <FileCode size={12} />;
+  if (filename.endsWith('.css')) return <FileCode size={12} />;
+  if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.tsx')) return <FileType size={12} />;
+  if (filename.endsWith('.json')) return <FileJson size={12} />;
+  return <FileText size={12} />;
+}
+
+function buildPreviewHtml(files: LibraryComponentFile[]): string {
+  if (!files || files.length === 0) return '';
+  const entry = files.find(f => f.isEntry) || files.find(f => f.filename.endsWith('.html')) || files[0];
+  if (!entry) return '';
+
+  if (entry.contentType === 'html') {
+    let html = entry.content;
+    const cssFiles = files.filter(f => f.contentType === 'css' && f.id !== entry.id);
+    const jsFiles = files.filter(f => f.contentType === 'js' && f.id !== entry.id);
+
+    const cssBlock = cssFiles.map(f => `<style data-file="${f.filename}">\n${f.content}\n</style>`).join('\n');
+    const jsBlock = jsFiles.map(f => `<script data-file="${f.filename}">\n${f.content}\n</script>`).join('\n');
+
+    if (cssBlock) {
+      if (html.includes('</head>')) {
+        html = html.replace('</head>', cssBlock + '\n</head>');
+      } else {
+        html = cssBlock + '\n' + html;
+      }
+    }
+    if (jsBlock) {
+      if (html.includes('</body>')) {
+        html = html.replace('</body>', jsBlock + '\n</body>');
+      } else {
+        html = html + '\n' + jsBlock;
+      }
+    }
+    return html;
+  }
+
+  if (entry.contentType === 'js' || entry.contentType === 'ts' || entry.contentType === 'tsx') {
+    return `<!DOCTYPE html><html><head></head><body><pre style="font-family:monospace;padding:1rem;color:#e0e0e0;background:#0f0f1a;min-height:100vh;white-space:pre-wrap">${entry.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+  }
+
+  if (entry.contentType === 'css') {
+    return `<!DOCTYPE html><html><head><style>${entry.content}</style></head><body><div style="font-family:system-ui;padding:2rem;color:#888"><p>CSS Preview</p><p class="test">This text uses the component's stylesheet.</p></div></body></html>`;
+  }
+
+  return `<!DOCTYPE html><html><head></head><body><pre style="font-family:monospace;padding:1rem;color:#e0e0e0;background:#0f0f1a;min-height:100vh;white-space:pre-wrap">${entry.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+}
+
+export interface LibraryControls {
+  showAgent: boolean;
+  onToggleAgent: () => void;
+  componentName: string;
+  componentDescription: string;
+  componentTags: string[];
+  onBack: () => void;
+  isDirty: boolean;
+  isSaving: boolean;
+  onSave: () => void;
+}
+
 interface LibraryPanelProps {
   theme?: 'dark' | 'light';
   modelConfig?: ModelConfig;
   onNotification?: (msg: string, type: 'success' | 'error') => void;
+  onControlsChange?: (controls: LibraryControls | null) => void;
 }
 
-const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig, onNotification }) => {
+const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig, onNotification, onControlsChange }) => {
   const [components, setComponents] = useState<LibraryComponent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,15 +154,6 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   const [selectedComponent, setSelectedComponent] = useState<LibraryComponent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
-
-  const [newComponent, setNewComponent] = useState({
-    name: '',
-    category: 'ui-widget' as LibraryComponent['category'],
-    contentType: 'html' as LibraryComponent['contentType'],
-    description: '',
-    tags: '',
-    content: '',
-  });
 
   const [showAgent, setShowAgent] = useState(false);
   const [agentMessages, setAgentMessages] = useState<{ role: 'user' | 'assistant'; content: string; id: string }[]>([]);
@@ -74,6 +163,23 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
+
+  // File editor state
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [editFiles, setEditFiles] = useState<LibraryComponentFile[]>([]);
+  const [openFileIds, setOpenFileIds] = useState<string[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'code' | 'preview'>('code');
+  const [showAddFileDialog, setShowAddFileDialog] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [deleteFileDialog, setDeleteFileDialog] = useState<string | null>(null);
+
+  // Create dialog multi-file state
+  const [createFiles, setCreateFiles] = useState<Array<{ filename: string; contentType: string; content: string; isEntry: boolean }>>([
+    { filename: 'index.html', contentType: 'html', content: '', isEntry: true },
+  ]);
 
   const loadComponents = useCallback(async () => {
     setIsLoading(true);
@@ -97,6 +203,44 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   useEffect(() => {
     agentMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [agentMessages]);
+
+  useEffect(() => {
+    if (!onControlsChange) return;
+    if (selectedComponent) {
+      onControlsChange({
+        showAgent,
+        onToggleAgent: () => setShowAgent(prev => !prev),
+        componentName: selectedComponent.name,
+        componentDescription: selectedComponent.description,
+        componentTags: selectedComponent.tags,
+        onBack: () => setSelectedComponent(null),
+        isDirty,
+        isSaving,
+        onSave: handleSaveFiles,
+      });
+    } else {
+      onControlsChange(null);
+    }
+  }, [selectedComponent, showAgent, isDirty, isSaving, onControlsChange]);
+
+  useEffect(() => {
+    return () => { onControlsChange?.(null); };
+  }, [onControlsChange]);
+
+  // When a component is selected, load its files into editor state
+  useEffect(() => {
+    if (selectedComponent?.files) {
+      setEditFiles([...selectedComponent.files]);
+      setOpenFileIds(selectedComponent.files.map(f => f.id));
+      setActiveFileId(selectedComponent.files.find(f => f.isEntry)?.id || selectedComponent.files[0]?.id || null);
+      setIsDirty(false);
+      setViewMode('code');
+    }
+  }, [selectedComponent]);
+
+  const activeFile = useMemo(() => editFiles.find(f => f.id === activeFileId) || null, [editFiles, activeFileId]);
+
+  const previewHtml = useMemo(() => buildPreviewHtml(editFiles), [editFiles]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -136,23 +280,35 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   };
 
   const handleCreate = async () => {
-    if (!newComponent.name || !newComponent.content) return;
+    const validFiles = createFiles.filter(f => f.content.trim());
+    if (!newComponent.name || validFiles.length === 0) return;
     try {
+      const body: any = {
+        name: newComponent.name,
+        category: newComponent.category,
+        description: newComponent.description,
+        tags: newComponent.tags.split(',').map(t => t.trim()).filter(Boolean),
+        isGlobal: true,
+        agentAccessible: true,
+        files: validFiles.map(f => ({
+          filename: f.filename,
+          contentType: f.contentType,
+          content: f.content,
+          isEntry: f.isEntry,
+        })),
+      };
+
       const response = await fetch('/api/library/components', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newComponent,
-          tags: newComponent.tags.split(',').map(t => t.trim()).filter(Boolean),
-          isGlobal: true,
-          agentAccessible: true,
-        }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) throw new Error('Failed to create component');
       const data = await response.json();
       setComponents(prev => [data.component, ...prev]);
       setIsCreating(false);
       setNewComponent({ name: '', category: 'ui-widget', contentType: 'html', description: '', tags: '', content: '' });
+      setCreateFiles([{ filename: 'index.html', contentType: 'html', content: '', isEntry: true }]);
       onNotification?.('Component created', 'success');
     } catch (err: any) {
       onNotification?.(err.message, 'error');
@@ -264,88 +420,385 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     }
   };
 
+  const handleFileContentChange = (fileId: string, newContent: string) => {
+    setEditFiles(prev => prev.map(f => f.id === fileId ? { ...f, content: newContent } : f));
+    setIsDirty(true);
+  };
+
+  const handleSaveFiles = async () => {
+    if (!selectedComponent) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/library/components/${selectedComponent.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: editFiles.map(f => ({
+            filename: f.filename,
+            contentType: f.contentType,
+            content: f.content,
+            sortOrder: f.sortOrder,
+            isEntry: f.isEntry,
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to save');
+      const data = await response.json();
+      setSelectedComponent(data.component);
+      setEditFiles(data.component.files || []);
+      setIsDirty(false);
+      onNotification?.('Saved', 'success');
+      loadComponents();
+    } catch (err: any) {
+      onNotification?.(err.message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddFile = () => {
+    if (!newFileName.trim()) return;
+    const id = Math.random().toString(36).slice(2);
+    const newFile: LibraryComponentFile = {
+      id,
+      componentId: selectedComponent?.id || '',
+      filename: newFileName.trim(),
+      contentType: deriveContentType(newFileName.trim()) as any,
+      content: '',
+      sortOrder: editFiles.length,
+      isEntry: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditFiles(prev => [...prev, newFile]);
+    setOpenFileIds(prev => [...prev, id]);
+    setActiveFileId(id);
+    setIsDirty(true);
+    setShowAddFileDialog(false);
+    setNewFileName('');
+  };
+
+  const handleCloseTab = (fileId: string) => {
+    setOpenFileIds(prev => {
+      const remaining = prev.filter(id => id !== fileId);
+      if (remaining.length === 0) return prev;
+      if (activeFileId === fileId) {
+        setActiveFileId(remaining[0]);
+      }
+      return remaining;
+    });
+  };
+
+  const handleDeleteFile = (fileId: string) => {
+    setEditFiles(prev => {
+      const remaining = prev.filter(f => f.id !== fileId);
+      if (remaining.length === 0) return prev;
+      if (activeFileId === fileId) {
+        setActiveFileId(remaining[0].id);
+      }
+      return remaining;
+    });
+    setOpenFileIds(prev => prev.filter(id => id !== fileId));
+    setIsDirty(true);
+    setDeleteFileDialog(null);
+  };
+
+  const handleSetEntryFile = (fileId: string) => {
+    setEditFiles(prev => prev.map(f => ({ ...f, isEntry: f.id === fileId })));
+    setIsDirty(true);
+  };
+
+  const handleRemoveCreateFile = (index: number) => {
+    setCreateFiles(prev => {
+      const remaining = prev.filter((_, i) => i !== index);
+      if (remaining.length === 0) return [{ filename: 'index.html', contentType: 'html', content: '', isEntry: true }];
+      if (!remaining.some(f => f.isEntry)) remaining[0].isEntry = true;
+      return remaining;
+    });
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const readFile = (file: File): Promise<{ filename: string; contentType: string; content: string; isEntry: boolean }> =>
+      new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({
+            filename: file.name,
+            contentType: deriveContentType(file.name),
+            content: typeof reader.result === 'string' ? reader.result : '',
+            isEntry: false,
+          });
+        };
+        reader.readAsText(file);
+      });
+
+    const uploaded = await Promise.all(Array.from(files).map(readFile));
+    if (uploaded.length > 0) uploaded[0].isEntry = true;
+
+    setCreateFiles(prev => {
+      const merged = prev.length === 1 && !prev[0].content.trim() ? uploaded : [...prev, ...uploaded];
+      if (!merged.some(f => f.isEntry)) merged[0].isEntry = true;
+      return merged;
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const [newComponent, setNewComponent] = useState({
+    name: '',
+    category: 'ui-widget' as LibraryComponent['category'],
+    contentType: 'html' as LibraryComponent['contentType'],
+    description: '',
+    tags: '',
+    content: '',
+  });
+
+  // Detail view with tabbed file editor + preview
   if (selectedComponent) {
+    const aceMode = activeFile ? ACE_MODE_MAP[activeFile.contentType] || 'text' : 'text';
+
     return (
-      <div className="w-full max-w-5xl mx-auto flex flex-col gap-4 p-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedComponent(null)}
-            style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)', borderColor: 'var(--border-300)' }}
-          >
-            &larr; Back
-          </Button>
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-100)' }}>{selectedComponent.name}</h2>
-            <p className="text-xs" style={{ color: 'var(--text-500)' }}>{selectedComponent.description}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              className="text-[10px]"
-              style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)' }}
-            >
-              {CATEGORY_LABELS[selectedComponent.category] || selectedComponent.category}
-            </Badge>
-            <Badge
-              variant="secondary"
-              className="text-[10px]"
-              style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
-            >
-              {selectedComponent.contentType}
-            </Badge>
-          </div>
-        </div>
-
-        {selectedComponent.tags.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
-            {selectedComponent.tags.map(tag => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className="text-[10px]"
-                style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
+      <div className="flex h-full w-full">
+      <div className="flex-1 flex flex-col gap-4 p-4 h-full overflow-hidden">
+        {/* File Tabs */}
+        <div className="flex items-center gap-1 flex-shrink-0 overflow-x-auto pb-1" style={{ borderBottom: '1px solid var(--border-300)' }}>
+          {openFileIds.map(fileId => {
+            const file = editFiles.find(f => f.id === fileId);
+            if (!file) return null;
+            return (
+              <div
+                key={file.id}
+                className="flex items-center gap-1.5 cursor-pointer transition-colors group/tab"
+                onClick={() => setActiveFileId(file.id)}
+                onDoubleClick={() => handleSetEntryFile(file.id)}
+                title={file.isEntry ? 'Entry file (double-click another to change)' : 'Double-click to set as entry'}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px 8px 0 0',
+                  backgroundColor: activeFileId === file.id ? 'var(--bg-200)' : 'transparent',
+                  color: activeFileId === file.id ? 'var(--neon-color)' : 'var(--text-500)',
+                  borderBottom: activeFileId === file.id ? '2px solid var(--neon-color)' : '2px solid transparent',
+                  fontSize: '13px',
+                  whiteSpace: 'nowrap',
+                }}
               >
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
+                {getFileIcon(file.filename)}
+                <span>{file.filename}</span>
+                {file.isEntry && <span className="text-[9px] px-1 rounded" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>entry</span>}
+                {isDirty && activeFileId === file.id && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleCloseTab(file.id); }}
+                  className="ml-1 opacity-0 group-hover/tab:opacity-100 transition-opacity"
+                  style={{ color: 'var(--text-500)' }}
+                  title="Close tab"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setShowAddFileDialog(true)}
+            className="flex items-center justify-center transition-colors"
+            style={{
+              padding: '6px 8px',
+              borderRadius: '8px',
+              color: 'var(--text-500)',
+              fontSize: '13px',
+            }}
+            title="Add file"
+          >
+            <Plus size={14} />
+          </button>
 
-        <Card style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
-          <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
-            <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Content</span>
+          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1 h-7 text-[10px]"
+              className="h-7 text-xs gap-1"
+              onClick={() => setViewMode(v => v === 'code' ? 'preview' : 'code')}
               style={{ color: 'var(--text-300)' }}
-              onClick={() => {
-                navigator.clipboard.writeText(selectedComponent.content);
-                onNotification?.('Copied to clipboard', 'success');
-              }}
             >
-              <Copy size={10} />
-              Copy
+              {viewMode === 'code' ? <Eye size={12} /> : <Code size={12} />}
+              {viewMode === 'code' ? 'Preview' : 'Code'}
             </Button>
           </div>
-          <pre className="p-4 overflow-x-auto text-xs leading-relaxed max-h-[60vh]" style={{ color: 'var(--text-300)' }}>
-            <code>{selectedComponent.content}</code>
-          </pre>
-        </Card>
+        </div>
 
+        {/* Editor + Preview Split */}
+        <div className="flex-1 flex gap-3 min-h-0 overflow-hidden">
+          {/* Code Editor */}
+          {viewMode === 'code' ? (
+            <div className="flex-1 flex flex-col min-w-0 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+              {activeFile ? (
+                <>
+                  {/* Editor Header */}
+                  <div className="flex items-center justify-between px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-300)' }}>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1.5 py-0.5 font-mono uppercase"
+                        style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
+                      >
+                        {activeFile.contentType}
+                      </Badge>
+                      {activeFile.isEntry && (
+                        <Badge
+                          className="text-[10px] px-1.5 py-0.5"
+                          style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}
+                        >
+                          entry
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => editorRef.current?.undo()}
+                        className="p-1.5 rounded-lg transition-colors hover:opacity-80"
+                        style={{ color: 'var(--text-500)' }}
+                        title="Undo (Ctrl+Z)"
+                      >
+                        <Undo2 size={12} />
+                      </button>
+                      <button
+                        onClick={() => editorRef.current?.redo()}
+                        className="p-1.5 rounded-lg transition-colors hover:opacity-80"
+                        style={{ color: 'var(--text-500)' }}
+                        title="Redo (Ctrl+Shift+Z)"
+                      >
+                        <Redo2 size={12} />
+                      </button>
+                      {!activeFile.isEntry && (
+                        <button
+                          onClick={() => handleSetEntryFile(activeFile.id)}
+                          className="text-xs px-2 py-1 rounded-lg transition-colors hover:opacity-80 ml-1"
+                          style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)' }}
+                        >
+                          Set as entry
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 relative min-h-0">
+                    <CodeEditor
+                      language={ACE_LANG_MAP[activeFile.contentType] || 'html'}
+                      value={activeFile.content}
+                      onChange={(val) => handleFileContentChange(activeFile.id, val)}
+                      onLoad={(editor) => { editorRef.current = editor; }}
+                      className="absolute inset-0"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-500)' }}>
+                  <p className="text-sm">No file selected</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col min-w-0 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+              <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-300)' }}>
+                <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Live Preview</span>
+                <div className="flex items-center gap-1">
+                  {editFiles.filter(f => f.contentType === 'css').length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] px-1" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
+                      +{editFiles.filter(f => f.contentType === 'css').length} CSS
+                    </Badge>
+                  )}
+                  {editFiles.filter(f => f.contentType === 'js').length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] px-1" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
+                      +{editFiles.filter(f => f.contentType === 'js').length} JS
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1">
+                {previewHtml ? (
+                  <iframe
+                    srcDoc={previewHtml}
+                    sandbox="allow-scripts"
+                    className="w-full h-full border-0"
+                    style={{ backgroundColor: '#fff' }}
+                    title="Preview"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-500)' }}>
+                    <p className="text-sm">No previewable content</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Mini file list sidebar */}
+          <div className="w-48 flex-shrink-0 rounded-xl overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-300)' }}>
+              <span className="text-xs font-semibold" style={{ color: 'var(--text-500)' }}>Files</span>
+              <button
+                onClick={() => setShowAddFileDialog(true)}
+                className="p-0.5 rounded transition-colors hover:opacity-80"
+                style={{ color: 'var(--neon-color)' }}
+                title="Add file"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-0.5">
+                {editFiles.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex items-center gap-1 group/file"
+                  >
+                    <button
+                      onClick={() => {
+                        setActiveFileId(file.id);
+                        setViewMode('code');
+                        if (!openFileIds.includes(file.id)) {
+                          setOpenFileIds(prev => [...prev, file.id]);
+                        }
+                      }}
+                      className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors min-w-0"
+                      style={{
+                        backgroundColor: activeFileId === file.id ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent',
+                        color: activeFileId === file.id ? 'var(--neon-color)' : 'var(--text-500)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {getFileIcon(file.filename)}
+                      <span className="truncate flex-1">{file.filename}</span>
+                      {file.isEntry && <span className="text-[8px] px-1 rounded flex-shrink-0" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>E</span>}
+                    </button>
+                    {editFiles.length > 1 && (
+                      <button
+                        onClick={() => setDeleteFileDialog(file.id)}
+                        className="p-1 rounded opacity-0 group-hover/file:opacity-100 transition-opacity flex-shrink-0"
+                        style={{ color: '#ef4444' }}
+                        title="Delete file"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+
+        {/* Metadata */}
         {selectedComponent.metadata && Object.keys(selectedComponent.metadata).length > 0 && (
-          <Card style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
-            <CardContent className="p-4">
-              <span className="text-xs font-semibold block mb-2" style={{ color: 'var(--text-500)' }}>Metadata</span>
+          <Card className="flex-shrink-0" style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
+            <CardContent className="p-3">
+              <span className="text-sm font-semibold block mb-2" style={{ color: 'var(--text-500)' }}>Metadata</span>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(selectedComponent.metadata).map(([key, value]) => (
-                  <Badge
-                    key={key}
-                    variant="secondary"
-                    className="text-[10px]"
-                    style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
-                  >
+                  <Badge key={key} variant="secondary" className="text-xs" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
                     {key}: {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                   </Badge>
                 ))}
@@ -353,71 +806,113 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
             </CardContent>
           </Card>
         )}
+
+        {/* Add File Dialog */}
+        <Dialog open={showAddFileDialog} onOpenChange={setShowAddFileDialog}>
+          <DialogContent style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: 'var(--text-100)' }}>Add File</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Filename</Label>
+                <Input
+                  type="text"
+                  value={newFileName}
+                  onChange={e => setNewFileName(e.target.value)}
+                  placeholder="e.g. utils.js"
+                  className="text-sm font-mono"
+                  style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                  onKeyDown={e => e.key === 'Enter' && handleAddFile()}
+                  autoFocus
+                />
+                {newFileName.includes('.') && (
+                  <p className="text-xs" style={{ color: 'var(--text-500)' }}>
+                    Type: <span style={{ color: 'var(--neon-color)' }}>{deriveContentType(newFileName)}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleAddFile} disabled={!newFileName.trim() || !newFileName.includes('.')} style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
+                  Add
+                </Button>
+                <Button variant="secondary" onClick={() => { setShowAddFileDialog(false); setNewFileName(''); }} style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete File Confirm Dialog */}
+        <Dialog open={!!deleteFileDialog} onOpenChange={() => setDeleteFileDialog(null)}>
+          <DialogContent style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: 'var(--text-100)' }}>Delete File</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm" style={{ color: 'var(--text-500)' }}>
+              Are you sure you want to delete <strong style={{ color: 'var(--text-100)' }}>{editFiles.find(f => f.id === deleteFileDialog)?.filename}</strong>?
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => deleteFileDialog && handleDeleteFile(deleteFileDialog)}
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                Delete
+              </Button>
+              <Button variant="secondary" onClick={() => setDeleteFileDialog(null)} style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}>
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-    );
-  }
 
-  return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-4 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl" style={{ background: 'rgba(var(--neon-rgb), 0.1)', boxShadow: '0 0 20px rgba(var(--neon-rgb), 0.08)' }}>
-            <Package size={22} style={{ color: 'var(--neon-color)' }} />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: 'var(--text-100)' }}>Component Library</h2>
-            <p className="text-xs" style={{ color: 'var(--text-500)' }}>Reusable components, templates, and agent tools</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 rounded-xl"
-            onClick={() => setShowAgent(!showAgent)}
-            style={{
-              backgroundColor: showAgent ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
-              color: showAgent ? 'var(--neon-color)' : 'var(--text-300)',
-              borderColor: showAgent ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)',
-            }}
-          >
-            <Bot size={14} />
-            Agent
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5 rounded-xl"
-            onClick={() => setIsCreating(true)}
-            style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
-          >
-            <Plus size={14} />
-            New Component
-          </Button>
-        </div>
-      </div>
-
-      {/* Agent Chat Panel */}
-      {showAgent && (
-        <Card className="rounded-2xl animate-fade-in" style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
-          <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid var(--border-300)' }}>
-            <Bot size={14} style={{ color: 'var(--neon-color)' }} />
-            <span className="text-xs font-semibold" style={{ color: 'var(--text-100)' }}>Library Agent</span>
-            <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>Search, create, and manage components with AI</span>
+      {/* Agent Right Sidebar */}
+      <aside
+        className={`
+          flex-shrink-0 h-full flex flex-col
+          transition-all duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)]
+          fixed right-0 top-0 z-50
+          ${showAgent ? 'w-[288px]' : 'w-0 overflow-hidden'}
+        `}
+        style={{
+          backgroundColor: 'var(--bg-100)',
+          borderLeft: showAgent ? '1px solid var(--border-300)' : 'none',
+          height: '100vh',
+        }}
+      >
+        <div className={`flex flex-col h-full w-[288px] transition-opacity duration-200 ${showAgent ? 'opacity-100' : 'opacity-0'}`}>
+          {/* Header */}
+          <div className="flex w-full items-center p-2 pt-2 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowAgent(false)}
+              className="h-8 w-8 flex-shrink-0"
+              style={{ color: 'var(--text-500)' }}
+            >
+              <PanelLeftClose size={16} style={{ transform: 'scaleX(-1)' }} />
+            </Button>
+            <div className="flex items-center gap-2 h-8">
+              <Bot size={16} style={{ color: 'var(--neon-color)' }} />
+              <span className="font-semibold text-sm" style={{ color: 'var(--text-100)' }}>Library Agent</span>
+            </div>
           </div>
 
-          <ScrollArea className="max-h-64 px-4 py-3">
+          {/* Messages */}
+          <ScrollArea className="flex-1 px-3 pt-2">
             <div className="space-y-3">
               {agentMessages.length === 0 && (
-                <div className="text-center py-4">
-                  <Sparkles size={20} className="mx-auto mb-2" style={{ color: 'var(--text-500)' }} />
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Sparkles size={20} className="mb-2" style={{ color: 'var(--text-500)' }} />
                   <p className="text-xs" style={{ color: 'var(--text-500)' }}>Ask me to find or create components</p>
                 </div>
               )}
               {agentMessages.map(msg => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className="max-w-[80%] rounded-xl px-3 py-2 text-xs leading-relaxed"
+                    className="max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed"
                     style={{
                       backgroundColor: msg.role === 'user' ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-300)',
                       color: 'var(--text-100)',
@@ -433,45 +928,77 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
             </div>
           </ScrollArea>
 
-          <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--border-300)' }}>
-            <Input
-              type="text"
-              value={agentInput}
-              onChange={e => setAgentInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAgentSend()}
-              placeholder="Ask the agent to find or create components..."
-              className="flex-1 h-8 text-xs rounded-lg"
-              style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-              disabled={isAgentStreaming}
-            />
-            <Button
-              size="icon"
-              className="h-8 w-8 rounded-lg"
-              onClick={handleAgentSend}
-              disabled={!agentInput.trim() || isAgentStreaming}
-              style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
-            >
-              <Send size={14} />
-            </Button>
-            {isAgentStreaming && (
+          {/* Input */}
+          <div className="p-2 space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="text"
+                value={agentInput}
+                onChange={e => setAgentInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAgentSend()}
+                placeholder="Ask the agent..."
+                className="flex-1 h-8 text-sm rounded-lg"
+                style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                disabled={isAgentStreaming}
+              />
               <Button
-                variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-lg"
-                onClick={() => abortControllerRef.current?.abort()}
-                style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#f87171' }}
+                className="h-8 w-8 rounded-lg flex-shrink-0"
+                onClick={handleAgentSend}
+                disabled={!agentInput.trim() || isAgentStreaming}
+                style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
               >
-                <X size={14} />
+                <Send size={14} />
               </Button>
-            )}
+              {isAgentStreaming && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg flex-shrink-0"
+                  onClick={() => abortControllerRef.current?.abort()}
+                  style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#f87171' }}
+                >
+                  <X size={14} />
+                </Button>
+              )}
+            </div>
           </div>
-        </Card>
-      )}
+        </div>
+      </aside>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-4 p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl" style={{ background: 'rgba(var(--neon-rgb), 0.1)', boxShadow: '0 0 20px rgba(var(--neon-rgb), 0.08)' }}>
+            <Package size={22} style={{ color: 'var(--neon-color)' }} />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--text-100)' }}>Component Library</h2>
+            <p className="text-sm" style={{ color: 'var(--text-500)' }}>Reusable components, templates, and agent tools</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-xl"
+            onClick={() => setIsCreating(true)}
+            style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+          >
+            <Plus size={14} />
+            New Component
+          </Button>
+        </div>
+      </div>
 
       {/* Create Form */}
       <Dialog open={isCreating} onOpenChange={setIsCreating}>
         <DialogContent
-          className="max-w-2xl"
+          className="max-w-3xl"
           style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}
         >
           <DialogHeader>
@@ -485,18 +1012,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                 value={newComponent.name}
                 onChange={e => setNewComponent(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Component name"
-                className="text-xs"
-                style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Description</Label>
-              <Input
-                type="text"
-                value={newComponent.description}
-                onChange={e => setNewComponent(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Description"
-                className="text-xs"
+                className="text-sm"
                 style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
               />
             </div>
@@ -506,20 +1022,12 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                 value={newComponent.category}
                 onValueChange={value => setNewComponent(prev => ({ ...prev, category: value as any }))}
               >
-                <SelectTrigger
-                  className="text-xs"
-                  style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-                >
+                <SelectTrigger className="text-sm" style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
                   {CATEGORIES.filter(c => c.key !== 'all').map(c => (
-                    <SelectItem
-                      key={c.key}
-                      value={c.key}
-                      className="text-xs"
-                      style={{ color: 'var(--text-100)' }}
-                    >
+                    <SelectItem key={c.key} value={c.key} className="text-sm" style={{ color: 'var(--text-100)' }}>
                       {c.label}
                     </SelectItem>
                   ))}
@@ -527,66 +1035,99 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Content Type</Label>
-              <Select
-                value={newComponent.contentType}
-                onValueChange={value => setNewComponent(prev => ({ ...prev, contentType: value as any }))}
-              >
-                <SelectTrigger
-                  className="text-xs"
-                  style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
-                  {CONTENT_TYPES.map(ct => (
-                    <SelectItem
-                      key={ct.value}
-                      value={ct.value}
-                      className="text-xs"
-                      style={{ color: 'var(--text-100)' }}
-                    >
-                      {ct.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Tags</Label>
+              <Input
+                type="text"
+                value={newComponent.tags}
+                onChange={e => setNewComponent(prev => ({ ...prev, tags: e.target.value }))}
+                placeholder="Tags (comma-separated)"
+                className="text-sm"
+                style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+              />
             </div>
           </div>
+
           <div className="space-y-1.5">
-            <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Tags</Label>
-            <Input
-              type="text"
-              value={newComponent.tags}
-              onChange={e => setNewComponent(prev => ({ ...prev, tags: e.target.value }))}
-              placeholder="Tags (comma-separated)"
-              className="text-xs"
-              style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Content</Label>
+            <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Description</Label>
             <Textarea
-              value={newComponent.content}
-              onChange={e => setNewComponent(prev => ({ ...prev, content: e.target.value }))}
-              placeholder="Component content (code, HTML, JSON, etc.)"
-              className="text-xs font-mono resize-none h-40"
+              value={newComponent.description}
+              onChange={e => setNewComponent(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Describe what this component does..."
+              className="text-sm min-h-[80px] resize-y"
               style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
             />
           </div>
+
+          {/* File upload */}
+          <div className="space-y-2">
+            <Label className="text-xs" style={{ color: 'var(--text-500)' }}>Files</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              accept=".html,.htm,.css,.js,.jsx,.ts,.tsx,.json,.md,.py,.java,.cpp,.c,.h,.rb,.php,.sql,.go,.rs,.lua"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex flex-col items-center gap-2 py-6 rounded-lg border-2 border-dashed transition-colors hover:opacity-80"
+              style={{ borderColor: 'var(--border-300)', color: 'var(--text-500)' }}
+            >
+              <Upload size={20} style={{ color: 'var(--neon-color)', opacity: 0.6 }} />
+              <span className="text-sm">Click to upload files</span>
+              <span className="text-xs" style={{ color: 'var(--text-500)' }}>Supports multiple files at once</span>
+            </button>
+            {createFiles.some(f => f.content.trim()) && (
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {createFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)' }}
+                  >
+                    {getFileIcon(file.filename)}
+                    <span className="text-xs font-mono flex-1 truncate" style={{ color: 'var(--text-100)' }}>{file.filename}</span>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1"
+                      style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
+                    >
+                      {file.contentType}
+                    </Badge>
+                    {file.isEntry && (
+                      <Badge className="text-[10px] px-1" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>
+                        entry
+                      </Badge>
+                    )}
+                    <button
+                      onClick={() => handleRemoveCreateFile(idx)}
+                      className="p-1 rounded transition-colors hover:opacity-80"
+                      style={{ color: '#ef4444' }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <Button
               onClick={handleCreate}
-              disabled={!newComponent.name || !newComponent.content}
-              className="text-xs"
+              disabled={!newComponent.name || !createFiles.some(f => f.content.trim())}
               style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
             >
               Create
             </Button>
             <Button
               variant="secondary"
-              onClick={() => setIsCreating(false)}
-              className="text-xs"
+              onClick={() => {
+                setIsCreating(false);
+                setCreateFiles([{ filename: 'index.html', contentType: 'html', content: '', isEntry: true }]);
+              }}
               style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-300)' }}
             >
               Cancel
@@ -605,7 +1146,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="Search components..."
-            className="flex-1 bg-transparent border-0 text-xs h-9 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="flex-1 bg-transparent border-0 text-sm h-9 focus-visible:ring-0 focus-visible:ring-offset-0"
             style={{ color: 'var(--text-100)' }}
           />
           {searchQuery && (
@@ -621,7 +1162,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
           )}
           <Button
             size="sm"
-            className="h-7 text-[10px] rounded-lg"
+            className="h-7 text-xs rounded-lg"
             onClick={handleSearch}
             style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
           >
@@ -649,7 +1190,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
               key={cat.key}
               variant="outline"
               size="sm"
-              className="gap-1 h-7 text-[11px] whitespace-nowrap rounded-lg"
+              className="gap-1 h-8 text-xs whitespace-nowrap rounded-lg"
               onClick={() => setActiveCategory(cat.key)}
               style={{
                 backgroundColor: activeCategory === cat.key ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--bg-200)',
@@ -673,10 +1214,10 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
         <Card className="rounded-2xl p-12 text-center" style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)' }}>
           <CardContent className="p-0">
             <Package size={48} className="mx-auto mb-4" style={{ color: 'var(--text-500)' }} />
-            <p className="text-sm mb-2" style={{ color: 'var(--text-300)' }}>No components yet</p>
-            <p className="text-xs mb-4" style={{ color: 'var(--text-500)' }}>Create your first component or seed the defaults</p>
+            <p className="text-base mb-2" style={{ color: 'var(--text-300)' }}>No components yet</p>
+            <p className="text-sm mb-4" style={{ color: 'var(--text-500)' }}>Create your first component or seed the defaults</p>
             <Button
-              className="rounded-xl text-xs"
+              className="rounded-xl text-sm"
               onClick={handleSeed}
               style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
             >
@@ -714,8 +1255,8 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</h3>
-                      <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
+                      <h3 className="text-base font-semibold truncate" style={{ color: 'var(--text-100)' }}>{comp.name}</h3>
+                      <p className="text-sm mt-0.5 line-clamp-2" style={{ color: 'var(--text-500)' }}>{comp.description}</p>
                     </div>
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
@@ -743,33 +1284,36 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
                   <div className="flex items-center gap-1.5 flex-wrap mt-2">
                     <Badge
-                      className="text-[9px] px-1.5 py-0.5"
+                      className="text-xs px-1.5 py-0.5"
                       style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)' }}
                     >
                       {CATEGORY_LABELS[comp.category] || comp.category}
                     </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="text-[9px] px-1.5 py-0.5"
-                      style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
-                    >
-                      {comp.contentType}
-                    </Badge>
+                    {[comp.contentType, ...comp.tags.slice(0, 2)].map((label, i) => (
+                      <Badge
+                        key={i}
+                        variant="secondary"
+                        className="text-xs px-1.5 py-0.5"
+                        style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                    {comp.files && comp.files.length > 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs px-1.5 py-0.5 gap-0.5"
+                        style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)' }}
+                      >
+                        <FileCode size={10} />
+                        {comp.files.length} files
+                      </Badge>
+                    )}
                     {isScored && (
-                      <span className="text-[9px] px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
+                      <span className="text-xs px-1 py-0.5 rounded" style={{ color: 'var(--neon-color)' }}>
                         {((comp as any).score * 100).toFixed(0)}%
                       </span>
                     )}
-                    {comp.tags.slice(0, 2).map(tag => (
-                      <Badge
-                        key={tag}
-                        variant="secondary"
-                        className="text-[8px] px-1 py-0.5"
-                        style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
                   </div>
                 </CardContent>
               </Card>
