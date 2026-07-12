@@ -66,7 +66,7 @@ function resolveInternalImport(
 function rewriteImports(content: string, filename: string, files: LibraryComponentFile[]): string {
   return content.replace(
     /import\s+(?:(type)\s+)?(?:(\{[\s\S]*?\})\s*from\s+|([\w$]+)\s*(?:,\s*(\{[\s\S]*?\}))?\s*from\s+|\*\s+as\s+([\w$]+)\s*from\s+)['"]([^'"]+)['"]\s*;?|import\s+['"]([^'"]+)['"]\s*;?/g,
-    (match, _typeKeyword, _namedClause, _defaultName, _namedAfterDefault, _nsName, fromSource, sideEffectSource) => {
+    (match, _typeKeyword, namedClause, _defaultName, _namedAfterDefault, _nsName, fromSource, sideEffectSource) => {
       const source = fromSource || sideEffectSource;
       if (!source) return match;
 
@@ -82,15 +82,37 @@ function rewriteImports(content: string, filename: string, files: LibraryCompone
   );
 }
 
+function rewriteCnImports(content: string): string {
+  return content.replace(
+    /import\s+\{\s*cn\s*(?:,\s*[^}]+)?\}\s*from\s*['"]((?:\.\/|\.\.\/|@\/)[^'"]+)['"]\s*;?/g,
+    (match) => {
+      return match.replace(/from\s*['"][^'"]+['"]/, 'from "./__cn_virtual__"');
+    }
+  );
+}
+
 function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
+  const CN_MODULE = `
+import { clsx } from "https://esm.sh/clsx?external=react,react-dom";
+import { twMerge } from "https://esm.sh/tailwind-merge?external=react,react-dom";
+export function cn(...inputs) { return twMerge(clsx(inputs)); }
+export default cn;
+`;
+
   return {
     name: 'library-component-resolver',
     setup(build) {
       build.onResolve({ filter: /^\.\// }, (args) => {
+        if (args.path === './cn' || (args.importer !== '<stdin>' && /\/cn$/.test(args.path))) {
+          return { path: './__cn_virtual__', namespace: 'component' };
+        }
         return { path: args.path, namespace: 'component' };
       });
 
       build.onResolve({ filter: /^@\// }, (args) => {
+        if (/\/cn$/.test(args.path)) {
+          return { path: './__cn_virtual__', namespace: 'component' };
+        }
         return { path: args.path, namespace: 'unresolved-stub' };
       });
 
@@ -103,10 +125,13 @@ function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: 'component' }, (args) => {
         const filename = args.path.replace(/^\.\//, '');
+        if (filename === '__cn_virtual__') {
+          return { contents: CN_MODULE, loader: 'js', resolveDir: '/' };
+        }
         const file = files.find(f => f.filename === filename);
         if (!file) return { contents: 'export default {}', loader: 'js' };
 
-        const rewritten = rewriteImports(file.content, file.filename, files);
+        const rewritten = rewriteCnImports(rewriteImports(file.content, file.filename, files));
         const loader = filename.endsWith('.tsx') ? 'tsx' as const
           : filename.endsWith('.ts') ? 'ts' as const
           : filename.endsWith('.jsx') ? 'jsx' as const
