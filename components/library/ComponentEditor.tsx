@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
-import { ACE_LANG_MAP, deriveContentType, getFileIcon, buildPreviewHtml } from './constants';
+import { ACE_LANG_MAP, deriveContentType, getFileIcon, buildPreviewHtml, buildThemePreviewHtml } from './constants';
 
 export interface LibraryControls {
   componentName: string;
@@ -67,7 +67,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   useEffect(() => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     previewTimerRef.current = setTimeout(() => {
-      setPreviewHtml(buildPreviewHtml(editFiles, selectedComponent?.id, isDark));
+      const builder = selectedComponent?.category === 'theme' ? buildThemePreviewHtml : buildPreviewHtml;
+      setPreviewHtml(builder(editFiles, selectedComponent?.id, isDark));
     }, 400);
     return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
   }, [editFiles, selectedComponent?.id, isDark]);

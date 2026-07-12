@@ -8,7 +8,7 @@ export const searchLibraryTool = defineTool({
   description: 'Search the component library for reference components using natural language. Returns matching components with relevance scores and content previews.',
   parameters: z.object({
     query: z.string().describe('Natural language search query'),
-    category: z.string().optional().describe('Optional category filter: ui-widget, template'),
+    category: z.string().optional().describe('Optional category filter: ui-widget, template, theme'),
     topK: z.number().optional().describe('Max results to return (default 5)'),
   }),
   execute: async (args) => {
@@ -56,7 +56,7 @@ export const createComponentTool = defineTool({
   description: 'Create a new component in the library. Supports multi-file components.',
   parameters: z.object({
     name: z.string().describe('Component name'),
-    category: z.enum(['ui-widget', 'template']).optional().describe('Category'),
+    category: z.enum(['ui-widget', 'template', 'theme']).optional().describe('Category'),
     description: z.string().optional().describe('What the component does'),
     tags: z.array(z.string()).optional().describe('Array of tag strings'),
     files: z.array(z.object({

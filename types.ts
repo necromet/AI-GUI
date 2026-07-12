@@ -59,7 +59,7 @@ export type Mode = 'selector' | 'chat' | 'experiments' | 'library';
 export interface LibraryComponent {
   id: string;
   name: string;
-  category: 'ui-widget' | 'template';
+  category: 'ui-widget' | 'template' | 'theme';
   contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown';
   description: string;
   tags: string[];

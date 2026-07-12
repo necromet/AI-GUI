@@ -1,16 +1,18 @@
 import React from 'react';
-import { Package, Layers, Code, LayoutGrid, Bot, FileCode, FileText, FileJson, FileType } from 'lucide-react';
+import { Package, Layers, LayoutGrid, Palette, FileCode, FileText, FileJson, FileType } from 'lucide-react';
 import { LibraryComponentFile } from '../../types';
 
 export const CATEGORIES = [
   { key: 'all', label: 'All', icon: React.createElement(Package, { size: 12 }) },
   { key: 'ui-widget', label: 'Widgets', icon: React.createElement(LayoutGrid, { size: 12 }) },
   { key: 'template', label: 'Templates', icon: React.createElement(Layers, { size: 12 }) },
+  { key: 'theme', label: 'Themes', icon: React.createElement(Palette, { size: 12 }) },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'ui-widget': 'Widget',
   'template': 'Template',
+  'theme': 'Theme',
 };
 
 export const CONTENT_TYPES = [
@@ -181,4 +183,82 @@ export function buildPreviewHtml(files: LibraryComponentFile[], componentId?: st
   }
 
   return `<!DOCTYPE html><html><head>${themeStyle}</head><body><pre style="font-family:monospace;padding:1rem;color:${bodyColor};background:${bodyBg};min-height:100vh;white-space:pre-wrap">${entry.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+}
+
+export function buildThemePreviewHtml(files: LibraryComponentFile[], componentId?: string, isDark: boolean = false): string {
+  const cssFile = files.find(f => f.filename.endsWith('.css'));
+  if (!cssFile) return buildPreviewHtml(files, componentId, isDark);
+
+  const cssContent = cssFile.content;
+  const hasDarkVars = /\.dark\s*\{/.test(cssContent) || cssContent.includes('.dark ');
+
+  return `<!DOCTYPE html>
+<html${isDark && hasDarkVars ? ' class="dark"' : ''}>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>
+${cssContent}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background: var(--background, #fff);
+  color: var(--foreground, #333);
+  padding: 1.5rem;
+  min-height: 100vh;
+}
+</style>
+</head>
+<body>
+<div style="max-width:100%;margin:0 auto">
+  <div style="display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
+    <span style="background:var(--primary,#8839ef);color:var(--primary-foreground,#fff);padding:0.375rem 0.875rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600">Primary</span>
+    <span style="background:var(--secondary,#ccd0da);color:var(--secondary-foreground,#333);padding:0.375rem 0.875rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600">Secondary</span>
+    <span style="background:var(--accent,#04a5e5);color:var(--accent-foreground,#fff);padding:0.375rem 0.875rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600">Accent</span>
+    <span style="background:var(--destructive,#d20f39);color:var(--destructive-foreground,#fff);padding:0.375rem 0.875rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600">Destructive</span>
+    <span style="background:var(--muted,#dce0e8);color:var(--muted-foreground,#666);padding:0.375rem 0.875rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600">Muted</span>
+  </div>
+
+  <div style="background:var(--card,#fff);color:var(--card-foreground,#333);border:1px solid var(--border,#ddd);border-radius:var(--radius,6px);padding:1.25rem;margin-bottom:1rem;box-shadow:0 var(--shadow-offset-y,4px) var(--shadow-blur,6px) var(--shadow-spread,0px) var(--shadow-color,rgba(0,0,0,0.1))">
+    <div style="font-size:1rem;font-weight:700;margin-bottom:0.25rem">Card Title</div>
+    <div style="font-size:0.8125rem;color:var(--muted-foreground,#888);margin-bottom:1rem">A card component using the theme variables</div>
+    <div style="display:flex;gap:0.5rem">
+      <button style="background:var(--primary,#8839ef);color:var(--primary-foreground,#fff);border:none;padding:0.5rem 1rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600;cursor:pointer">Button</button>
+      <button style="background:transparent;color:var(--foreground,#333);border:1px solid var(--border,#ddd);padding:0.5rem 1rem;border-radius:var(--radius,6px);font-size:0.8125rem;font-weight:600;cursor:pointer">Outline</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">
+    <div style="background:var(--card,#fff);color:var(--card-foreground,#333);border:1px solid var(--border,#ddd);border-radius:var(--radius,6px);padding:1rem">
+      <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted-foreground,#888);margin-bottom:0.25rem">Input</div>
+      <div style="background:var(--background,#f5f5f5);border:1px solid var(--input,#ccc);border-radius:var(--radius,6px);padding:0.5rem 0.75rem;font-size:0.8125rem;color:var(--foreground,#333)">Text field</div>
+    </div>
+    <div style="background:var(--popover,#eee);color:var(--popover-foreground,#333);border:1px solid var(--border,#ddd);border-radius:var(--radius,6px);padding:1rem">
+      <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted-foreground,#888);margin-bottom:0.25rem">Popover</div>
+      <div style="font-size:0.8125rem">Popover content area</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+    <div style="width:1.5rem;height:1.5rem;border-radius:var(--radius,6px);background:var(--chart-1,#8839ef)"></div>
+    <div style="width:1.5rem;height:1.5rem;border-radius:var(--radius,6px);background:var(--chart-2,#04a5e5)"></div>
+    <div style="width:1.5rem;height:1.5rem;border-radius:var(--radius,6px);background:var(--chart-3,#40a02b)"></div>
+    <div style="width:1.5rem;height:1.5rem;border-radius:var(--radius,6px);background:var(--chart-4,#fe640b)"></div>
+    <div style="width:1.5rem;height:1.5rem;border-radius:var(--radius,6px);background:var(--chart-5,#dc8a78)"></div>
+    <span style="font-size:0.6875rem;color:var(--muted-foreground,#888);margin-left:0.5rem">Chart palette</span>
+  </div>
+
+  <div style="background:var(--sidebar,#e6e9ef);color:var(--sidebar-foreground,#333);border:1px solid var(--sidebar-border,#ddd);border-radius:var(--radius,6px);padding:1rem">
+    <div style="display:flex;align-items:center;gap:0.75rem">
+      <div style="background:var(--sidebar-primary,#8839ef);color:var(--sidebar-primary-foreground,#fff);padding:0.25rem 0.625rem;border-radius:var(--radius,6px);font-size:0.75rem;font-weight:600">Active</div>
+      <div style="color:var(--sidebar-foreground,#333);font-size:0.75rem">Sidebar item</div>
+      <div style="margin-left:auto;background:var(--sidebar-accent,#04a5e5);color:var(--sidebar-accent-foreground,#fff);padding:0.25rem 0.625rem;border-radius:var(--radius,6px);font-size:0.75rem;font-weight:600">Accent</div>
+    </div>
+    <div style="margin-top:0.5rem;height:2px;background:var(--sidebar-ring,#8839ef);border-radius:1px;width:60%"></div>
+  </div>
+</div>
+</body>
+</html>`;
 }

@@ -10,7 +10,7 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
     description: 'Search the component library for reference components using natural language. Returns matching components with relevance scores and content previews.',
     parameters: {
       query: { type: 'string', description: 'Natural language search query' },
-      category: { type: 'string', description: 'Optional category filter: ui-widget, template' },
+      category: { type: 'string', description: 'Optional category filter: ui-widget, template, theme' },
       topK: { type: 'number', description: 'Max results to return (default 5)' },
     },
   },
@@ -19,7 +19,7 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
     description: 'Create a new component in the library. Supports multi-file components. One file must be marked as the entry point. Use this when the user wants a separate helper component.',
     parameters: {
       name: { type: 'string', description: 'Component name' },
-      category: { type: 'string', description: 'Category: ui-widget, template' },
+      category: { type: 'string', description: 'Category: ui-widget, template, theme' },
       description: { type: 'string', description: 'What the component does' },
       tags: { type: 'array', description: 'Array of tag strings' },
       files: { type: 'array', description: 'Array of { filename, contentType, content, isEntry }. At least one file required.' },
@@ -160,7 +160,7 @@ Now let me analyze...
 - When you use ask_user, do NOT call any other tools in the same response.
 - execute_code runs JavaScript in a sandboxed VM (Node.js-like). Use it for data transformations, NOT for React rendering.
 - Content types: html, tsx, css, js, json, markdown.
-- Categories: ui-widget, template.
+- Categories: ui-widget, template, theme.
 
 ### Widget (ui-widget) File Structure
 - Exactly 2 files: components.tsx and usage.tsx

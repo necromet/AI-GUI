@@ -4,7 +4,7 @@ import { getEmbedding, cosineSimilarity } from './embeddingService';
 export interface LibraryComponent {
   id: string;
   name: string;
-  category: 'ui-widget' | 'template';
+  category: 'ui-widget' | 'template' | 'theme';
   contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
   description: string;
   tags: string[];
