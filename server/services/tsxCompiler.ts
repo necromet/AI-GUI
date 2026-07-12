@@ -43,8 +43,8 @@ function resolveInternalImport(
   });
   if (found) return found.filename;
 
-  const componentsFile = files.find(f => f.filename === 'components.tsx');
-  if (componentsFile && currentFilename !== 'components.tsx') {
+  const componentsFile = files.find(f => f.filename === 'components.tsx' || f.filename === 'component.tsx');
+  if (componentsFile && currentFilename !== componentsFile.filename) {
     return componentsFile.filename;
   }
 
@@ -156,7 +156,8 @@ export async function compileComponent(files: LibraryComponentFile[]): Promise<s
   } else if (!hasCreateRoot) {
     const defaultMatch = entryContent.match(/export\s+default\s+(?:function\s+)?(\w+)/);
     const namedMatch = entryContent.match(/export\s+(?:function|const)\s+(\w+)/);
-    const componentName = defaultMatch?.[1] || namedMatch?.[1] || 'App';
+    const localMatch = entryContent.match(/(?:function|const)\s+(\w+)\s*(?:=\s*(?:\([^)]*\)\s*=>|\([^)]*\)\s*:\s*\w+))/);
+    const componentName = defaultMatch?.[1] || namedMatch?.[1] || localMatch?.[1] || 'App';
     entryWithRender += `\nimport { createRoot } from 'react-dom/client';\nimport React from 'react';\ncreateRoot(document.getElementById('root')).render(React.createElement(${componentName}));\n`;
   }
 
