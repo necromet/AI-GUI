@@ -27,8 +27,6 @@ import StitchPanel from './components/StitchPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
 import { StitchControls } from './components/StitchEditor';
-
-
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 const fileToAttachment = (file: File): Promise<Attachment> => {
@@ -57,10 +55,59 @@ export const FONT_FAMILY_MAP: Record<string, string> = {
   comfortaa: "'Comfortaa', sans-serif",
 };
 
+const CHAT_SUGGESTIONS = ['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'];
+
 const RequireAuth: React.FC<{ isAuth: boolean; children: React.ReactNode }> = ({ isAuth, children }) => {
   if (!isAuth) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
+
+type StreamChunk = { text: string; thinkingText?: string; usageMetadata?: any; annotations?: any[] };
+
+async function processStreamResponse(
+  streamResult: AsyncIterable<StreamChunk>,
+  aiMessageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+  signal: AbortSignal,
+) {
+  let fullText = '';
+  let fullThinkingText = '';
+  let usageMetadata: any = null;
+  let searchAnnotations: any[] = [];
+
+  for await (const chunk of streamResult) {
+    const chunkUsageMetadata = (chunk as any).usageMetadata;
+    if (chunkUsageMetadata) {
+      usageMetadata = {
+        promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
+        candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
+        totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0,
+      };
+    }
+    if ((chunk as any).annotations) {
+      searchAnnotations.push(...(chunk as any).annotations);
+      setMessages(prev => prev.map(msg =>
+        msg.id === aiMessageId ? { ...msg, annotations: [...searchAnnotations] } : msg
+      ));
+    }
+    if ((chunk as any).thinkingText) {
+      fullThinkingText += (chunk as any).thinkingText;
+      setMessages(prev => prev.map(msg =>
+        msg.id === aiMessageId ? { ...msg, thinkingContent: fullThinkingText, isThinking: true } : msg
+      ));
+    }
+    if (chunk.text) {
+      fullText += chunk.text;
+      setMessages(prev => prev.map(msg =>
+        msg.id === aiMessageId ? {
+          ...msg, content: fullText, thinkingContent: fullThinkingText,
+          isThinking: false, usageMetadata, annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined,
+        } : msg
+      ));
+    }
+  }
+  return { fullText, usageMetadata, searchAnnotations };
+}
 
 const App: React.FC = () => {
   const location = useLocation();
@@ -96,7 +143,6 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('none');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSize, setFontSize] = useState<string>(() => {
@@ -234,8 +280,6 @@ const App: React.FC = () => {
       localStorage.removeItem('maxOutputTokens');
     }
   }, [maxOutputTokens]);
-
-
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -443,7 +487,6 @@ const App: React.FC = () => {
 
     if (messages.length === 0) {
       try {
-        const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
         const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
         const title = await generateChatTitle(titleText, '', selectedModelConfig.provider);
         await db.updateConversationTitle(conversationId, title);
@@ -474,74 +517,17 @@ const App: React.FC = () => {
         const history = messages.map(m => ({ role: m.role, content: m.content, attachments: m.attachments }));
         history.push({ role: Role.User, content: userText, attachments });
 
-        const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
-
         const streamResult = await generateResponseStream(
           selectedModelConfig.apiModelId || selectedModelConfig.id,
-          userText,
-          history,
-          selectedModelConfig.systemInstruction,
-          selectedModelConfig.provider,
-          selectedModelConfig.maxTokens || maxOutputTokens,
+          userText, history, selectedModelConfig.systemInstruction,
+          selectedModelConfig.provider, selectedModelConfig.maxTokens || maxOutputTokens,
           abortController.signal,
           { search: options?.search, think: options?.think },
         );
 
-        let fullText = '';
-        let fullThinkingText = '';
-        let usageMetadata: any = null;
-        let searchAnnotations: any[] = [];
-        
-        for await (const chunk of streamResult) {
-            const chunkText = chunk.text;
-            const thinkingText = (chunk as any).thinkingText;
-            
-            const chunkUsageMetadata = (chunk as any).usageMetadata;
-            if (chunkUsageMetadata) {
-              usageMetadata = {
-                promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
-                candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
-                totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0
-              };
-            }
-
-            if ((chunk as any).annotations) {
-              searchAnnotations.push(...(chunk as any).annotations);
-              setMessages(prev => prev.map(msg => {
-                  if (msg.id === aiMessageId) {
-                      return { ...msg, annotations: [...searchAnnotations] };
-                  }
-                  return msg;
-              }));
-            }
-            
-            if (thinkingText) {
-              fullThinkingText += thinkingText;
-              setMessages(prev => prev.map(msg => {
-                  if (msg.id === aiMessageId) {
-                      return { ...msg, thinkingContent: fullThinkingText, isThinking: true };
-                  }
-                  return msg;
-              }));
-            }
-            
-            if (chunkText) {
-              fullText += chunkText;
-              setMessages(prev => prev.map(msg => {
-                  if (msg.id === aiMessageId) {
-                      return {
-                          ...msg,
-                          content: fullText,
-                          thinkingContent: fullThinkingText,
-                          isThinking: false,
-                          usageMetadata: usageMetadata,
-                          annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined,
-                      };
-                  }
-                  return msg;
-              }));
-            }
-        }
+        const { fullText, usageMetadata, searchAnnotations } = await processStreamResponse(
+          streamResult, aiMessageId, setMessages, abortController.signal,
+        );
 
         if (fullText) {
           await saveMessageToDb(
@@ -549,52 +535,20 @@ const App: React.FC = () => {
             usageMetadata?.totalTokens || null,
             usageMetadata?.promptTokens || null,
             usageMetadata?.candidatesTokens || null,
-            searchAnnotations.length > 0 ? searchAnnotations : null
+            searchAnnotations.length > 0 ? searchAnnotations : null,
           );
         }
-
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
           setMessages(prev => {
             const msg = prev.find(m => m.id === aiMessageId);
-            if (msg && !msg.content && !msg.thinkingContent) {
-              return prev.filter(m => m.id !== aiMessageId);
-            }
-            return prev.map(m => {
-                if (m.id === aiMessageId) {
-                    return { ...m, isThinking: false };
-                }
-                return m;
-            });
+            if (msg && !msg.content && !msg.thinkingContent) return prev.filter(m => m.id !== aiMessageId);
+            return prev.map(m => m.id === aiMessageId ? { ...m, isThinking: false } : m);
           });
         } else {
           console.error("Generation error:", error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-          const isQuota = errorMsg.toLowerCase().includes('quota');
-          const isNoImageEndpoint = errorMsg.includes('No endpoints found that support image input');
-          const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
-          const isThinkingDisabled = errorMsg.includes('thinking');
-          if (isWebSearchDisabled) {
-            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            toast.error('Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.');
-          } else if (isThinkingDisabled && options?.think) {
-            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            toast.error('Deep Thinking is not available for this model or account.');
-          } else if (isNoImageEndpoint) {
-            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            toast.error('This model does not support image input. Try a different model or remove the image.');
-          } else if (isQuota) {
-            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
-          } else {
-            const displayMsg = `**Error:** ${errorMsg}`;
-            setMessages(prev => prev.map(msg => {
-                if (msg.id === aiMessageId) {
-                    return { ...msg, content: displayMsg, isThinking: false };
-                }
-                return msg;
-            }));
-          }
+          handleStreamError(errorMsg, aiMessageId, setMessages, options?.think);
         }
     } finally {
         abortControllerRef.current = null;
@@ -607,6 +561,26 @@ const App: React.FC = () => {
       abortControllerRef.current.abort();
     }
   };
+
+  const handleStreamError = useCallback((errorMsg: string, aiMessageId: string, setMsgs: React.Dispatch<React.SetStateAction<Message[]>>, think?: boolean) => {
+    if (errorMsg.includes('webSearchEnabled is false')) {
+      setMsgs(prev => prev.filter(msg => msg.id !== aiMessageId));
+      toast.error('Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.');
+    } else if (errorMsg.includes('thinking') && think) {
+      setMsgs(prev => prev.filter(msg => msg.id !== aiMessageId));
+      toast.error('Deep Thinking is not available for this model or account.');
+    } else if (errorMsg.includes('No endpoints found that support image input')) {
+      setMsgs(prev => prev.filter(msg => msg.id !== aiMessageId));
+      toast.error('This model does not support image input. Try a different model or remove the image.');
+    } else if (errorMsg.toLowerCase().includes('quota')) {
+      setMsgs(prev => prev.filter(msg => msg.id !== aiMessageId));
+      toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
+    } else {
+      setMsgs(prev => prev.map(msg =>
+        msg.id === aiMessageId ? { ...msg, content: `**Error:** ${errorMsg}`, isThinking: false } : msg
+      ));
+    }
+  }, []);
 
   const handleRegenerate = async (messageId: string) => {
     const messageIndex = messages.findIndex(m => m.id === messageId);
@@ -636,70 +610,20 @@ const App: React.FC = () => {
     abortControllerRef.current = abortController;
 
     try {
-    const conversationId = await ensureConversation();
+      const conversationId = await ensureConversation();
       const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
       history.push({ role: Role.User, content: userText });
 
-      const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
-
       const streamResult = await generateResponseStream(
         selectedModelConfig.apiModelId || selectedModelConfig.id,
-        userText,
-        history,
-        selectedModelConfig.systemInstruction,
-        selectedModelConfig.provider,
-        selectedModelConfig.maxTokens || maxOutputTokens,
+        userText, history, selectedModelConfig.systemInstruction,
+        selectedModelConfig.provider, selectedModelConfig.maxTokens || maxOutputTokens,
         abortController.signal,
       );
 
-      let fullText = '';
-      let fullThinkingText = '';
-      let usageMetadata: any = null;
-      let searchAnnotations: any[] = [];
-
-      for await (const chunk of streamResult) {
-        const chunkText = chunk.text;
-        const thinkingText = (chunk as any).thinkingText;
-
-        const chunkUsageMetadata = (chunk as any).usageMetadata;
-        if (chunkUsageMetadata) {
-          usageMetadata = {
-            promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
-            candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
-            totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0
-          };
-        }
-
-        if ((chunk as any).annotations) {
-          searchAnnotations.push(...(chunk as any).annotations);
-          setMessages(prev => prev.map(msg => {
-              if (msg.id === aiMessageId) {
-                  return { ...msg, annotations: [...searchAnnotations] };
-              }
-              return msg;
-          }));
-        }
-
-        if (thinkingText) {
-          fullThinkingText += thinkingText;
-          setMessages(prev => prev.map(msg => {
-            if (msg.id === aiMessageId) {
-              return { ...msg, thinkingContent: fullThinkingText, isThinking: true };
-            }
-            return msg;
-          }));
-        }
-        
-        if (chunkText) {
-          fullText += chunkText;
-          setMessages(prev => prev.map(msg => {
-            if (msg.id === aiMessageId) {
-              return { ...msg, content: fullText, thinkingContent: fullThinkingText, isThinking: false, usageMetadata, annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined };
-            }
-            return msg;
-          }));
-        }
-      }
+      const { fullText, usageMetadata, searchAnnotations } = await processStreamResponse(
+        streamResult, aiMessageId, setMessages, abortController.signal,
+      );
 
       if (fullText) {
         await saveMessageToDb(
@@ -707,52 +631,23 @@ const App: React.FC = () => {
           usageMetadata?.totalTokens || null,
           usageMetadata?.promptTokens || null,
           usageMetadata?.candidatesTokens || null,
-          searchAnnotations.length > 0 ? searchAnnotations : null
+          searchAnnotations.length > 0 ? searchAnnotations : null,
         );
       }
-
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setMessages(prev => {
           const msg = prev.find(m => m.id === aiMessageId);
-          if (msg && !msg.content && !msg.thinkingContent) {
-            return prev.filter(m => m.id !== aiMessageId);
-          }
-          return prev.map(m => {
-            if (m.id === aiMessageId) {
-              return { ...m, isThinking: false };
-            }
-            return m;
-          });
+          if (msg && !msg.content && !msg.thinkingContent) return prev.filter(m => m.id !== aiMessageId);
+          return prev.map(m => m.id === aiMessageId ? { ...m, isThinking: false } : m);
         });
       } else {
         console.error("Regeneration error:", error);
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        const isQuota = errorMsg.toLowerCase().includes('quota');
-        const isNoImageEndpoint = errorMsg.includes('No endpoints found that support image input');
-        const isWebSearchDisabled = errorMsg.includes('webSearchEnabled is false');
-        if (isWebSearchDisabled) {
-          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          toast.error('Web Search is not enabled. Activate the Web Search Plugin in your MiMo Console → Plugin Management.');
-        } else if (isNoImageEndpoint) {
-          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          toast.error('This model does not support image input. Try a different model or remove the image.');
-        } else if (isQuota) {
-          setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-          toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
-        } else {
-          const displayMsg = `**Error:** ${errorMsg}`;
-          setMessages(prev => prev.map(msg => {
-              if (msg.id === aiMessageId) {
-                  return { ...msg, content: displayMsg, isThinking: false };
-              }
-              return msg;
-          }));
-        }
+        handleStreamError(error instanceof Error ? error.message : 'Unknown error', aiMessageId, setMessages);
       }
     } finally {
-        abortControllerRef.current = null;
-        setIsStreaming(false);
+      abortControllerRef.current = null;
+      setIsStreaming(false);
     }
   };
 
@@ -822,6 +717,63 @@ const App: React.FC = () => {
       }
     }
   }, [location.pathname]);
+
+  const ChatRouteContent = () => {
+    if (modelType !== 'chat') {
+      return (
+        <div className="h-full flex items-center justify-center p-6">
+          {modelType === 'tts' && <TTSPanel onNotification={handleNotification} theme={theme} modelConfig={selectedModelConfig} />}
+          {modelType === 'tts-voicedesign' && <VoiceDesignPanel onNotification={handleNotification} theme={theme} modelConfig={selectedModelConfig} />}
+          {modelType === 'tts-voiceclone' && <VoiceClonePanel onNotification={handleNotification} theme={theme} modelConfig={selectedModelConfig} />}
+          {modelType === 'asr' && <ASRPanel onNotification={handleNotification} theme={theme} modelConfig={selectedModelConfig} />}
+        </div>
+      );
+    }
+    if (messages.length === 0) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
+          <div className="relative mb-8">
+            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+          </div>
+          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+            How can I help you today?
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
+            {CHAT_SUGGESTIONS.map((suggestion, i) => (
+              <Card key={i} onClick={() => setInput(suggestion)}
+                className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]">
+                <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
+              </Card>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="pb-10 mb-52">
+        {messages.map((msg) => (
+          <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+    );
+  };
+
+  const RAGRouteContent = () => (
+    <div className="h-full relative">
+      <RAGChatPanel theme={theme} modelConfig={selectedModelConfig} models={models}
+        onNotification={handleNotification} conversationId={experimentConversationId}
+        onConversationChange={setExperimentConversationId} />
+    </div>
+  );
+
+  const AgentRouteContent = () => (
+    <div className="h-full relative">
+      <AgentChatPanel theme={theme} modelConfig={selectedModelConfig} models={models}
+        onNotification={handleNotification} conversationId={experimentConversationId}
+        onConversationChange={setExperimentConversationId} />
+    </div>
+  );
 
   if (isSelector) {
     return (
@@ -1100,157 +1052,33 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/chat" element={
               <RequireAuth isAuth={isChatAuthenticated}>
-                {modelType === 'chat' ? (
-                  messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                      <div className="relative mb-8">
-                        <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                      </div>
-                      <h2
-                        className="text-2xl md:text-3xl font-semibold mb-8"
-                        style={{ color: 'var(--text-100)' }}
-                      >
-                        How can I help you today?
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                        {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                          <Card
-                            key={i}
-                            onClick={() => setInput(suggestion)}
-                            className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]"
-                          >
-                            <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="pb-10 mb-52">
-                      {messages.map((msg) => (
-                        <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
-                      ))}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )
-                ) : (
-                  <div className="h-full flex items-center justify-center p-6">
-                    {modelType === 'tts' ? (
-                      <TTSPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'tts-voicedesign' ? (
-                      <VoiceDesignPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'tts-voiceclone' ? (
-                      <VoiceClonePanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'asr' ? (
-                      <ASRPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : null}
-                  </div>
-                )}
+                <ChatRouteContent />
               </RequireAuth>
             } />
             <Route path="/chat/:conversationId" element={
               <RequireAuth isAuth={isChatAuthenticated}>
-                {modelType === 'chat' ? (
-                  messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                      <div className="relative mb-8">
-                        <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                      </div>
-                      <h2
-                        className="text-2xl md:text-3xl font-semibold mb-8"
-                        style={{ color: 'var(--text-100)' }}
-                      >
-                        How can I help you today?
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                        {['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'].map((suggestion, i) => (
-                          <Card
-                            key={i}
-                            onClick={() => setInput(suggestion)}
-                            className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]"
-                          >
-                            <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="pb-10 mb-52">
-                      {messages.map((msg) => (
-                        <ChatMessage key={msg.id} message={msg} onRegenerate={handleRegenerate} onFeedback={handleFeedback} onReattach={handleReattach} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
-                      ))}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )
-                ) : (
-                  <div className="h-full flex items-center justify-center p-6">
-                    {modelType === 'tts' ? (
-                      <TTSPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'tts-voicedesign' ? (
-                      <VoiceDesignPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'tts-voiceclone' ? (
-                      <VoiceClonePanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : modelType === 'asr' ? (
-                      <ASRPanel onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)} theme={theme} modelConfig={selectedModelConfig} />
-                    ) : null}
-                  </div>
-                )}
+                <ChatRouteContent />
               </RequireAuth>
             } />
             <Route path="/experiments" element={<Navigate to="/experiments/rag" replace />} />
             <Route path="/experiments/rag" element={
               <RequireAuth isAuth={isExperimentsAuthenticated}>
-                <div className="h-full relative">
-                  <RAGChatPanel
-                    theme={theme}
-                    modelConfig={selectedModelConfig}
-                    models={models}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                    conversationId={experimentConversationId}
-                    onConversationChange={setExperimentConversationId}
-                  />
-                </div>
+                <RAGRouteContent />
               </RequireAuth>
             } />
             <Route path="/experiments/rag/:conversationId" element={
               <RequireAuth isAuth={isExperimentsAuthenticated}>
-                <div className="h-full relative">
-                  <RAGChatPanel
-                    theme={theme}
-                    modelConfig={selectedModelConfig}
-                    models={models}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                    conversationId={experimentConversationId}
-                    onConversationChange={setExperimentConversationId}
-                  />
-                </div>
+                <RAGRouteContent />
               </RequireAuth>
             } />
             <Route path="/experiments/plugin-agent" element={
               <RequireAuth isAuth={isExperimentsAuthenticated}>
-                <div className="h-full relative">
-                  <AgentChatPanel
-                    theme={theme}
-                    modelConfig={selectedModelConfig}
-                    models={models}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                    conversationId={experimentConversationId}
-                    onConversationChange={setExperimentConversationId}
-                  />
-                </div>
+                <AgentRouteContent />
               </RequireAuth>
             } />
             <Route path="/experiments/plugin-agent/:conversationId" element={
               <RequireAuth isAuth={isExperimentsAuthenticated}>
-                <div className="h-full relative">
-                  <AgentChatPanel
-                    theme={theme}
-                    modelConfig={selectedModelConfig}
-                    models={models}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                    conversationId={experimentConversationId}
-                    onConversationChange={setExperimentConversationId}
-                  />
-                </div>
+                <AgentRouteContent />
               </RequireAuth>
             } />
             <Route path="/experiments/stitch" element={
