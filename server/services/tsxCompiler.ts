@@ -121,7 +121,7 @@ function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
       });
 
       build.onLoad({ filter: /.*/, namespace: 'esm-sh' }, (args) => {
-        return { contents: `export * from "${args.path}"; export { default } from "${args.path}";`, loader: 'js' };
+        return { contents: `export * from "${args.path}";`, loader: 'js' };
       });
     },
   };
