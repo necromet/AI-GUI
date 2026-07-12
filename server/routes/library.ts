@@ -70,13 +70,8 @@ router.post('/components', async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const entryFile = files.find((f: any) => f.isEntry) || files.find((f: any) => f.filename.endsWith('.html')) || files[0];
-      primaryContent = entryFile.content;
-      primaryContentType = entryFile.contentType;
-    }
-
-    if (!primaryContent) {
-      res.status(400).json({ error: 'Missing content: provide content or files' });
-      return;
+      primaryContent = entryFile.content || '';
+      primaryContentType = entryFile.contentType || 'html';
     }
 
     const component = await library.addComponent({

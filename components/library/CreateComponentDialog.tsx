@@ -107,8 +107,13 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
   };
 
   const handleCreate = async () => {
-    const validFiles = createFiles.filter(f => f.content.trim());
-    if (!newComponent.name || validFiles.length === 0) return;
+    if (!newComponent.name) return;
+    const filesToSend = createFiles.map(f => ({
+      filename: f.filename,
+      contentType: f.contentType,
+      content: f.content,
+      isEntry: f.isEntry,
+    }));
     try {
       const body: any = {
         name: newComponent.name,
@@ -118,12 +123,7 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
         isGlobal: true,
         agentAccessible: true,
         folderId: defaultFolderId || null,
-        files: validFiles.map(f => ({
-          filename: f.filename,
-          contentType: f.contentType,
-          content: f.content,
-          isEntry: f.isEntry,
-        })),
+        files: filesToSend,
       };
 
       const response = await fetch('/api/library/components', {
@@ -247,7 +247,7 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
                 Files <span style={{ color: 'var(--neon-color)' }}>*</span>
               </Label>
               <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>
-                {createFiles.filter(f => f.content.trim()).length} file{createFiles.filter(f => f.content.trim()).length !== 1 ? 's' : ''}
+                {createFiles.length} file{createFiles.length !== 1 ? 's' : ''}
               </span>
             </div>
 
@@ -277,7 +277,7 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
               </div>
             </button>
 
-            {createFiles.some(f => f.content.trim()) && (
+            {createFiles.length > 0 && (
               <div className="space-y-1.5 max-h-40 overflow-y-auto rounded-lg p-1" style={{ backgroundColor: 'var(--bg-200)' }}>
                 {createFiles.map((file, idx) => (
                   <div
@@ -330,7 +330,7 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={!newComponent.name || !createFiles.some(f => f.content.trim())}
+              disabled={!newComponent.name}
               className="h-9 px-5 rounded-lg text-sm font-semibold gap-1.5"
               style={{
                 background: 'linear-gradient(135deg, var(--neon-color), rgba(var(--neon-rgb), 0.8))',
