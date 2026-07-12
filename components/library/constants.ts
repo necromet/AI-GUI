@@ -6,21 +6,11 @@ export const CATEGORIES = [
   { key: 'all', label: 'All', icon: React.createElement(Package, { size: 12 }) },
   { key: 'ui-widget', label: 'Widgets', icon: React.createElement(LayoutGrid, { size: 12 }) },
   { key: 'template', label: 'Templates', icon: React.createElement(Layers, { size: 12 }) },
-  { key: 'snippet', label: 'Snippets', icon: React.createElement(Code, { size: 12 }) },
-  { key: 'hook', label: 'Hooks', icon: React.createElement(Code, { size: 12 }) },
-  { key: 'util', label: 'Utils', icon: React.createElement(Code, { size: 12 }) },
-  { key: 'pattern', label: 'Patterns', icon: React.createElement(Layers, { size: 12 }) },
-  { key: 'agent-tool', label: 'Agent Tools', icon: React.createElement(Bot, { size: 12 }) },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'ui-widget': 'Widget',
   'template': 'Template',
-  'snippet': 'Snippet',
-  'hook': 'Hook',
-  'util': 'Utility',
-  'pattern': 'Pattern',
-  'agent-tool': 'Agent Tool',
 };
 
 export const CONTENT_TYPES = [

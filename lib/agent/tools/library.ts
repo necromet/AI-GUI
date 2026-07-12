@@ -8,7 +8,7 @@ export const searchLibraryTool = defineTool({
   description: 'Search the component library for reference components using natural language. Returns matching components with relevance scores and content previews.',
   parameters: z.object({
     query: z.string().describe('Natural language search query'),
-    category: z.string().optional().describe('Optional category filter: ui-widget, template, snippet, pattern, hook, util, agent-tool'),
+    category: z.string().optional().describe('Optional category filter: ui-widget, template'),
     topK: z.number().optional().describe('Max results to return (default 5)'),
   }),
   execute: async (args) => {
@@ -56,7 +56,7 @@ export const createComponentTool = defineTool({
   description: 'Create a new component in the library. Supports multi-file components.',
   parameters: z.object({
     name: z.string().describe('Component name'),
-    category: z.enum(['ui-widget', 'template', 'snippet', 'pattern', 'hook', 'util', 'agent-tool']).optional().describe('Category'),
+    category: z.enum(['ui-widget', 'template']).optional().describe('Category'),
     description: z.string().optional().describe('What the component does'),
     tags: z.array(z.string()).optional().describe('Array of tag strings'),
     files: z.array(z.object({
@@ -70,7 +70,7 @@ export const createComponentTool = defineTool({
     if (!args.files || args.files.length === 0) {
       return { title: 'Create', output: 'Error: At least one file required.', error: 'No files' };
     }
-    const cat = args.category || 'snippet';
+    const cat = args.category || 'template';
     const entryFile = args.files.find(f => f.isEntry) || args.files[0];
     const created = await library.addComponent({
       name: args.name,
