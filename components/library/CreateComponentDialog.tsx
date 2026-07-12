@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { CATEGORIES, deriveContentType, getFileIcon } from './constants';
+import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_HTML_TEMPLATE } from './constants';
 
 interface CreateComponentDialogProps {
   open: boolean;
@@ -48,88 +48,13 @@ const defaultCreateFiles: CreateFileEntry[] = [
   { filename: 'index.html', contentType: 'html', content: '', isEntry: true },
 ];
 
-const THEME_TEMPLATE = `:root {
-  --card: #ffffff;
-  --ring: #8839ef;
-  --input: #ccd0da;
-  --muted: #dce0e8;
-  --accent: #04a5e5;
-  --border: #bcc0cc;
-  --radius: 0.35rem;
-  --chart-1: #8839ef;
-  --chart-2: #04a5e5;
-  --chart-3: #40a02b;
-  --chart-4: #fe640b;
-  --chart-5: #dc8a78;
-  --popover: #ccd0da;
-  --primary: #8839ef;
-  --sidebar: #e6e9ef;
-  --font-mono: Fira Code, monospace;
-  --font-sans: Montserrat, sans-serif;
-  --secondary: #ccd0da;
-  --background: #eff1f5;
-  --font-serif: Georgia, serif;
-  --foreground: #4c4f69;
-  --destructive: #d20f39;
-  --shadow-blur: 6px;
-  --shadow-color: hsl(240 30% 25%);
-  --sidebar-ring: #8839ef;
-  --shadow-spread: 0px;
-  --shadow-opacity: 0.12;
-  --sidebar-accent: #04a5e5;
-  --sidebar-border: #bcc0cc;
-  --card-foreground: #4c4f69;
-  --shadow-offset-x: 0px;
-  --shadow-offset-y: 4px;
-  --sidebar-primary: #8839ef;
-  --muted-foreground: #6c6f85;
-  --accent-foreground: #ffffff;
-  --popover-foreground: #4c4f69;
-  --primary-foreground: #ffffff;
-  --sidebar-foreground: #4c4f69;
-  --secondary-foreground: #4c4f69;
-  --destructive-foreground: #ffffff;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-primary-foreground: #ffffff;
-}
-
-.dark {
-  --card: #1e1e2e;
-  --ring: #cba6f7;
-  --input: #313244;
-  --muted: #292c3c;
-  --accent: #89dceb;
-  --border: #313244;
-  --chart-1: #cba6f7;
-  --chart-2: #89dceb;
-  --chart-3: #a6e3a1;
-  --chart-4: #fab387;
-  --chart-5: #f5e0dc;
-  --popover: #45475a;
-  --primary: #cba6f7;
-  --sidebar: #11111b;
-  --secondary: #585b70;
-  --background: #181825;
-  --foreground: #cdd6f4;
-  --destructive: #f38ba8;
-  --sidebar-ring: #cba6f7;
-  --sidebar-accent: #89dceb;
-  --sidebar-border: #45475a;
-  --card-foreground: #cdd6f4;
-  --sidebar-primary: #cba6f7;
-  --muted-foreground: #a6adc8;
-  --accent-foreground: #1e1e2e;
-  --popover-foreground: #cdd6f4;
-  --primary-foreground: #1e1e2e;
-  --sidebar-foreground: #cdd6f4;
-  --secondary-foreground: #cdd6f4;
-  --destructive-foreground: #1e1e2e;
-  --sidebar-accent-foreground: #1e1e2e;
-  --sidebar-primary-foreground: #1e1e2e;
-}`;
+const defaultThemeFiles: CreateFileEntry[] = [
+  { filename: 'index.html', contentType: 'html', content: THEME_HTML_TEMPLATE, isEntry: true },
+  { filename: 'theme.css', contentType: 'css', content: THEME_CSS_TEMPLATE, isEntry: false },
+];
 
 function buildThemePreviewInline(): string {
-  return `<!DOCTYPE html><html class="dark"><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script><style>${THEME_TEMPLATE}*{margin:0;padding:0;box-sizing:border-box}body{font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#333);padding:1rem;min-height:100vh;overflow:hidden}</style></head><body><div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap"><span style="background:var(--primary);color:var(--primary-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Primary</span><span style="background:var(--secondary);color:var(--secondary-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Secondary</span><span style="background:var(--accent);color:var(--accent-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Accent</span><span style="background:var(--destructive);color:var(--destructive-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Destructive</span></div><div style="background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);padding:0.875rem;margin-bottom:0.75rem"><div style="font-size:0.875rem;font-weight:700;margin-bottom:0.125rem">Card Title</div><div style="font-size:0.6875rem;color:var(--muted-foreground);margin-bottom:0.75rem">Styled with theme variables</div><div style="display:flex;gap:0.375rem"><button style="background:var(--primary);color:var(--primary-foreground);border:none;padding:0.375rem 0.75rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Button</button><button style="background:transparent;color:var(--foreground);border:1px solid var(--border);padding:0.375rem 0.75rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Outline</button></div></div><div style="display:flex;gap:0.375rem;align-items:center"><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-1)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-2)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-3)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-4)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-5)"></div><span style="font-size:0.625rem;color:var(--muted-foreground);margin-left:0.375rem">Charts</span></div></body></html>`;
+  return THEME_HTML_TEMPLATE.replace('<link rel="stylesheet" href="theme.css">', `<style>${THEME_CSS_TEMPLATE}</style>`);
 }
 
 export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
@@ -155,7 +80,7 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
 
   useEffect(() => {
     if (isTheme) {
-      setCreateFiles([{ filename: 'theme.css', contentType: 'css', content: THEME_TEMPLATE, isEntry: true }]);
+      setCreateFiles(defaultThemeFiles);
     } else {
       setCreateFiles(defaultCreateFiles);
     }
