@@ -62,6 +62,14 @@ const FILENAME_MAP: Record<string, string> = {
 };
 
 function migrateLibraryFiles(db: Database.Database): void {
+  // Add folder_id column to library_components if missing
+  const libCols = db.prepare("PRAGMA table_info(library_components)").all() as { name: string }[];
+  const libColNames = new Set(libCols.map(c => c.name));
+  if (!libColNames.has('folder_id')) {
+    db.exec("ALTER TABLE library_components ADD COLUMN folder_id TEXT REFERENCES library_folders(id) ON DELETE SET NULL");
+    console.log('[db] Migration: added folder_id to library_components');
+  }
+
   const components = db.prepare('SELECT id, content_type FROM library_components').all() as { id: string; content_type: string }[];
   for (const comp of components) {
     const existing = db.prepare('SELECT id FROM library_component_files WHERE component_id = ?').get(comp.id) as any;

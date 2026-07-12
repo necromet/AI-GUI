@@ -460,7 +460,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                               srcDoc={codeString}
                               sandbox="allow-scripts"
                               className="w-full border-0"
-                              style={{ minHeight: '300px', backgroundColor: '#fff' }}
+                              style={{ minHeight: '300px', backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }}
                               title="HTML Preview"
                             />
                           ) : (

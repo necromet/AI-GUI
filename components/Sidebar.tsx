@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code } from 'lucide-react';
 import { ChatSession, Mode, ConversationType, ModelConfig } from '../types';
+import type { LibraryComponentFile } from '../types';
+import type { LibraryControls } from './LibraryPanel';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -45,6 +47,15 @@ interface SidebarProps {
     onChangeFontFamily: (family: string) => void;
   };
   availableModels: ModelConfig[];
+  libraryControls?: LibraryControls | null;
+}
+
+function getFileIcon(filename: string) {
+  if (filename.endsWith('.html')) return <FileCode size={12} />;
+  if (filename.endsWith('.css')) return <FileCode size={12} />;
+  if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.tsx')) return <FileType size={12} />;
+  if (filename.endsWith('.json')) return <FileJson size={12} />;
+  return <FileText size={12} />;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -64,6 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSidebarPanelChange,
   settingsProps,
   availableModels,
+  libraryControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -322,30 +334,118 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         ) : currentMode === 'library' ? (
-          /* Library mode: simple info sidebar */
+          /* Library mode: file list when editing, otherwise info */
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-2 pt-2">
-              {sectionLabel('Library')}
-              <ul className="space-y-0.5">
-                <li>
-                  <Button
-                    variant="ghost"
-                    className={itemClassName(true)}
-                    onClick={() => navigate('/library')}
+            {libraryControls ? (
+              <>
+                {/* View mode toggle */}
+                <div className="px-3 pt-2 pb-1 flex items-center gap-1">
+                  <button
+                    onClick={() => libraryControls.onViewModeChange('code')}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+                    style={{
+                      backgroundColor: libraryControls.viewMode === 'code' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                      color: libraryControls.viewMode === 'code' ? 'var(--neon-color)' : 'var(--text-500)',
+                    }}
                   >
-                    <Package size={18} className="text-[var(--text-100)]" />
-                    <span className="truncate text-base">All Components</span>
-                  </Button>
-                </li>
-              </ul>
-            </div>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-              <Package size={36} className="mb-3 text-[var(--text-500)]" />
-              <p className="text-sm font-medium mb-1 text-[var(--text-300)]">Component Library</p>
-              <p className="text-xs leading-relaxed text-[var(--text-500)]">
-                Browse, search, and manage reusable components. Use the AI agent to find or create components.
-              </p>
-            </div>
+                    <Code size={12} />
+                    Code
+                  </button>
+                  <button
+                    onClick={() => libraryControls.onViewModeChange('preview')}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+                    style={{
+                      backgroundColor: libraryControls.viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                      color: libraryControls.viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-500)',
+                    }}
+                  >
+                    <Eye size={12} />
+                    Preview
+                  </button>
+                </div>
+
+                {/* File list */}
+                <div className="px-3 pt-3">
+                  <div className="flex items-center justify-between pb-1.5">
+                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-500)]">
+                      Files
+                    </span>
+                    <button
+                      onClick={libraryControls.onAddFile}
+                      className="p-0.5 rounded transition-colors hover:opacity-80"
+                      style={{ color: 'var(--neon-color)' }}
+                      title="Add file"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1 px-2">
+                  <div className="space-y-0.5">
+                    {libraryControls.files.map(file => (
+                      <div
+                        key={file.id}
+                        className="flex items-center gap-1 group/file"
+                      >
+                        <button
+                          onClick={() => libraryControls.onSelectFile(file.id)}
+                          className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors min-w-0"
+                          style={{
+                            backgroundColor: libraryControls.activeFileId === file.id ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent',
+                            color: libraryControls.activeFileId === file.id ? 'var(--neon-color)' : 'var(--text-500)',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {getFileIcon(file.filename)}
+                          <span className="truncate flex-1">{file.filename}</span>
+                          {file.isEntry && (
+                            <span className="text-[8px] px-1 rounded flex-shrink-0" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>E</span>
+                          )}
+                          {libraryControls.isDirty && libraryControls.activeFileId === file.id && (
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+                          )}
+                        </button>
+                        {libraryControls.files.length > 1 && (
+                          <button
+                            onClick={() => libraryControls.onDeleteFile(file.id)}
+                            className="p-1 rounded opacity-0 group-hover/file:opacity-100 transition-opacity flex-shrink-0"
+                            style={{ color: '#ef4444' }}
+                            title="Delete file"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </>
+            ) : (
+              <>
+                <div className="px-2 pt-2">
+                  {sectionLabel('Library')}
+                  <ul className="space-y-0.5">
+                    <li>
+                      <Button
+                        variant="ghost"
+                        className={itemClassName(true)}
+                        onClick={() => navigate('/library')}
+                      >
+                        <Package size={18} className="text-[var(--text-100)]" />
+                        <span className="truncate text-base">All Components</span>
+                      </Button>
+                    </li>
+                  </ul>
+                </div>
+                <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+                  <Package size={36} className="mb-3 text-[var(--text-500)]" />
+                  <p className="text-sm font-medium mb-1 text-[var(--text-300)]">Component Library</p>
+                  <p className="text-xs leading-relaxed text-[var(--text-500)]">
+                    Browse, search, and manage reusable components. Use the AI agent to find or create components.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           /* Chat mode: standard sidebar */

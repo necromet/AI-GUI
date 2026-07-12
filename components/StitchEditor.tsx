@@ -1053,17 +1053,16 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
 
       {/* Preview area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div ref={containerRef} className="flex-1 overflow-auto flex justify-center p-4" style={{ backgroundColor: 'var(--bg-100)' }}>
+        <div ref={containerRef} className="flex-1 overflow-auto flex justify-center items-center p-4" style={{ backgroundColor: 'var(--bg-100)' }}>
           {displayHtml ? (
             viewMode === 'preview' || !generatedHtml ? (
               <div style={{
                 width: `${dims.width}px`,
-                minHeight: '100%',
                 transform: `scale(${zoom})`,
-                transformOrigin: 'top center',
+                transformOrigin: 'center center',
               }}>
                 <iframe
-                  style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: '#fff', boxShadow: '0 4px 30px rgba(0,0,0,0.2)', borderRadius: '12px' }}
+                  style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.2)', borderRadius: '12px' }}
                   sandbox="allow-scripts"
                   srcDoc={displayHtml}
                   title="HTML Preview"

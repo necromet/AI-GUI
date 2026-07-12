@@ -457,3 +457,24 @@ math {
 html.dark math {
   color: #e2e8f0;
 }
+
+.agent-changed-line {
+  background-color: rgba(var(--neon-rgb), 0.08) !important;
+  transition: background-color 2s ease-out;
+}
+
+.library-card {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.library-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(var(--neon-rgb), 0.08), 0 2px 8px rgba(0,0,0,0.06);
+  border-color: rgba(var(--neon-rgb), 0.25) !important;
+}
+html.dark .library-card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+html.dark .library-card:hover {
+  box-shadow: 0 8px 30px rgba(var(--neon-rgb), 0.1), 0 2px 8px rgba(0,0,0,0.3);
+}

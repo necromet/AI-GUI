@@ -140,6 +140,30 @@ CREATE TABLE IF NOT EXISTS library_component_files (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_lcf_component ON library_component_files(component_id);
+
+-- Library agent chat sessions (per-component)
+CREATE TABLE IF NOT EXISTS library_agent_sessions (
+  id TEXT PRIMARY KEY,
+  component_id TEXT NOT NULL REFERENCES library_components(id) ON DELETE CASCADE,
+  title TEXT,
+  messages_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_las_component ON library_agent_sessions(component_id);
+
+-- Library folders (grouping for components)
+CREATE TABLE IF NOT EXISTS library_folders (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT NOT NULL DEFAULT '#6366f1',
+  icon TEXT NOT NULL DEFAULT 'folder',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  agent_accessible INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 export const SEED_SQL = `

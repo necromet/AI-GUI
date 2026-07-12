@@ -312,6 +312,17 @@ function CodeEditor({
     (editor, monaco) => {
       editorRef.current = editor;
 
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true,
+      });
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true,
+      });
+
       if (placeholder && !value) {
         const model = editor.getModel();
         if (model) {

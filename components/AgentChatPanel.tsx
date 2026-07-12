@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Puzzle, Globe, Code, Wrench, Loader2, ChevronDown, ChevronRight, Check, X } from 'lucide-react';
+import { Puzzle, Globe, Code, Wrench, Loader2, ChevronDown, ChevronRight, Check, X, Bot, Zap } from 'lucide-react';
 import { Role, Message, ModelConfig, ConversationType } from '../types';
 import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
 import * as db from '../services/apiDatabaseAdapter';
 import { sendAgentMessage, ToolResult, getAvailableTools, ToolDefinition } from '../services/agentService';
+import { createSession, sendOpenCodeMessage, type OpenCodeEvent } from '../services/opencodeAgentService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +43,10 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const [availableTools, setAvailableTools] = useState<ToolDefinition[]>([]);
   const [toolResults, setToolResults] = useState<ToolResult[]>([]);
   const [showToolResults, setShowToolResults] = useState(true);
+  const [agentBackend, setAgentBackend] = useState<'mimo' | 'opencode'>(() => {
+    return (localStorage.getItem('edward:labs_agentBackend') as 'mimo' | 'opencode') || 'mimo';
+  });
+  const opencodeSessionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -99,6 +104,14 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     );
   };
 
+  const switchBackend = (backend: 'mimo' | 'opencode') => {
+    setAgentBackend(backend);
+    localStorage.setItem('edward:labs_agentBackend', backend);
+    opencodeSessionRef.current = null;
+    setMessages([]);
+    setToolResults([]);
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
@@ -133,34 +146,73 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     abortControllerRef.current = abortController;
 
     try {
-      const history = messages.map(m => ({ role: m.role === Role.Assistant ? 'assistant' : 'user', content: m.content }));
-
       let fullText = '';
       let fullThinking = '';
 
-      for await (const chunk of sendAgentMessage(history, enabledTools, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal)) {
-        if (chunk.toolCall) {
-          setToolResults(prev => [...prev, { name: chunk.toolCall!.name, input: chunk.toolCall!.arguments, output: '' }]);
+      if (agentBackend === 'opencode') {
+        if (!opencodeSessionRef.current) {
+          opencodeSessionRef.current = await createSession();
         }
-        if (chunk.toolResult) {
-          setToolResults(prev => {
-            const updated = [...prev];
-            const idx = updated.findIndex(r => r.name === chunk.toolResult!.name && !r.output);
-            if (idx >= 0) updated[idx] = chunk.toolResult!;
-            return updated;
-          });
+
+        for await (const event of sendOpenCodeMessage(opencodeSessionRef.current, text, abortController.signal)) {
+          if (event.toolCall) {
+            setToolResults(prev => [...prev, { name: event.toolCall!.name, input: event.toolCall!.arguments, output: '' }]);
+          }
+          if (event.toolResult) {
+            setToolResults(prev => {
+              const updated = [...prev];
+              const idx = updated.findIndex(r => r.name === event.toolResult!.name && !r.output);
+              if (idx >= 0) {
+                updated[idx] = {
+                  name: event.toolResult!.name,
+                  input: {},
+                  output: typeof event.toolResult!.result === 'string' ? event.toolResult!.result : JSON.stringify(event.toolResult!.result),
+                  error: event.toolResult!.error,
+                };
+              }
+              return updated;
+            });
+          }
+          if (event.thinkingText) {
+            fullThinking += event.thinkingText;
+            setMessages(prev => prev.map(msg =>
+              msg.id === aiMessageId ? { ...msg, thinkingContent: fullThinking, isThinking: true } : msg
+            ));
+          }
+          if (event.text) {
+            fullText += event.text;
+            setMessages(prev => prev.map(msg =>
+              msg.id === aiMessageId ? { ...msg, content: fullText, thinkingContent: fullThinking, isThinking: false } : msg
+            ));
+          }
         }
-        if (chunk.thinkingText) {
-          fullThinking += chunk.thinkingText;
-          setMessages(prev => prev.map(msg =>
-            msg.id === aiMessageId ? { ...msg, thinkingContent: fullThinking, isThinking: true } : msg
-          ));
-        }
-        if (chunk.text) {
-          fullText += chunk.text;
-          setMessages(prev => prev.map(msg =>
-            msg.id === aiMessageId ? { ...msg, content: fullText, thinkingContent: fullThinking, isThinking: false } : msg
-          ));
+      } else {
+        const history = messages.map(m => ({ role: m.role === Role.Assistant ? 'assistant' : 'user', content: m.content }));
+
+        for await (const chunk of sendAgentMessage(history, enabledTools, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal)) {
+          if (chunk.toolCall) {
+            setToolResults(prev => [...prev, { name: chunk.toolCall!.name, input: chunk.toolCall!.arguments, output: '' }]);
+          }
+          if (chunk.toolResult) {
+            setToolResults(prev => {
+              const updated = [...prev];
+              const idx = updated.findIndex(r => r.name === chunk.toolResult!.name && !r.output);
+              if (idx >= 0) updated[idx] = chunk.toolResult!;
+              return updated;
+            });
+          }
+          if (chunk.thinkingText) {
+            fullThinking += chunk.thinkingText;
+            setMessages(prev => prev.map(msg =>
+              msg.id === aiMessageId ? { ...msg, thinkingContent: fullThinking, isThinking: true } : msg
+            ));
+          }
+          if (chunk.text) {
+            fullText += chunk.text;
+            setMessages(prev => prev.map(msg =>
+              msg.id === aiMessageId ? { ...msg, content: fullText, thinkingContent: fullThinking, isThinking: false } : msg
+            ));
+          }
         }
       }
 
@@ -191,13 +243,52 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             <Puzzle size={20} style={{ color: 'var(--neon-color)' }} />
           </div>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>Plug-in Agent</h2>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>
+              {agentBackend === 'opencode' ? 'OpenCode Agent' : 'Plug-in Agent'}
+            </h2>
             <p className="text-[10px]" style={{ color: 'var(--text-500)' }}>
-              {enabledTools.length} tool{enabledTools.length !== 1 ? 's' : ''} enabled
+              {agentBackend === 'opencode'
+                ? '30+ tools via OpenCode runtime'
+                : `${enabledTools.length} tool${enabledTools.length !== 1 ? 's' : ''} enabled`}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg p-0.5" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => switchBackend('mimo')}
+              className="h-6 gap-1 px-2 text-[10px] font-medium"
+              style={{
+                backgroundColor: agentBackend === 'mimo' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                color: agentBackend === 'mimo' ? 'var(--neon-color)' : 'var(--text-500)',
+              }}
+            >
+              <Zap size={10} />
+              MiMo
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => switchBackend('opencode')}
+              className="h-6 gap-1 px-2 text-[10px] font-medium"
+              style={{
+                backgroundColor: agentBackend === 'opencode' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                color: agentBackend === 'opencode' ? 'var(--neon-color)' : 'var(--text-500)',
+              }}
+            >
+              <Bot size={10} />
+              OpenCode
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Separator className="mx-4" style={{ backgroundColor: 'var(--border-300)' }} />
+
+      {agentBackend === 'mimo' && availableTools.length > 0 && (
+        <div className="flex items-center gap-1.5 px-4 py-2">
           {availableTools.map(tool => {
             const isEnabled = enabledTools.includes(tool.name);
             return (
@@ -220,9 +311,7 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             );
           })}
         </div>
-      </div>
-
-      <Separator className="mx-4" style={{ backgroundColor: 'var(--border-300)' }} />
+      )}
 
       {toolResults.length > 0 && (
         <Collapsible open={showToolResults} onOpenChange={setShowToolResults} className="mx-4 mb-3">
@@ -274,9 +363,13 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
             <Puzzle size={40} style={{ color: 'var(--text-500)' }} className="mb-4" />
-            <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>Plug-in Agent</p>
+            <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>
+              {agentBackend === 'opencode' ? 'OpenCode Agent' : 'Plug-in Agent'}
+            </p>
             <p className="text-xs max-w-sm" style={{ color: 'var(--text-500)' }}>
-              Chat with an AI agent that can browse the web, execute code, and search for information.
+              {agentBackend === 'opencode'
+                ? 'Full coding agent with 30+ tools: file operations, shell, search, permissions, and more.'
+                : 'Chat with an AI agent that can browse the web, execute code, and search for information.'}
             </p>
           </div>
         ) : (

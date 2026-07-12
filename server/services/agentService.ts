@@ -331,7 +331,7 @@ async function toolWebBrowse(url: string): Promise<string> {
   }
 }
 
-async function toolExecuteCode(code: string): Promise<string> {
+export async function toolExecuteCode(code: string): Promise<string> {
   if (!code) return 'Error: No code provided';
 
   const logs: string[] = [];
@@ -877,16 +877,24 @@ ${toolNote}`;
 
 export function parseToolCalls(response: string): ToolCall[] {
   const calls: ToolCall[] = [];
+  const seen = new Set<string>();
   const regex = /```(?:tool|json)\s*\n?([\s\S]*?)```/g;
   let match;
+
+  const addCall = (name: string, arguments_: Record<string, any>) => {
+    const key = `${name}:${JSON.stringify(arguments_)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    calls.push({ name, arguments: arguments_ });
+  };
 
   while ((match = regex.exec(response)) !== null) {
     try {
       const parsed = JSON.parse(match[1].trim());
       if (parsed.name && parsed.arguments) {
-        calls.push({ name: parsed.name, arguments: parsed.arguments });
+        addCall(parsed.name, parsed.arguments);
       } else if (parsed.prompt && !parsed.name) {
-        calls.push({ name: 'generate_spec', arguments: parsed });
+        addCall('generate_spec', parsed);
       }
     } catch {
       // skip malformed tool calls
@@ -899,7 +907,7 @@ export function parseToolCalls(response: string): ToolCall[] {
       try {
         const parsed = JSON.parse(match[0]);
         if (parsed.name && parsed.arguments) {
-          calls.push({ name: parsed.name, arguments: parsed.arguments });
+          addCall(parsed.name, parsed.arguments);
         }
       } catch {
         // skip malformed

@@ -60,7 +60,7 @@ export interface LibraryComponent {
   id: string;
   name: string;
   category: 'ui-widget' | 'template' | 'snippet' | 'pattern' | 'hook' | 'util' | 'agent-tool';
-  contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown';
   description: string;
   tags: string[];
   content: string;
@@ -68,6 +68,7 @@ export interface LibraryComponent {
   thumbnail?: string;
   isGlobal: boolean;
   agentAccessible: boolean;
+  folderId?: string | null;
   createdAt: string;
   updatedAt: string;
   files?: LibraryComponentFile[];
@@ -77,7 +78,7 @@ export interface LibraryComponentFile {
   id: string;
   componentId: string;
   filename: string;
-  contentType: 'tsx' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown';
   content: string;
   sortOrder: number;
   isEntry: boolean;
@@ -87,6 +88,19 @@ export interface LibraryComponentFile {
 
 export interface LibraryComponentWithScore extends LibraryComponent {
   score: number;
+}
+
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
+  agentAccessible: boolean;
+  createdAt: string;
+  updatedAt: string;
+  componentCount?: number;
 }
 
 export function getModelType(modelId: string): ModelType {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, Bot } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package } from 'lucide-react';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
@@ -25,6 +25,7 @@ import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
+import { AgentSidebar } from './components/library/AgentSidebar';
 import { StitchControls } from './components/StitchEditor';
 
 
@@ -132,6 +133,19 @@ const App: React.FC = () => {
   const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
   const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
+  const [agentDockOpen, setAgentDockOpen] = useState(() => {
+    try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
+  });
+  const toggleAgentDock = useCallback(() => {
+    setAgentDockOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem('edward:labs_agentDockOpen', String(next)); } catch {}
+      return next;
+    });
+  }, []);
+  const handleNotification = useCallback((msg: string, type: 'success' | 'error') => {
+    type === 'success' ? toast.success(msg) : toast.error(msg);
+  }, []);
   const [stitchResetKey, setStitchResetKey] = useState(0);
   const [experimentConversationId, setExperimentConversationId] = useState<number | null>(null);
 
@@ -891,10 +905,12 @@ const App: React.FC = () => {
           onChangeFontFamily: setFontFamily,
         }}
         availableModels={models}
+        libraryControls={libraryControls}
       />
 
-      <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)', paddingRight: libraryControls?.showAgent ? 288 : 0 }}>
+      <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
         {/* Top bar */}
+        {(!isLibraryMode || libraryControls) && (
         <div className="flex items-center p-2 md:p-4 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
             <Button
@@ -1040,25 +1056,18 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleAgentDock}
+                  className="text-[var(--text-500)] hover:text-[var(--text-100)]"
+                  title={agentDockOpen ? 'Hide Agent' : 'Show Agent'}
+                >
+                  {agentDockOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                </Button>
                 {libraryControls.isDirty && (
                   <Button size="sm" onClick={libraryControls.onSave} disabled={libraryControls.isSaving} style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
                     {libraryControls.isSaving ? 'Saving...' : 'Save'}
-                  </Button>
-                )}
-                {!libraryControls.showAgent && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 rounded-xl"
-                    onClick={libraryControls.onToggleAgent}
-                    style={{
-                      backgroundColor: 'var(--bg-200)',
-                      color: 'var(--text-300)',
-                      borderColor: 'var(--border-300)',
-                    }}
-                  >
-                    <Bot size={14} />
-                    Agent
                   </Button>
                 )}
               </div>
@@ -1084,6 +1093,7 @@ const App: React.FC = () => {
             </>
           )}
         </div>
+        )}
 
         {/* Content area */}
         <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
@@ -1292,11 +1302,11 @@ const App: React.FC = () => {
             } />
             <Route path="/library" element={
               <RequireAuth isAuth={isLibraryAuthenticated}>
-                <div className="h-full overflow-auto">
+                <div className="h-full">
                   <LibraryPanel
                     theme={theme}
                     modelConfig={selectedModelConfig}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
+                    onNotification={handleNotification}
                     onControlsChange={setLibraryControls}
                   />
                 </div>
@@ -1304,11 +1314,11 @@ const App: React.FC = () => {
             } />
             <Route path="/library/:componentId" element={
               <RequireAuth isAuth={isLibraryAuthenticated}>
-                <div className="h-full overflow-auto">
+                <div className="h-full">
                   <LibraryPanel
                     theme={theme}
                     modelConfig={selectedModelConfig}
-                    onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
+                    onNotification={handleNotification}
                     onControlsChange={setLibraryControls}
                   />
                 </div>
@@ -1347,6 +1357,37 @@ const App: React.FC = () => {
 
         <Toaster />
       </main>
+
+      {libraryControls && (
+        <AgentSidebar
+          isOpen={agentDockOpen}
+          onToggle={toggleAgentDock}
+          selectedComponent={{
+            id: libraryControls.componentId,
+            name: libraryControls.componentName,
+            description: libraryControls.componentDescription,
+            tags: libraryControls.componentTags,
+            category: libraryControls.componentCategory,
+            files: libraryControls.files,
+          } as any}
+          modelConfig={selectedModelConfig}
+          onNotification={handleNotification}
+          onComponentUpdated={(comp) => {
+            setLibraryControls(prev => prev ? {
+              ...prev,
+              componentName: comp.name,
+              componentDescription: comp.description,
+              componentTags: comp.tags,
+            } : prev);
+          }}
+          onComponentsReload={() => {
+            window.dispatchEvent(new CustomEvent('library-reload'));
+          }}
+          models={models.filter(m => m.modelType === 'chat').map(m => ({ id: m.id, name: m.name }))}
+          selectedModelId={currentModelId}
+          onModelChange={handleSelectModel}
+        />
+      )}
     </div>
   );
 };
