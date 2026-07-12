@@ -94,6 +94,13 @@ function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
         return { path: args.path, namespace: 'unresolved-stub' };
       });
 
+      build.onResolve({ filter: /.*/ }, (args) => {
+        if (args.path.startsWith('.') || args.path.startsWith('/') || args.path.startsWith('http')) return undefined;
+        if (EXTERNAL_PACKAGES.includes(args.path)) return undefined;
+        const esmUrl = `https://esm.sh/${args.path}?external=react,react-dom`;
+        return { path: esmUrl, namespace: 'esm-sh', external: false };
+      });
+
       build.onLoad({ filter: /.*/, namespace: 'component' }, (args) => {
         const filename = args.path.replace(/^\.\//, '');
         const file = files.find(f => f.filename === filename);
@@ -111,6 +118,10 @@ function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: 'unresolved-stub' }, () => {
         return { contents: 'export default function Stub() { return null; }', loader: 'jsx' };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: 'esm-sh' }, (args) => {
+        return { contents: `export * from "${args.path}"; export { default } from "${args.path}";`, loader: 'js' };
       });
     },
   };
