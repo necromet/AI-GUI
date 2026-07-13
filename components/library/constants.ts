@@ -109,7 +109,7 @@ export const THEME_CSS_TEMPLATE = `:root {
   --sidebar-primary-foreground: #1e1e2e;
 }`;
 
-export const THEME_TSX_TEMPLATE = `import { useState } from "react";
+export const THEME_TSX_TEMPLATE = `import React, { useState } from "react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid,
@@ -153,6 +153,33 @@ function Badge({ children, className, variant, style }: any) {
 }
 function Input({ className, style, ...props }: any) {
   return <input className={className} style={{ width: "100%", padding: "0.5rem 0.75rem", background: "var(--background)", border: "1px solid var(--input)", borderRadius: "var(--radius)", fontSize: "0.8125rem", color: "var(--foreground)", outline: "none", ...style }} {...props} />;
+}
+function Textarea({ className, style, ...props }: any) {
+  return <textarea className={className} style={{ width: "100%", padding: "0.5rem 0.75rem", background: "var(--background)", border: "1px solid var(--input)", borderRadius: "var(--radius)", fontSize: "0.8125rem", color: "var(--foreground)", outline: "none", minHeight: 80, resize: "vertical", fontFamily: "inherit", ...style }} {...props} />;
+}
+function Label({ children, style }: any) {
+  return <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem", color: "var(--foreground)", ...style }}>{children}</label>;
+}
+function Select({ value, onChange, options, style }: any) {
+  return <select value={value} onChange={onChange} style={{ width: "100%", padding: "0.5rem 0.75rem", background: "var(--background)", border: "1px solid var(--input)", borderRadius: "var(--radius)", fontSize: "0.8125rem", color: "var(--foreground)", outline: "none", cursor: "pointer", ...style }}>
+    {options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+  </select>;
+}
+function Modal({ open, onClose, title, description, children }: any) {
+  if (!open) return null;
+  return <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card)", color: "var(--card-foreground)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", width: 440, maxHeight: "85vh", overflow: "auto" }}>
+      <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontWeight: 700, fontSize: "1rem" }}>{title}</div>
+        {description && <div style={{ fontSize: "0.8125rem", color: "var(--muted-foreground)", marginTop: 4 }}>{description}</div>}
+      </div>
+      <div style={{ padding: "1.25rem 1.5rem" }}>{children}</div>
+    </div>
+  </div>;
+}
+function Toast({ message, type, onDone }: any) {
+  React.useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }, []);
+  return <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 10000, padding: "0.75rem 1rem", borderRadius: "var(--radius)", fontSize: "0.8125rem", fontWeight: 600, background: type === "error" ? "var(--destructive)" : "var(--primary)", color: type === "error" ? "var(--destructive-foreground)" : "var(--primary-foreground)", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s" }}>{message}</div>;
 }
 
 /* ── data ── */
@@ -235,7 +262,7 @@ function ThemeShowcase() {
       <Button size="sm" style={{ background: "var(--secondary)", color: "var(--secondary-foreground)" }}>Secondary</Button>
       <Button size="sm" variant="outline" style={{ borderColor: "var(--border)" }}>Outline</Button>
       <Button size="sm" variant="ghost">Ghost</Button>
-      <Button size="sm" style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }}>Delete</Button>
+      <Button size="sm" style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }} onClick={() => alert("Delete clicked!")}>Delete</Button>
     </div>
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
       <Badge style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>Badge</Badge>
@@ -270,7 +297,7 @@ function MoveGoalCard() {
       <button onClick={() => setGoal((g) => g + 10)} style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", background: "transparent", cursor: "pointer" }}><Plus size={14} /></button>
     </div>
     <div style={{ height: 70 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={moveGoalData}><Bar dataKey="v" radius={[3, 3, 0, 0]} fill="var(--primary)" /></BarChart></ResponsiveContainer></div>
-    <Button variant="outline" style={{ width: "100%", marginTop: "0.75rem", borderColor: "var(--border)" }}>Set Goal</Button>
+    <Button variant="outline" style={{ width: "100%", marginTop: "0.75rem", borderColor: "var(--border)" }} onClick={() => showToast("Goal set to " + goal + " cal/day")}>Set Goal</Button>
   </CardContent></Card>;
 }
 function ExerciseMinutesCard() {
@@ -306,13 +333,82 @@ function StatCard({ title, value, change, down, icon }: any) {
 export default function Dashboard() {
   const [toggles, setToggles] = useState({ notifications: true, marketing: false });
   const [activeTab, setActiveTab] = useState("Overview");
+  const [modal, setModal] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+  const [projectForm, setProjectForm] = useState({ name: "", description: "", type: "web" });
+  const [profileForm, setProfileForm] = useState({ name: "John Doe", email: "john@example.com", role: "admin" });
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+
+  const showToast = (msg: string, type = "success") => setToast({ msg, type });
+
+  const handleCreateProject = () => {
+    if (!projectForm.name.trim()) return;
+    setProjects((p) => [...p, { ...projectForm, id: Date.now() }]);
+    setModal(null);
+    setProjectForm({ name: "", description: "", type: "web" });
+    showToast("Project \\"" + projectForm.name + "\\" created");
+  };
+
+  const handleDeleteRow = (name: string) => {
+    setDeleteTarget(name);
+    setModal("delete");
+  };
+
+  const confirmDelete = () => {
+    setModal(null);
+    showToast(deleteTarget + " deleted", "error");
+    setDeleteTarget(null);
+  };
+
+  const handleSaveProfile = () => {
+    setModal(null);
+    showToast("Profile updated");
+  };
 
   const tooltipStyle: any = { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "var(--radius)", color: "var(--popover-foreground)", fontSize: "0.75rem" };
   const tabList = ["Overview", "Analytics", "Reports", "Notifications"];
 
+  const fieldGap: any = { display: "flex", flexDirection: "column", gap: "0.75rem" };
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", width: "100%", background: "var(--background)", color: "var(--foreground)", fontFamily: "var(--font-sans)" }}>
       <style>{THEME_CSS}</style>
+      <style>{\`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }\`}</style>
+
+      {/* Modals */}
+      <Modal open={modal === "newProject"} onClose={() => setModal(null)} title="Create New Project" description="Add a new project to your dashboard.">
+        <div style={fieldGap}>
+          <div><Label>Project Name</Label><Input value={projectForm.name} onChange={(e: any) => setProjectForm((f) => ({ ...f, name: e.target.value }))} placeholder="My Awesome Project" /></div>
+          <div><Label>Description</Label><Textarea value={projectForm.description} onChange={(e: any) => setProjectForm((f) => ({ ...f, description: e.target.value }))} placeholder="Brief description of the project..." /></div>
+          <div><Label>Project Type</Label><Select value={projectForm.type} onChange={(e: any) => setProjectForm((f) => ({ ...f, type: e.target.value }))} options={[{ value: "web", label: "Web Application" }, { value: "mobile", label: "Mobile App" }, { value: "api", label: "API / Backend" }, { value: "design", label: "Design System" }]} /></div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.5rem" }}>
+            <Button variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+            <Button onClick={handleCreateProject} disabled={!projectForm.name.trim()}>Create Project</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={modal === "editProfile"} onClose={() => setModal(null)} title="Edit Profile" description="Update your personal information.">
+        <div style={fieldGap}>
+          <div><Label>Full Name</Label><Input value={profileForm.name} onChange={(e: any) => setProfileForm((f) => ({ ...f, name: e.target.value }))} /></div>
+          <div><Label>Email</Label><Input type="email" value={profileForm.email} onChange={(e: any) => setProfileForm((f) => ({ ...f, email: e.target.value }))} /></div>
+          <div><Label>Role</Label><Select value={profileForm.role} onChange={(e: any) => setProfileForm((f) => ({ ...f, role: e.target.value }))} options={[{ value: "admin", label: "Admin" }, { value: "editor", label: "Editor" }, { value: "viewer", label: "Viewer" }]} /></div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.5rem" }}>
+            <Button variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+            <Button onClick={handleSaveProfile}>Save Changes</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={modal === "delete"} onClose={() => setModal(null)} title="Are you sure?" description={"This will permanently delete \\"" + (deleteTarget || "") + "\\". This action cannot be undone."}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.5rem" }}>
+          <Button variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+          <Button style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }} onClick={confirmDelete}>Delete</Button>
+        </div>
+      </Modal>
+
+      {toast && <Toast message={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
       <nav style={{ width: 240, flexShrink: 0, background: "var(--sidebar)", color: "var(--sidebar-foreground)", borderRight: "1px solid var(--sidebar-border)", padding: "1rem", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", marginBottom: "1.5rem", fontWeight: 700, fontSize: "0.875rem" }}><CircleCheck size={18} style={{ color: "var(--sidebar-primary)" }} />Dashboard</div>
         <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", padding: "0.5rem 0.5rem 0.25rem" }}>Platform</div>
@@ -322,9 +418,9 @@ export default function Dashboard() {
         <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", padding: "0.75rem 0.5rem 0.25rem" }}>Settings</div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", borderRadius: "var(--radius)", fontSize: "0.8125rem", cursor: "pointer" }}><SettingsIcon size={16} style={{ opacity: 0.7 }} />Settings</div>
         <div style={{ marginTop: "auto", paddingTop: "1rem", borderTop: "1px solid var(--sidebar-border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", cursor: "pointer", borderRadius: "var(--radius)" }} onClick={() => setModal("editProfile")}>
             <Avatar bg="var(--sidebar-primary)" fg="var(--sidebar-primary-foreground)">JD</Avatar>
-            <div><div style={{ fontSize: "0.8125rem", fontWeight: 600 }}>John Doe</div><div style={{ fontSize: "0.6875rem", color: "var(--muted-foreground)" }}>john@example.com</div></div>
+            <div><div style={{ fontSize: "0.8125rem", fontWeight: 600 }}>{profileForm.name}</div><div style={{ fontSize: "0.6875rem", color: "var(--muted-foreground)" }}>{profileForm.email}</div></div>
           </div>
         </div>
       </nav>
@@ -334,12 +430,26 @@ export default function Dashboard() {
           <div style={{ fontSize: "0.9375rem", fontWeight: 700 }}>Overview</div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <div style={{ position: "relative" }}><Search size={14} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--muted-foreground)" }} /><Input placeholder="Search..." style={{ width: 220, paddingLeft: 32 }} /></div>
-            <Button size="sm"><Plus size={13} style={{ marginRight: 4 }} />New Project</Button>
+            <Button size="sm" onClick={() => setModal("newProject")}><Plus size={13} style={{ marginRight: 4 }} />New Project</Button>
           </div>
         </div>
 
         <div style={{ flex: 1, padding: "1.5rem", overflowY: "auto" }}>
           <ThemeShowcase />
+
+          {projects.length > 0 && <Card style={{ marginBottom: "1.5rem" }}><CardHeader style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <div><CardTitle>Projects</CardTitle><CardDescription>{projects.length} project{projects.length !== 1 ? "s" : ""} created</CardDescription></div>
+          </CardHeader><CardContent>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {projects.map((p: any) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem", background: "var(--muted)", borderRadius: "var(--radius)" }}>
+                  <div><div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{p.name}</div><div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>{p.description || "No description"} · {p.type}</div></div>
+                  <Button size="sm" variant="ghost" onClick={() => { setProjects((prev) => prev.filter((x: any) => x.id !== p.id)); showToast(p.name + " deleted", "error"); }}>Remove</Button>
+                </div>
+              ))}
+            </div>
+          </CardContent></Card>}
+
           <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: "1.5rem" }}>
             {tabList.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem", fontWeight: activeTab === tab ? 600 : 500, color: activeTab === tab ? "var(--foreground)" : "var(--muted-foreground)", borderBottom: "2px solid " + (activeTab === tab ? "var(--primary)" : "transparent"), background: "none", border: "none", borderBottomWidth: 2, cursor: "pointer" }}>{tab}</button>
@@ -366,13 +476,13 @@ export default function Dashboard() {
             <Card>
               <CardHeader style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <div><CardTitle>Recent Sales</CardTitle><CardDescription>You made 265 sales this month.</CardDescription></div>
-                <Button variant="outline" size="sm" style={{ borderColor: "var(--border)" }}>View All</Button>
+                <Button variant="outline" size="sm" style={{ borderColor: "var(--border)" }} onClick={() => showToast("Showing all 265 sales")}>View All</Button>
               </CardHeader>
               <CardContent>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem" }}>
                   <thead><tr>{["Customer", "Email", "Status", ""].map((h, i) => <th key={i} style={{ textAlign: i === 3 ? "right" : "left", padding: "0.625rem 0.75rem", fontSize: "0.6875rem", fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)" }}>{h === "" ? "Amount" : h}</th>)}</tr></thead>
                   <tbody>{salesData.map((row) => (
-                    <tr key={row.email} style={{ cursor: "pointer" }}>
+                    <tr key={row.email} style={{ cursor: "pointer" }} onClick={() => handleDeleteRow(row.name)}>
                       <td style={{ padding: "0.625rem 0.75rem", borderBottom: "1px solid var(--border)" }}><div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><Avatar bg={row.color} fg={row.fg} size={28}>{row.name.split(" ").map((n: string) => n[0]).join("")}</Avatar>{row.name}</div></td>
                       <td style={{ padding: "0.625rem 0.75rem", borderBottom: "1px solid var(--border)", color: "var(--muted-foreground)" }}>{row.email}</td>
                       <td style={{ padding: "0.625rem 0.75rem", borderBottom: "1px solid var(--border)" }}><StatusBadge status={row.status} /></td>
