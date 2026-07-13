@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Code, Eye, Undo2, Redo2 } from 'lucide-react';
+import { Plus, X, Code, Eye, Undo2, Redo2, Maximize2, Minimize2 } from 'lucide-react';
 import { LibraryComponent, LibraryComponentFile } from '../../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,6 +55,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const [deleteFileDialog, setDeleteFileDialog] = useState<string | null>(null);
   const [agentChangedFileIds, setAgentChangedFileIds] = useState<Set<string>>(new Set());
   const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const editorRef = useRef<any>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
@@ -463,6 +464,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-300)' }}>
               <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Live Preview</span>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsFullscreen(true)}
+                  className="p-1 rounded-md transition-colors hover:bg-[var(--bg-300)]"
+                  style={{ color: 'var(--text-500)' }}
+                  title="Fullscreen preview"
+                >
+                  <Maximize2 size={13} />
+                </button>
                 {editFiles.filter(f => f.contentType === 'css').length > 0 && (
                   <Badge variant="secondary" className="text-[10px] px-1" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
                     +{editFiles.filter(f => f.contentType === 'css').length} CSS
@@ -529,6 +538,33 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Fullscreen Preview Overlay */}
+      {isFullscreen && previewHtml && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }}>
+          <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ backgroundColor: 'var(--bg-100)', borderBottom: '1px solid var(--border-300)' }}>
+            <div className="flex items-center gap-2">
+              <Eye size={14} style={{ color: 'var(--neon-color)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>{selectedComponent.name}</span>
+              <Badge variant="secondary" className="text-[10px]" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>Preview</Badge>
+            </div>
+            <button
+              onClick={() => setIsFullscreen(false)}
+              className="p-1.5 rounded-md transition-colors hover:bg-[var(--bg-300)]"
+              style={{ color: 'var(--text-500)' }}
+              title="Exit fullscreen"
+            >
+              <Minimize2 size={16} />
+            </button>
+          </div>
+          <iframe
+            srcDoc={previewHtml}
+            sandbox="allow-scripts"
+            className="flex-1 w-full border-0"
+            title="Fullscreen Preview"
+          />
+        </div>
+      )}
 
       {/* Metadata */}
       {selectedComponent.metadata && Object.keys(selectedComponent.metadata).length > 0 && (
