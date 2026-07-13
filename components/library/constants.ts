@@ -109,17 +109,16 @@ export const THEME_CSS_TEMPLATE = `:root {
   --sidebar-primary-foreground: #1e1e2e;
 }`;
 
-export const THEME_TSX_TEMPLATE = `import React, { useState } from "react";
+export const THEME_TSX_TEMPLATE = `import React, { useState, useEffect } from "react";
+import "./theme.css";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import {
   LayoutGrid, Users, CreditCard, Settings as SettingsIcon,
-  Plus, Search, CircleCheck, Box, Minus,
+  Plus, Search, CircleCheck, Box, Minus, Sun, Moon, Type,
 } from "lucide-react";
-
-const THEME_CSS = \`${THEME_CSS_TEMPLATE.replace(/\\/g, '\\\\').replace(/\`/g, '\\\`').replace(/\$/g, '\\$')}\`;
 
 /* ── inline UI primitives (sandbox-safe, no @/ imports) ── */
 function Card({ children, className, style }: any) {
@@ -339,6 +338,22 @@ export default function Dashboard() {
   const [profileForm, setProfileForm] = useState({ name: "John Doe", email: "john@example.com", role: "admin" });
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [isDark, setIsDark] = useState(true);
+  const [font, setFont] = useState("sans-serif");
+
+  const FONTS = [
+    { value: "sans-serif", label: "System Sans" },
+    { value: "Georgia, serif", label: "Georgia Serif" },
+    { value: "'Fira Code', monospace", label: "Fira Code" },
+    { value: "'Montserrat', sans-serif", label: "Montserrat" },
+    { value: "'Inter', sans-serif", label: "Inter" },
+  ];
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) root.classList.add("dark");
+    else root.classList.remove("dark");
+  }, [isDark]);
 
   const showToast = (msg: string, type = "success") => setToast({ msg, type });
 
@@ -372,8 +387,7 @@ export default function Dashboard() {
   const fieldGap: any = { display: "flex", flexDirection: "column", gap: "0.75rem" };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", width: "100%", background: "var(--background)", color: "var(--foreground)", fontFamily: "var(--font-sans)" }}>
-      <style>{THEME_CSS}</style>
+    <div style={{ display: "flex", minHeight: "100vh", width: "100%", background: "var(--background)", color: "var(--foreground)", fontFamily: font }}>
       <style>{\`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }\`}</style>
 
       {/* Modals */}
@@ -417,6 +431,22 @@ export default function Dashboard() {
         ))}
         <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", padding: "0.75rem 0.5rem 0.25rem" }}>Settings</div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", borderRadius: "var(--radius)", fontSize: "0.8125rem", cursor: "pointer" }}><SettingsIcon size={16} style={{ opacity: 0.7 }} />Settings</div>
+
+        <div style={{ padding: "0.5rem", marginTop: "0.5rem" }}>
+          <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", marginBottom: "0.5rem", padding: "0 0.5rem" }}>Preferences</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.375rem 0.5rem", marginBottom: "0.25rem" }}>
+            <span style={{ fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>{isDark ? <Moon size={14} /> : <Sun size={14} />} {isDark ? "Dark" : "Light"} Mode</span>
+            <Toggle on={isDark} onClick={() => setIsDark(!isDark)} />
+          </div>
+          <div style={{ padding: "0.375rem 0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.375rem" }}>
+              <Type size={14} />
+              <span style={{ fontSize: "0.8125rem" }}>Font</span>
+            </div>
+            <Select value={font} onChange={(e: any) => setFont(e.target.value)} options={FONTS} style={{ fontSize: "0.75rem", padding: "0.375rem 0.5rem" }} />
+          </div>
+        </div>
+
         <div style={{ marginTop: "auto", paddingTop: "1rem", borderTop: "1px solid var(--sidebar-border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", cursor: "pointer", borderRadius: "var(--radius)" }} onClick={() => setModal("editProfile")}>
             <Avatar bg="var(--sidebar-primary)" fg="var(--sidebar-primary-foreground)">JD</Avatar>

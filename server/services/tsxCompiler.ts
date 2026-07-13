@@ -131,6 +131,15 @@ export default cn;
         const file = files.find(f => f.filename === filename);
         if (!file) return { contents: 'export default {}', loader: 'js' };
 
+        if (file.contentType === 'css') {
+          const escaped = file.content.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+          return {
+            contents: `if (typeof document !== 'undefined') { const s = document.createElement('style'); s.dataset.source = ${JSON.stringify(filename)}; s.textContent = \`${escaped}\`; document.head.appendChild(s); } export default {};`,
+            loader: 'js',
+            resolveDir: '/',
+          };
+        }
+
         const rewritten = rewriteCnImports(rewriteImports(file.content, file.filename, files));
         const loader = filename.endsWith('.tsx') ? 'tsx' as const
           : filename.endsWith('.ts') ? 'ts' as const
