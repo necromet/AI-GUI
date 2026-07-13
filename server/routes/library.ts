@@ -695,11 +695,14 @@ router.post('/agent/chat', async (req: Request, res: Response) => {
 
       const firstToolIdx = fullResponse.indexOf('```tool');
       const firstJsonIdx = fullResponse.indexOf('```json');
+      const firstXmlToolIdx = fullResponse.indexOf('<tool_call>');
       let splitIdx = -1;
-      if (firstToolIdx !== -1 && (firstJsonIdx === -1 || firstToolIdx < firstJsonIdx)) {
+      if (firstToolIdx !== -1 && (firstJsonIdx === -1 || firstToolIdx < firstJsonIdx) && (firstXmlToolIdx === -1 || firstToolIdx < firstXmlToolIdx)) {
         splitIdx = firstToolIdx;
-      } else if (firstJsonIdx !== -1) {
+      } else if (firstJsonIdx !== -1 && (firstXmlToolIdx === -1 || firstJsonIdx < firstXmlToolIdx)) {
         splitIdx = firstJsonIdx;
+      } else if (firstXmlToolIdx !== -1) {
+        splitIdx = firstXmlToolIdx;
       }
 
       const preToolText = splitIdx > 0 ? fullResponse.substring(0, splitIdx).trim() : '';

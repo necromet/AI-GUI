@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_TSX_TEMPLATE } from './constants';
+import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_HTML_TEMPLATE, THEME_TSX_TEMPLATE } from './constants';
 
 interface CreateComponentDialogProps {
   open: boolean;
@@ -49,7 +49,7 @@ const defaultCreateFiles: CreateFileEntry[] = [
 ];
 
 const defaultThemeFiles: CreateFileEntry[] = [
-  { filename: 'components.tsx', contentType: 'tsx', content: THEME_TSX_TEMPLATE, isEntry: true },
+  { filename: 'index.html', contentType: 'html', content: THEME_HTML_TEMPLATE, isEntry: true },
   { filename: 'theme.css', contentType: 'css', content: THEME_CSS_TEMPLATE, isEntry: false },
 ];
 

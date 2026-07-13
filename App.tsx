@@ -861,6 +861,18 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
+        {/* Floating sidebar toggle for library mode when sidebar is closed */}
+        {isLibraryMode && !libraryControls && !isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="fixed top-3 left-3 z-50 p-2 rounded-lg transition-all duration-200 cursor-pointer hover:bg-[var(--bg-100)] hover:text-[var(--text-100)] hover:border-[var(--text-500)]"
+            style={{ color: 'var(--text-500)', backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
+            title="Open sidebar"
+          >
+            <PanelLeft size={18} />
+          </button>
+        )}
+
         {/* Top bar */}
         {(!isLibraryMode || libraryControls) && (
         <div className="flex items-center p-2 md:p-4 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>

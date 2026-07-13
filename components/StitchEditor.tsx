@@ -13,7 +13,7 @@ import StitchPromptBar from './StitchPromptBar';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
-import { SquareLoader } from '@/components/ui/loader-2';
+import { MathCurveLoader } from '@/components/ui/math-curve-loader';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from '@/components/ui/chat-input';
@@ -1125,7 +1125,7 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
           ) : isGenerating ? (
             <div className="text-center py-20">
               <div className="mx-auto mb-4 flex items-center justify-center">
-                <SquareLoader size={56} />
+                <MathCurveLoader size={56} />
               </div>
               <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>{isIgContent ? 'Composing design...' : 'Generating HTML...'}</p>
               <p className="text-xs" style={{ color: 'var(--text-500)' }}>{isIgContent ? 'The AI is building your design spec' : 'The AI is building your design'}</p>

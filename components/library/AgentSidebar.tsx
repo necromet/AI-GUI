@@ -3,8 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Bot, X, Sparkles, ChevronDown, ChevronRight, Copy, Check, Square,
-  MoreVertical, MessageSquare, Trash2, Plus, CheckCircle2, CircleX, Loader,
+  MoreVertical, MessageSquare, Trash2, Plus, CheckCircle2, CircleX,
 } from 'lucide-react';
+import { MathCurveLoader } from '@/components/ui/math-curve-loader';
 import { ModelConfig, LibraryComponent } from '../../types';
 import { CATEGORY_LABELS } from './constants';
 import { Badge } from '@/components/ui/badge';
@@ -178,7 +179,7 @@ function AgentResponseWrapper({
           ) : status === 'error' ? (
             <CircleX size={13} style={{ color: '#f87171', flexShrink: 0 }} />
           ) : (
-            <Loader size={13} className="animate-spin" style={{ color: 'var(--neon-color)', flexShrink: 0 }} />
+            <div className="flex-shrink-0"><MathCurveLoader size={16} /></div>
           )}
           <span className="text-xs font-medium truncate" style={{ color: 'var(--text-100)' }}>
             {block.name}
@@ -311,7 +312,7 @@ function AgentResponseWrapper({
             ) : toolStatus === 'error' ? (
               <CircleX size={12} style={{ color: '#f87171', flexShrink: 0 }} />
             ) : (
-              <Loader size={12} className="animate-spin" style={{ color: 'var(--neon-color)', flexShrink: 0 }} />
+              <div className="flex-shrink-0"><MathCurveLoader size={16} /></div>
             )}
             <span className="text-[11px] font-medium" style={{ color: 'var(--text-200)' }}>
               {toolStatus === 'done' ? 'All steps complete' : toolStatus === 'error' ? 'Steps completed with errors' : 'Executing steps...'}
@@ -409,6 +410,7 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ id: string; title: string | null; createdAt: string; updatedAt: string }>>([]);
+  const verifyingComponentRef = useRef<string | null>(null);
 
   const [width, setWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
@@ -436,6 +438,28 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
       document.removeEventListener('mouseup', onMouseUp);
     };
   }, [isResizing]);
+
+  // Listen for verify results from ComponentEditor and POST back to server
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail) return;
+      try {
+        await fetch('/api/library/agent/verify-result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            componentId: verifyingComponentRef.current,
+            errors: detail.errors || [],
+            success: detail.success !== false,
+          }),
+        });
+      } catch {}
+      verifyingComponentRef.current = null;
+    };
+    window.addEventListener('agent-verify-result', handler);
+    return () => window.removeEventListener('agent-verify-result', handler);
+  }, []);
 
   useEffect(() => {
     if (shouldAutoScrollRef.current) {
@@ -468,12 +492,12 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
             if (sessionResp.ok) {
               const sessionData = await sessionResp.json();
               const msgs = JSON.parse(sessionData.session?.messagesJson || '[]');
-              if (msgs.length > 0) {
-                setMessages(msgs);
-                return;
-              }
+              setMessages(msgs);
+              return;
             }
           } catch {}
+          setMessages([]);
+          return;
         }
 
         const createResp = await fetch('/api/library/agent/sessions', {
@@ -694,6 +718,13 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
                 const blocks = m.blocks ? [...m.blocks] : [];
                 blocks.push({ type: 'ask_user', question: parsed.ask_user.question });
                 return { ...m, blocks, isThinking: false };
+              }));
+            }
+
+            if (parsed.verify_component) {
+              verifyingComponentRef.current = parsed.verify_component.componentId;
+              window.dispatchEvent(new CustomEvent('agent-verify-component', {
+                detail: { componentId: parsed.verify_component.componentId },
               }));
             }
 
@@ -966,62 +997,141 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
             )}
             {messages.map((msg) => {
               const isUser = msg.role === 'user';
-              return (
-                <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className="max-w-[92%] rounded-2xl text-sm leading-relaxed"
-                    style={{
-                      backgroundColor: isUser ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
-                      color: 'var(--text-100)',
-                      wordBreak: 'break-word',
-                      border: isUser ? 'none' : '1px solid var(--border-300)',
-                    }}
-                  >
-                    {msg.isThinking && !msg.content && (!msg.blocks || msg.blocks.length === 0) && (
-                      <div className="px-3.5 py-2.5 flex items-center gap-2">
-                        <div className="flex gap-1">
-                          {[0, 1, 2].map((i) => (
-                            <div
-                              key={i}
-                              className="w-1.5 h-1.5 rounded-full animate-pulse"
-                              style={{ backgroundColor: 'var(--neon-color)', animationDelay: `${i * 200}ms` }}
-                            />
-                          ))}
-                        </div>
+
+              if (isUser) {
+                return (
+                  <div key={msg.id} className="flex justify-end">
+                    <div
+                      className="max-w-[92%] rounded-2xl text-sm leading-relaxed"
+                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--text-100)', wordBreak: 'break-word' }}
+                    >
+                      <div className="px-3.5 py-2.5 whitespace-pre-wrap">{msg.content}</div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Assistant message — render each block type as its own bubble
+              if (!msg.blocks || msg.blocks.length === 0) {
+                if (msg.isThinking) {
+                  return (
+                    <div key={msg.id} className="flex justify-start">
+                      <div className="rounded-2xl px-4 py-3 flex items-center gap-2.5" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+                        <MathCurveLoader size={28} />
                         <span className="text-xs" style={{ color: 'var(--text-500)' }}>Thinking...</span>
                       </div>
-                    )}
-
-                    {isUser ? (
-                      <div className="px-3.5 py-2.5 whitespace-pre-wrap">{msg.content}</div>
-                    ) : msg.blocks ? (
-                      <AgentResponseWrapper
-                        blocks={msg.blocks}
-                        msgId={msg.id}
-                        taskStatuses={taskStatuses}
-                        collapsedCodeBlocks={collapsedCodeBlocks}
-                        toggleCodeBlock={toggleCodeBlock}
-                        copiedCode={copiedCode}
-                        handleCopyCode={handleCopyCode}
-                        onToggleToolCollapse={(mId, blockIdx) => {
-                          setMessages(prev => prev.map(m => {
-                            if (m.id !== mId || !m.blocks) return m;
-                            const newBlocks = m.blocks.map((b, i) =>
-                              i === blockIdx && b.type === 'tool_call'
-                                ? { ...b, collapsed: !b.collapsed }
-                                : b
-                            );
-                            return { ...m, blocks: newBlocks };
-                          }));
-                        }}
-                      />
-                    ) : msg.content ? (
-                      <div className="px-3.5 py-2.5 whitespace-pre-wrap text-xs" style={{ color: 'var(--text-500)' }}>
-                        {msg.content}
+                    </div>
+                  );
+                }
+                if (msg.content) {
+                  return (
+                    <div key={msg.id} className="flex justify-start">
+                      <div className="max-w-[92%] rounded-2xl" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)', wordBreak: 'break-word' }}>
+                        <div className="px-3.5 py-2.5 text-sm leading-relaxed" style={{ color: 'var(--text-100)' }}>
+                          <MarkdownRenderer content={msg.content} msgId={msg.id} blockIdx={0} collapsedCodeBlocks={collapsedCodeBlocks} toggleCodeBlock={toggleCodeBlock} copiedCode={copiedCode} handleCopyCode={handleCopyCode} />
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
-                </div>
+                    </div>
+                  );
+                }
+                return null;
+              }
+
+              return (
+                <React.Fragment key={msg.id}>
+                  {msg.blocks.map((block, blockIdx) => {
+                    // Text block → normal chat bubble
+                    if (block.type === 'text' && block.content) {
+                      return (
+                        <div key={blockIdx} className="flex justify-start">
+                          <div className="max-w-[92%] rounded-2xl" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)', wordBreak: 'break-word' }}>
+                            <div className="px-3.5 py-2.5 text-sm leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:my-2 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:my-2 [&>ol]:list-decimal [&>ol]:ml-4 [&>li]:mb-1 [&>h1]:text-lg [&>h1]:font-bold [&>h1]:mb-2 [&>h1]:mt-3 [&>h2]:text-base [&>h2]:font-semibold [&>h2]:mb-2 [&>h2]:mt-3 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mb-1 [&>h3]:mt-2 [&>blockquote]:border-l-2 [&>blockquote]:pl-3 [&>blockquote]:my-2 [&>blockquote]:italic [&>blockquote]:opacity-70" style={{ color: 'var(--text-100)' }}>
+                              <MarkdownRenderer content={block.content} msgId={msg.id} blockIdx={blockIdx} collapsedCodeBlocks={collapsedCodeBlocks} toggleCodeBlock={toggleCodeBlock} copiedCode={copiedCode} handleCopyCode={handleCopyCode} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Tool call → activity bubble with distinct style
+                    if (block.type === 'tool_call') {
+                      const status = block.progress ? 'running' : block.result?.error ? 'error' : block.result ? 'done' : 'running';
+                      const statusColor = status === 'done' && !block.result?.error ? '#4ade80' : status === 'error' || block.result?.error ? '#f87171' : 'var(--neon-color)';
+                      return (
+                        <div key={blockIdx} className="flex justify-start">
+                          <div className="max-w-[92%] rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-300)', borderLeft: `3px solid ${statusColor}`, backgroundColor: 'var(--bg-100)' }}>
+                            <button
+                              onClick={() => {
+                                setMessages(prev => prev.map(m => {
+                                  if (m.id !== msg.id || !m.blocks) return m;
+                                  const newBlocks = m.blocks.map((b, i) =>
+                                    i === blockIdx && b.type === 'tool_call' ? { ...b, collapsed: !b.collapsed } : b
+                                  );
+                                  return { ...m, blocks: newBlocks };
+                                }));
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 transition-colors hover:opacity-80"
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-100)' }}
+                            >
+                              {status === 'done' ? (
+                                <CheckCircle2 size={13} style={{ color: statusColor, flexShrink: 0 }} />
+                              ) : status === 'error' ? (
+                                <CircleX size={13} style={{ color: statusColor, flexShrink: 0 }} />
+                              ) : (
+                                <div className="flex-shrink-0"><MathCurveLoader size={16} color={statusColor} /></div>
+                              )}
+                              <span className="text-xs font-semibold font-mono truncate" style={{ color: 'var(--text-100)' }}>
+                                {block.name}
+                              </span>
+                              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-auto flex-shrink-0" style={{ backgroundColor: `${statusColor}1a`, color: statusColor }}>
+                                {block.result?.error ? 'error' : status === 'done' ? 'done' : 'running'}
+                              </Badge>
+                            </button>
+                            {!block.collapsed && block.result && (
+                              <div
+                                className="px-3 pb-2 pt-0 text-[11px] font-mono overflow-hidden"
+                                style={{ color: block.result.error ? '#f87171' : 'var(--text-500)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 150, overflowY: 'auto' }}
+                              >
+                                {block.result.error || (block.result.output.length > 500 ? block.result.output.substring(0, 500) + '...' : block.result.output)}
+                              </div>
+                            )}
+                            {!block.collapsed && block.progress && (
+                              <div className="px-3 pb-2 pt-0 text-[11px] font-mono" style={{ color: 'var(--text-500)' }}>
+                                {block.progress}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Agent plan → activity bubble
+                    if (block.type === 'agent_plan') {
+                      return (
+                        <div key={blockIdx} className="flex justify-start">
+                          <div className="max-w-[92%] rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-300)', borderLeft: '3px solid #a78bfa', backgroundColor: 'var(--bg-100)' }}>
+                            <div className="px-3 py-2">
+                              <AgentPlan tasks={block.tasks} taskStatuses={taskStatuses} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Ask user → question bubble
+                    if (block.type === 'ask_user') {
+                      return (
+                        <div key={blockIdx} className="flex justify-start">
+                          <div className="max-w-[92%] rounded-xl px-3 py-2.5 text-xs" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.08)', border: '1px solid rgba(var(--neon-rgb), 0.15)', borderLeft: '3px solid var(--neon-color)' }}>
+                            <span style={{ color: 'var(--neon-color)' }}>{block.question}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
+                </React.Fragment>
               );
             })}
             <div ref={messagesEndRef} />

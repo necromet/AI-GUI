@@ -878,8 +878,6 @@ ${toolNote}`;
 export function parseToolCalls(response: string): ToolCall[] {
   const calls: ToolCall[] = [];
   const seen = new Set<string>();
-  const regex = /```(?:tool|json)\s*\n?([\s\S]*?)```/g;
-  let match;
 
   const addCall = (name: string, arguments_: Record<string, any>) => {
     const key = `${name}:${JSON.stringify(arguments_)}`;
@@ -888,7 +886,24 @@ export function parseToolCalls(response: string): ToolCall[] {
     calls.push({ name, arguments: arguments_ });
   };
 
-  while ((match = regex.exec(response)) !== null) {
+  // XML-like format: <tool_call> <tool_name>...</tool_name> <arguments>...</arguments> </tool_call>
+  const xmlRegex = /<tool_call>\s*<tool_name>\s*([\s\S]*?)\s*<\/tool_name>\s*<arguments>\s*([\s\S]*?)\s*<\/arguments>\s*<\/tool_call>/g;
+  let match;
+  while ((match = xmlRegex.exec(response)) !== null) {
+    const name = match[1].trim();
+    try {
+      const args = JSON.parse(match[2].trim());
+      if (name) addCall(name, args);
+    } catch {
+      if (name) addCall(name, {});
+    }
+  }
+
+  if (calls.length > 0) return calls;
+
+  // ```tool or ```json code blocks
+  const codeBlockRegex = /```(?:tool|json)\s*\n?([\s\S]*?)```/g;
+  while ((match = codeBlockRegex.exec(response)) !== null) {
     try {
       const parsed = JSON.parse(match[1].trim());
       if (parsed.name && parsed.arguments) {
@@ -896,23 +911,20 @@ export function parseToolCalls(response: string): ToolCall[] {
       } else if (parsed.prompt && !parsed.name) {
         addCall('generate_spec', parsed);
       }
-    } catch {
-      // skip malformed tool calls
-    }
+    } catch {}
   }
 
-  if (calls.length === 0) {
-    const jsonRegex = /\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g;
-    while ((match = jsonRegex.exec(response)) !== null) {
-      try {
-        const parsed = JSON.parse(match[0]);
-        if (parsed.name && parsed.arguments) {
-          addCall(parsed.name, parsed.arguments);
-        }
-      } catch {
-        // skip malformed
+  if (calls.length > 0) return calls;
+
+  // Bare JSON fallback: {"name":"...","arguments":{...}}
+  const jsonRegex = /\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g;
+  while ((match = jsonRegex.exec(response)) !== null) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (parsed.name && parsed.arguments) {
+        addCall(parsed.name, parsed.arguments);
       }
-    }
+    } catch {}
   }
 
   return calls;
