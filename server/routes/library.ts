@@ -693,22 +693,27 @@ router.post('/agent/chat', async (req: Request, res: Response) => {
         break;
       }
 
-      const firstToolIdx = fullResponse.indexOf('```tool');
-      const firstJsonIdx = fullResponse.indexOf('```json');
-      const firstXmlToolIdx = fullResponse.indexOf('<tool_call>');
-      let splitIdx = -1;
-      if (firstToolIdx !== -1 && (firstJsonIdx === -1 || firstToolIdx < firstJsonIdx) && (firstXmlToolIdx === -1 || firstToolIdx < firstXmlToolIdx)) {
-        splitIdx = firstToolIdx;
-      } else if (firstJsonIdx !== -1 && (firstXmlToolIdx === -1 || firstJsonIdx < firstXmlToolIdx)) {
-        splitIdx = firstJsonIdx;
-      } else if (firstXmlToolIdx !== -1) {
-        splitIdx = firstXmlToolIdx;
-      }
+      let cleanContent = fullResponse;
+      cleanContent = cleanContent.replace(/<tool_call>\s*<tool_name>\s*[\s\S]*?\s*<\/tool_name>\s*<arguments>\s*[\s\S]*?\s*<\/arguments>\s*<\/tool_call>/g, '');
+      cleanContent = cleanContent.replace(/```(?:tool|json)\s*\n?[\s\S]*?```/g, (match) => {
+        try {
+          const inner = match.replace(/^```(?:tool|json)\s*\n?/, '').replace(/\n?```$/, '');
+          const parsed = JSON.parse(inner.trim());
+          if (parsed.name && parsed.arguments) return '';
+        } catch {}
+        return match;
+      });
+      cleanContent = cleanContent.replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g, (match) => {
+        try {
+          const parsed = JSON.parse(match);
+          if (parsed.name && parsed.arguments) return '';
+        } catch {}
+        return match;
+      });
+      cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n').trim();
 
-      const preToolText = splitIdx > 0 ? fullResponse.substring(0, splitIdx).trim() : '';
-
-      if (preToolText) {
-        res.write(`data: ${JSON.stringify({ content: preToolText })}\n\n`);
+      if (cleanContent) {
+        res.write(`data: ${JSON.stringify({ content: cleanContent })}\n\n`);
       }
 
       apiMessages.push({ role: 'assistant', content: fullResponse });

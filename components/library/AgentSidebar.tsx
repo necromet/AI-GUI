@@ -22,9 +22,35 @@ interface ExtractedToolBlock {
 function extractToolBlocks(content: string): { cleanText: string; toolBlocks: ExtractedToolBlock[] } {
   const toolBlocks: ExtractedToolBlock[] = [];
   const cleanText = content
+    .replace(/<tool_call>\s*<tool_name>\s*([\s\S]*?)\s*<\/tool_name>\s*<arguments>\s*([\s\S]*?)\s*<\/arguments>\s*<\/tool_call>/g, (match, nameStr, argsStr) => {
+      const name = nameStr.trim();
+      try {
+        const args = JSON.parse(argsStr.trim());
+        if (name) {
+          toolBlocks.push({ name, arguments: args, raw: match });
+          return '%%TOOL_BLOCK_PLACEHOLDER%%';
+        }
+      } catch {
+        if (name) {
+          toolBlocks.push({ name, arguments: {}, raw: match });
+          return '%%TOOL_BLOCK_PLACEHOLDER%%';
+        }
+      }
+      return match;
+    })
     .replace(/```(?:tool|json)\s*\n?([\s\S]*?)\n?```/g, (match, jsonStr) => {
       try {
         const parsed = JSON.parse(jsonStr.trim());
+        if (parsed.name && parsed.arguments) {
+          toolBlocks.push({ name: parsed.name, arguments: parsed.arguments, raw: match });
+          return '%%TOOL_BLOCK_PLACEHOLDER%%';
+        }
+      } catch {}
+      return match;
+    })
+    .replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g, (match) => {
+      try {
+        const parsed = JSON.parse(match);
         if (parsed.name && parsed.arguments) {
           toolBlocks.push({ name: parsed.name, arguments: parsed.arguments, raw: match });
           return '%%TOOL_BLOCK_PLACEHOLDER%%';
