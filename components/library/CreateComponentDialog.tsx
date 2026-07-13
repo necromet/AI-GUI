@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Trash2, Plus, Sparkles, File, Palette } from 'lucide-react';
 import { LibraryComponent } from '../../types';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_HTML_TEMPLATE } from './constants';
+import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_TSX_TEMPLATE } from './constants';
 
 interface CreateComponentDialogProps {
   open: boolean;
@@ -49,13 +49,9 @@ const defaultCreateFiles: CreateFileEntry[] = [
 ];
 
 const defaultThemeFiles: CreateFileEntry[] = [
-  { filename: 'index.html', contentType: 'html', content: THEME_HTML_TEMPLATE, isEntry: true },
+  { filename: 'components.tsx', contentType: 'tsx', content: THEME_TSX_TEMPLATE, isEntry: true },
   { filename: 'theme.css', contentType: 'css', content: THEME_CSS_TEMPLATE, isEntry: false },
 ];
-
-function buildThemePreviewInline(): string {
-  return THEME_HTML_TEMPLATE.replace('<link rel="stylesheet" href="theme.css">', `<style>${THEME_CSS_TEMPLATE}</style>`);
-}
 
 export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
   open,
@@ -68,7 +64,6 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
   const [createFiles, setCreateFiles] = useState<CreateFileEntry[]>(defaultCreateFiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTheme = newComponent.category === 'theme';
-  const themePreviewHtml = useMemo(() => buildThemePreviewInline(), []);
 
   useEffect(() => {
     if (!open) {
@@ -266,31 +261,34 @@ export const CreateComponentDialog: React.FC<CreateComponentDialogProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>
-                  Theme Preview
+                  Generated Files
                 </Label>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 rounded font-mono" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
-                  theme.css
-                </Badge>
+                <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>
+                  {createFiles.length} file{createFiles.length !== 1 ? 's' : ''}
+                </span>
               </div>
-              <div
-                className="rounded-xl overflow-hidden"
-                style={{ height: 200, backgroundColor: '#11111b', border: '1px solid var(--border-300)' }}
-              >
-                <iframe
-                  srcDoc={themePreviewHtml}
-                  className="w-full h-full border-0"
-                  style={{
-                    width: '200%',
-                    height: '200%',
-                    transform: 'scale(0.5)',
-                    transformOrigin: 'top left',
-                  }}
-                  title="Theme preview"
-                  tabIndex={-1}
-                />
+              <div className="space-y-1.5 rounded-lg p-1" style={{ backgroundColor: 'var(--bg-200)' }}>
+                {createFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
+                    <div className="flex-shrink-0" style={{ color: 'var(--text-500)' }}>
+                      {getFileIcon(file.filename)}
+                    </div>
+                    <span className="text-xs font-mono flex-1 truncate" style={{ color: 'var(--text-100)' }}>
+                      {file.filename}
+                    </span>
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 rounded font-mono" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)' }}>
+                      {file.contentType}
+                    </Badge>
+                    {file.isEntry && (
+                      <Badge className="text-[9px] px-1.5 py-0 rounded" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.12)', color: 'var(--neon-color)' }}>
+                        entry
+                      </Badge>
+                    )}
+                  </div>
+                ))}
               </div>
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-500)' }}>
-                A starter CSS template with all theme variables is pre-filled. Edit colors in the component editor after creation.
+                A React dashboard with recharts, lucide-react icons, and inline UI primitives is auto-generated. Edit colors in theme.css — the preview renders live in the component editor.
               </p>
             </div>
           ) : (
