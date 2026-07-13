@@ -189,6 +189,71 @@ function Toggle({ on, onClick }: any) {
     <span style={{ position: "absolute", top: 2, left: on ? 20 : 2, width: 16, height: 16, background: "white", borderRadius: "50%", transition: "left 0.2s" }} />
   </button>;
 }
+function ColorSwatch({ label, s }: any) {
+  return <div><div style={{ width: "100%", height: 56, borderRadius: "var(--radius)", marginBottom: 6, ...s }} /><span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>{label}</span></div>;
+}
+function ThemeShowcase() {
+  return <Card style={{ marginBottom: "1.5rem" }}><CardContent style={{ padding: "1.5rem" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ width: 40, height: 40, borderRadius: "var(--radius)", background: "linear-gradient(135deg, var(--primary), var(--accent))", flexShrink: 0 }} />
+        <div><div style={{ fontWeight: 700, fontSize: "1.125rem", lineHeight: 1.3 }}>Theme Preview</div><div style={{ fontSize: "0.8125rem", color: "var(--muted-foreground)" }}>CSS variables showcase</div></div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "var(--muted-foreground)" }}><Box size={14} /> shadcn/ui</div>
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2rem" }}>
+      <div>
+        <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", marginBottom: "0.75rem" }}>Colors</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.5rem" }}>
+          <ColorSwatch label="Primary" s={{ background: "var(--primary)" }} />
+          <ColorSwatch label="Secondary" s={{ background: "var(--secondary)" }} />
+          <ColorSwatch label="Accent" s={{ background: "var(--accent)" }} />
+          <ColorSwatch label="Muted" s={{ background: "var(--muted)" }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
+          <ColorSwatch label="Destructive" s={{ background: "var(--destructive)" }} />
+          <ColorSwatch label="Border" s={{ background: "var(--border)" }} />
+          <ColorSwatch label="Card" s={{ background: "var(--card)", border: "1px solid var(--border)" }} />
+          <ColorSwatch label="Background" s={{ background: "var(--background)", border: "1px solid var(--border)" }} />
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", marginBottom: "0.75rem" }}>Typography</div>
+        <div style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>Heading</div>
+        <div style={{ fontSize: "0.8125rem", marginBottom: "0.25rem", color: "var(--muted-foreground)" }}>Subtitle text</div>
+        <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>Body copy and captions</div>
+      </div>
+      <div>
+        <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", marginBottom: "0.75rem" }}>Radius</div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>{[0, 6, 12, 999].map((r, i) => <div key={i} style={{ width: 44, height: 44, borderRadius: r, border: "2px solid var(--ring)" }} />)}</div>
+      </div>
+    </div>
+    <div style={{ height: 1, background: "var(--border)", margin: "1.5rem 0" }} />
+    <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", marginBottom: "0.75rem" }}>Components</div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
+      <Button size="sm" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>Primary</Button>
+      <Button size="sm" style={{ background: "var(--secondary)", color: "var(--secondary-foreground)" }}>Secondary</Button>
+      <Button size="sm" variant="outline" style={{ borderColor: "var(--border)" }}>Outline</Button>
+      <Button size="sm" variant="ghost">Ghost</Button>
+      <Button size="sm" style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }}>Delete</Button>
+    </div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+      <Badge style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>Badge</Badge>
+      <Badge style={{ background: "var(--secondary)", color: "var(--secondary-foreground)" }}>Secondary</Badge>
+      <Badge variant="outline" style={{ borderColor: "var(--border)" }}>Outline</Badge>
+      <Badge style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }}>Error</Badge>
+      <div style={{ display: "flex", marginLeft: "auto" }}><Avatar bg="var(--secondary)" fg="var(--secondary-foreground)" size={26}>S</Avatar><Avatar bg="var(--accent)" fg="var(--accent-foreground)" size={26}>J</Avatar><Avatar bg="var(--primary)" fg="var(--primary-foreground)" size={26}>I</Avatar></div>
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem", alignItems: "start" }}>
+      <div><div style={{ fontSize: "0.75rem", marginBottom: 6, color: "var(--muted-foreground)" }}>Email</div><Input placeholder="m@example.com" style={{ background: "var(--background)", borderColor: "var(--input)" }} /></div>
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", paddingTop: 20 }}><Toggle on onClick={() => {}} /><label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8125rem" }}><input type="checkbox" defaultChecked style={{ accentColor: "var(--primary)" }} />Controls</label></div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", paddingTop: 20 }}>
+        <input type="range" defaultValue={90} min={0} max={100} readOnly style={{ width: "100%", height: 6, borderRadius: 999, background: "var(--secondary)", appearance: "none" as any, WebkitAppearance: "none" as any, outline: "none" }} />
+        <input type="range" defaultValue={40} min={0} max={100} readOnly style={{ width: "100%", height: 6, borderRadius: 999, background: "var(--secondary)", appearance: "none" as any, WebkitAppearance: "none" as any, outline: "none" }} />
+      </div>
+    </div>
+  </CardContent></Card>;
+}
 function SparklineStatCard({ title, value, change, data, color }: any) {
   return <Card><CardHeader className="pb-1"><CardTitle style={{ fontSize: "0.8125rem", color: "var(--muted-foreground)" }}>{title}</CardTitle></CardHeader><CardContent>
     <div style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>{value}</div>
@@ -274,6 +339,7 @@ export default function Dashboard() {
         </div>
 
         <div style={{ flex: 1, padding: "1.5rem", overflowY: "auto" }}>
+          <ThemeShowcase />
           <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: "1.5rem" }}>
             {tabList.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem", fontWeight: activeTab === tab ? 600 : 500, color: activeTab === tab ? "var(--foreground)" : "var(--muted-foreground)", borderBottom: "2px solid " + (activeTab === tab ? "var(--primary)" : "transparent"), background: "none", border: "none", borderBottomWidth: 2, cursor: "pointer" }}>{tab}</button>
