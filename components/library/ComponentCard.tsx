@@ -22,28 +22,44 @@ function buildCardPreview(files?: LibraryComponentFile[], componentId?: string, 
   if (!files || files.length === 0) return null;
 
   if (category === 'theme') {
-    if (!componentId) return null;
-    const hasTsx = files.some(f => f.filename.endsWith('.tsx'));
-    if (hasTsx) {
-      const importmap = JSON.stringify({
-        imports: {
-          'react': 'https://esm.sh/react@19',
-          'react/jsx-runtime': 'https://esm.sh/react@19/jsx-runtime',
-          'react-dom': 'https://esm.sh/react-dom@19',
-          'react-dom/client': 'https://esm.sh/react-dom@19/client',
-          'motion/react': 'https://esm.sh/motion@11/react?external=react,react-dom',
-          'framer-motion': 'https://esm.sh/framer-motion@11?external=react,react-dom',
-          '@phosphor-icons/react': 'https://esm.sh/@phosphor-icons/react?external=react,react-dom',
-          'lucide-react': 'https://esm.sh/lucide-react@0.554.0?external=react,react-dom',
-        },
-      });
-      return `<!DOCTYPE html><html class="dark"><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{background:#181825;color:#cdd6f4;font-family:system-ui,sans-serif;height:100%;overflow:hidden}#root{width:100%;height:100%}#e{position:fixed;inset:0;background:rgba(10,10,26,0.92);color:#f87171;padding:12px;font:11px 'JetBrains Mono',monospace;white-space:pre-wrap;overflow:auto;z-index:9999;display:none}</style><script type="importmap">${importmap}</script></head><body><div id="root"></div><div id="e"></div><script type="module">function s(m){var e=document.getElementById('e');e.style.display='block';e.textContent=m}window.onerror=function(m){s(m)};window.onunhandledrejection=function(e){s('Unhandled: '+(e.reason?.message||e.reason))};try{const[R,_,RC]=await Promise.all([import('react'),import('react-dom'),import('react-dom/client')]);if(!window.React)window.React=R;if(!window.ReactDOM)window.ReactDOM={..._};if(!window.ReactDOM.createRoot)window.ReactDOM.createRoot=RC.createRoot;await import('/api/library/components/${componentId}/compiled')}catch(e){s(e.message)}</script></body></html>`;
-    }
     const cssFile = files.find(f => f.filename.endsWith('.css'));
     if (!cssFile) return null;
     const css = cssFile.content;
     const hasDark = /\.dark\s*\{/.test(css);
-    return `<!DOCTYPE html><html${hasDark ? ' class="dark"' : ''}><head><meta charset="UTF-8"><style>${css}*{margin:0;padding:0;box-sizing:border-box}body{font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#333);padding:1rem;min-height:100vh;overflow:hidden}</style></head><body><div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap"><span style="background:var(--primary);color:var(--primary-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Primary</span><span style="background:var(--secondary);color:var(--secondary-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Secondary</span><span style="background:var(--accent);color:var(--accent-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Accent</span><span style="background:var(--destructive);color:var(--destructive-foreground);padding:0.25rem 0.625rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Destructive</span></div><div style="background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);padding:0.875rem;margin-bottom:0.75rem;box-shadow:0 var(--shadow-offset-y,4px) var(--shadow-blur,6px) var(--shadow-spread,0px) var(--shadow-color,rgba(0,0,0,0.1))"><div style="font-size:0.875rem;font-weight:700;margin-bottom:0.125rem">Card Title</div><div style="font-size:0.6875rem;color:var(--muted-foreground);margin-bottom:0.75rem">Styled with theme variables</div><div style="display:flex;gap:0.375rem"><button style="background:var(--primary);color:var(--primary-foreground);border:none;padding:0.375rem 0.75rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Button</button><button style="background:transparent;color:var(--foreground);border:1px solid var(--border);padding:0.375rem 0.75rem;border-radius:var(--radius);font-size:0.6875rem;font-weight:600">Outline</button></div></div><div style="display:flex;gap:0.375rem;align-items:center"><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-1)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-2)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-3)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-4)"></div><div style="width:1.25rem;height:1.25rem;border-radius:var(--radius);background:var(--chart-5)"></div><span style="font-size:0.625rem;color:var(--muted-foreground);margin-left:0.375rem">Charts</span></div></body></html>`;
+    return `<!DOCTYPE html><html${hasDark ? ' class="dark"' : ''}><head><meta charset="UTF-8"><style>${css}*{margin:0;padding:0;box-sizing:border-box}body{font-family:var(--font-sans,system-ui);background:var(--background);color:var(--foreground);padding:12px;min-height:100vh;overflow:hidden}</style></head><body>
+<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--primary)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--secondary)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--accent)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--destructive)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--muted)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--chart-1)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--chart-2)"></div>
+<div style="width:28px;height:28px;border-radius:var(--radius);background:var(--chart-3)"></div>
+</div>
+<div style="background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:8px;box-shadow:0 var(--shadow-offset-y,4px) var(--shadow-blur,6px) var(--shadow-spread,0px) var(--shadow-color)">
+<div style="font-size:12px;font-weight:700;margin-bottom:2px">Card Title</div>
+<div style="font-size:10px;color:var(--muted-foreground);margin-bottom:8px">Theme preview</div>
+<div style="display:flex;gap:4px">
+<span style="background:var(--primary);color:var(--primary-foreground);padding:3px 8px;border-radius:var(--radius);font-size:9px;font-weight:600">Button</span>
+<span style="background:transparent;color:var(--foreground);border:1px solid var(--border);padding:3px 8px;border-radius:var(--radius);font-size:9px;font-weight:600">Outline</span>
+<span style="background:var(--destructive);color:var(--destructive-foreground);padding:3px 8px;border-radius:var(--radius);font-size:9px;font-weight:600">Delete</span>
+</div>
+</div>
+<div style="display:flex;gap:4px;margin-bottom:8px">
+<span style="background:var(--primary);color:var(--primary-foreground);padding:2px 6px;border-radius:9999px;font-size:8px;font-weight:600">Badge</span>
+<span style="background:var(--secondary);color:var(--secondary-foreground);padding:2px 6px;border-radius:9999px;font-size:8px;font-weight:600">Secondary</span>
+<span style="background:var(--accent);color:var(--accent-foreground);padding:2px 6px;border-radius:9999px;font-size:8px;font-weight:600">Accent</span>
+<span style="background:var(--destructive);color:var(--destructive-foreground);padding:2px 6px;border-radius:9999px;font-size:8px;font-weight:600">Error</span>
+</div>
+<div style="background:var(--sidebar);color:var(--sidebar-foreground);border:1px solid var(--sidebar-border);border-radius:var(--radius);padding:8px">
+<div style="display:flex;gap:6px;align-items:center">
+<span style="background:var(--sidebar-primary);color:var(--sidebar-primary-foreground);padding:2px 6px;border-radius:var(--radius);font-size:8px;font-weight:600">Active</span>
+<span style="font-size:9px;color:var(--sidebar-foreground)">Sidebar</span>
+<span style="margin-left:auto;background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);padding:2px 6px;border-radius:var(--radius);font-size:8px;font-weight:600">Accent</span>
+</div>
+</div>
+</body></html>`;
   }
 
   const hasTsx = files.some(f => f.filename.endsWith('.tsx') || f.filename.endsWith('.jsx'));
