@@ -137,13 +137,14 @@ export async function* generateResponseStream(
 export async function generateChatTitle(
   userMessage: string,
   assistantResponse: string,
+  model?: string,
   provider?: string,
 ): Promise<string> {
   try {
     const response = await fetch(`${API_BASE}/chat/title`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userMessage, assistantResponse, provider }),
+      body: JSON.stringify({ userMessage, assistantResponse, model, provider }),
     });
 
     if (!response.ok) throw new Error(`API error ${response.status}`);

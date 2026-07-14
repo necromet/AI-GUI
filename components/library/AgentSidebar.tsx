@@ -543,6 +543,24 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
     loadSessions();
   }, [selectedComponent?.id]);
 
+  const wasStreamingRef = useRef(false);
+  useEffect(() => {
+    if (wasStreamingRef.current && !isStreaming && activeSessionId) {
+      const msgs = messages;
+      const body: Record<string, any> = { messages: msgs };
+      if (msgs.length === 2 && msgs[0].role === 'user') {
+        body.title = msgs[0].content.substring(0, 50);
+        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title: body.title } : s));
+      }
+      fetch(`/api/library/agent/sessions/${activeSessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    }
+    wasStreamingRef.current = isStreaming;
+  }, [isStreaming, messages, activeSessionId]);
+
   const handleSwitchSession = async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
     setActiveSessionId(sessionId);
@@ -619,7 +637,7 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
 
-      const response = await fetch('/api/library/agent/chat', {
+      const response = await fetch('/api/library-agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -797,28 +815,6 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
       setMessages(prev => prev.map(m =>
         m.id === aiMsgId ? { ...m, isThinking: false } : m
       ));
-
-      if (activeSessionId) {
-        const saveMsgs = (prev: AgentMessage[]) => {
-          const updated = prev.map(m => m.id === aiMsgId ? { ...m, isThinking: false } : m);
-          fetch(`/api/library/agent/sessions/${activeSessionId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: updated }),
-          }).catch(() => {});
-          if (updated.length === 2 && updated[0].role === 'user') {
-            const title = updated[0].content.substring(0, 50);
-            fetch(`/api/library/agent/sessions/${activeSessionId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title }),
-            }).catch(() => {});
-            setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
-          }
-          return updated;
-        };
-        setMessages(saveMsgs);
-      }
     } catch (err: any) {
       if (err.name === 'AbortError') {
         setMessages(prev => prev.filter(m => m.id !== aiMsgId));

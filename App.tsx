@@ -557,7 +557,7 @@ const App: React.FC = () => {
     if (messages.length === 0) {
       try {
         const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
-        const title = await generateChatTitle(titleText, '', selectedModelConfig.provider);
+        const title = await generateChatTitle(titleText, '', selectedModelConfig.apiModelId || selectedModelConfig.id, selectedModelConfig.provider);
         await db.updateConversationTitle(conversationId, title);
         await loadConversations();
       } catch (error) {
@@ -1252,7 +1252,7 @@ const App: React.FC = () => {
                     </RequireAuth>
                   } />
                   <Route path="/library" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
+                    <RequireAuth isAuth={isLibraryAuthenticated}>
                       <div className="h-full">
                         <LibraryPanel
                           theme={theme}
@@ -1264,7 +1264,7 @@ const App: React.FC = () => {
                     </RequireAuth>
                   } />
                   <Route path="/library/:componentId" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
+                    <RequireAuth isAuth={isLibraryAuthenticated}>
                       <div className="h-full">
                         <LibraryPanel
                           theme={theme}
@@ -1446,19 +1446,19 @@ const App: React.FC = () => {
                   </RequireAuth>
                 } />
                 <Route path="/library" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <div className="h-full">
-                      <LibraryPanel
-                        theme={theme}
-                        modelConfig={selectedModelConfig}
-                        onNotification={handleNotification}
-                        onControlsChange={setLibraryControls}
-                      />
-                    </div>
-                  </RequireAuth>
-                } />
-                <Route path="/library/:componentId" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+<RequireAuth isAuth={isLibraryAuthenticated}>
+                      <div className="h-full">
+                        <LibraryPanel
+                          theme={theme}
+                          modelConfig={selectedModelConfig}
+                          onNotification={handleNotification}
+                          onControlsChange={setLibraryControls}
+                        />
+                      </div>
+                    </RequireAuth>
+                  } />
+                  <Route path="/library/:componentId" element={
+                  <RequireAuth isAuth={isLibraryAuthenticated}>
                     <div className="h-full">
                       <LibraryPanel
                         theme={theme}

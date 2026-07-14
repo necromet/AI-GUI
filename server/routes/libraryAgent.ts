@@ -1,8 +1,5 @@
 import { Router } from 'express';
-import { processAgent } from '../../lib/agent/processor';
-import { LIBRARY_TOOLS } from '../../lib/agent/tools/library';
-import { LIBRARY_AGENT_SYSTEM_PROMPT } from '../../lib/agent/prompts/library';
-import { LIBRARY_PERMISSIONS } from '../../lib/agent/permission';
+import { createLibraryAgent } from '../../lib/agent/agent';
 import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
 import * as library from '../services/libraryService';
 
@@ -19,6 +16,59 @@ function buildComponentContext(comp: any): string {
 - Files: ${fileNames}
 
 The user is currently editing this component. Use read_component with ID "${comp.id}" to see the current file contents before making changes.`;
+}
+
+function parseToolOutputAsJson(output: unknown): Record<string, any> | null {
+  if (typeof output === 'string') {
+    try {
+      return JSON.parse(output);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof output === 'object' && output !== null) {
+    return output as Record<string, any>;
+  }
+  return null;
+}
+
+function emitSpecialToolEvents(res: any, toolName: string, output: unknown) {
+  if (toolName === 'create_component') {
+    const parsed = parseToolOutputAsJson(output);
+    if (parsed?.componentId) {
+      const comp = library.getComponent(parsed.componentId);
+      if (comp) res.write(`data: ${JSON.stringify({ component_created: comp })}\n\n`);
+    }
+  }
+
+  if (toolName === 'write_component_file') {
+    const parsed = parseToolOutputAsJson(output);
+    if (parsed?.componentId) {
+      const comp = library.getComponent(parsed.componentId);
+      if (comp) res.write(`data: ${JSON.stringify({ component_updated: comp })}\n\n`);
+    }
+  }
+
+  if (toolName === 'create_todo_list') {
+    const parsed = parseToolOutputAsJson(output);
+    if (parsed?.todo_list && parsed?.tasks) {
+      res.write(`data: ${JSON.stringify({ todo_list: parsed.tasks })}\n\n`);
+    }
+  }
+
+  if (toolName === 'verify_component') {
+    const parsed = parseToolOutputAsJson(output);
+    if (parsed?.verify_component) {
+      res.write(`data: ${JSON.stringify({ verify_component: { componentId: parsed.componentId } })}\n\n`);
+    }
+  }
+
+  if (toolName === 'ask_user') {
+    const parsed = parseToolOutputAsJson(output);
+    if (parsed?.ask_user) {
+      res.write(`data: ${JSON.stringify({ ask_user: { question: parsed.question } })}\n\n`);
+    }
+  }
 }
 
 router.post('/chat', async (req, res) => {
@@ -40,111 +90,75 @@ router.post('/chat', async (req, res) => {
     const detectedLang = detectLanguage(userQuery);
     const langInstruction = buildLanguageInstruction(detectedLang);
 
-    const systemPrompt = [LIBRARY_AGENT_SYSTEM_PROMPT, componentContext, langInstruction]
-      .filter(Boolean)
-      .join('\n\n');
+    const systemPrompt = [
+      componentContext,
+      langInstruction,
+    ].filter(Boolean).join('\n\n');
 
-    const userMessages = messages.map((m: any) => ({
-      role: m.role === 'model' ? 'assistant' : m.role,
-      content: m.content,
-    }));
+    const modelMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    for (const msg of messages) {
+      const role = msg.role === 'model' ? 'assistant' : msg.role;
+      modelMessages.push({ role, content: msg.content });
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
+    const agent = createLibraryAgent(model || 'mimo-v2.5', {
+      provider,
+      maxTokens: max_tokens || undefined,
+    });
+
     const toolResults: any[] = [];
+    let previousText = '';
 
-    try {
-      for await (const event of processAgent(
-      {
-        model: model || 'mimo-v2.5',
-        systemPrompt,
-        tools: LIBRARY_TOOLS,
-        permissions: LIBRARY_PERMISSIONS,
-        maxIterations: 10,
-        maxTokens: max_tokens || undefined,
-        provider,
+    const streamResult = await agent.stream({
+      messages: modelMessages,
+      onStepEnd: (step) => {
+        if (step.text) {
+          const deltaText = step.text.startsWith(previousText)
+            ? step.text.slice(previousText.length)
+            : step.text;
+          previousText = step.text;
+          if (deltaText) {
+            console.log(`[agent] text:\n${deltaText.trim()}`);
+            res.write(`data: ${JSON.stringify({ content: deltaText })}\n\n`);
+          }
+        }
+        if (step.reasoningText) {
+          console.log(`[agent] reasoning:\n${step.reasoningText.trim()}`);
+          res.write(`data: ${JSON.stringify({ reasoning: step.reasoningText })}\n\n`);
+        }
+        for (const tc of step.toolCalls) {
+          console.log(`[agent] tool_call: ${tc.toolName}(${JSON.stringify(tc.input)})`);
+          res.write(`data: ${JSON.stringify({
+            tool_call: { name: tc.toolName, arguments: tc.input },
+          })}\n\n`);
+        }
+        for (const tr of step.toolResults) {
+          const outputStr = typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output);
+          const truncated = outputStr.length > 300 ? outputStr.slice(0, 300) + '...' : outputStr;
+          console.log(`[agent] tool_result: ${tr.toolName} => ${truncated}`);
+          const resultEntry = {
+            name: tr.toolName,
+            input: tr.input,
+            output: outputStr,
+            error: undefined as string | undefined,
+          };
+          toolResults.push(resultEntry);
+          res.write(`data: ${JSON.stringify({ tool_result: resultEntry })}\n\n`);
+          emitSpecialToolEvents(res, tr.toolName, tr.output);
+        }
       },
-      userMessages,
-    )) {
-      if (event.type === 'text' && event.text) {
-        res.write(`data: ${JSON.stringify({ content: event.text })}\n\n`);
-      }
+    });
 
-      if (event.type === 'reasoning' && event.reasoning) {
-        res.write(`data: ${JSON.stringify({ reasoning: event.reasoning })}\n\n`);
-      }
-
-      if (event.type === 'tool_start') {
-        res.write(`data: ${JSON.stringify({ tool_call: { name: event.toolName, arguments: event.toolArgs } })}\n\n`);
-      }
-
-      if (event.type === 'tool_result') {
-        const result = { name: event.toolName, input: event.toolArgs || {}, output: event.toolOutput || '', error: event.toolError };
-        toolResults.push(result);
-        res.write(`data: ${JSON.stringify({ tool_result: result })}\n\n`);
-
-        if (event.toolName === 'create_component' && !event.toolError) {
-          try {
-            const parsed = JSON.parse(event.toolOutput || '');
-            if (parsed.metadata?.componentId) {
-              const comp = library.getComponent(parsed.metadata.componentId);
-              if (comp) res.write(`data: ${JSON.stringify({ component_created: comp })}\n\n`);
-            }
-          } catch {}
-        }
-
-        if (event.toolName === 'write_component_file' && !event.toolError) {
-          try {
-            const parsed = JSON.parse(event.toolOutput || '');
-            if (parsed.metadata?.componentId) {
-              const comp = library.getComponent(parsed.metadata.componentId);
-              if (comp) res.write(`data: ${JSON.stringify({ component_updated: comp })}\n\n`);
-            }
-          } catch {}
-        }
-
-        if (event.toolName === 'create_todo_list' && !event.toolError) {
-          try {
-            const parsed = JSON.parse(event.toolOutput || '');
-            if (parsed.todo_list) res.write(`data: ${JSON.stringify({ todo_list: parsed.tasks })}\n\n`);
-          } catch {}
-        }
-
-        if (event.toolName === 'verify_component' && !event.toolError) {
-          try {
-            const parsed = JSON.parse(event.toolOutput || '');
-            if (parsed.verify_component) {
-              res.write(`data: ${JSON.stringify({ verify_component: { componentId: parsed.componentId } })}\n\n`);
-            }
-          } catch {}
-        }
-
-        if (event.toolName === 'ask_user' && !event.toolError) {
-          try {
-            const parsed = JSON.parse(event.toolOutput || '');
-            if (parsed.ask_user) {
-              res.write(`data: ${JSON.stringify({ ask_user: { question: parsed.question } })}\n\n`);
-            }
-          } catch {}
-        }
-      }
-
-      if (event.type === 'tool_error') {
-        const result = { name: event.toolName, input: event.toolArgs || {}, output: '', error: event.toolError };
-        toolResults.push(result);
-        res.write(`data: ${JSON.stringify({ tool_result: result })}\n\n`);
-      }
-
-      if (event.type === 'error') {
-        res.write(`data: ${JSON.stringify({ error: event.error })}\n\n`);
-      }
-
-      if (event.type === 'done') {
-        break;
-      }
+    for await (const _part of streamResult.stream) {
+      // all emission handled by onStepEnd callback
     }
 
     if (toolResults.length > 0) {
@@ -152,16 +166,6 @@ router.post('/chat', async (req, res) => {
     }
     res.write('data: [DONE]\n\n');
     res.end();
-    } catch (streamErr: any) {
-      console.error('[library-agent/chat] Stream error:', streamErr.message);
-      if (!res.headersSent) {
-        res.status(500).json({ error: streamErr.message });
-      } else {
-        res.write(`data: ${JSON.stringify({ error: streamErr.message })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-      }
-    }
   } catch (error: any) {
     console.error('[library-agent/chat] Error:', error.message);
     if (!res.headersSent) {
