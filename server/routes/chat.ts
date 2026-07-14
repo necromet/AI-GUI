@@ -113,7 +113,7 @@ router.post('/completions', async (req: Request, res: Response) => {
 
 router.post('/title', async (req: Request, res: Response) => {
   try {
-    const { userMessage, assistantResponse, provider } = req.body;
+    const { userMessage, assistantResponse, model, provider } = req.body;
 
     if (!userMessage) {
       res.status(400).json({ error: 'Missing userMessage' });
@@ -125,7 +125,7 @@ router.post('/title', async (req: Request, res: Response) => {
 
     const data = await chatCompletion(
       {
-        model: 'mimo-v2.5',
+        model: model || 'mimo-v2.5',
         messages: [
           {
             role: 'system',

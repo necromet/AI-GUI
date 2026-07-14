@@ -39,6 +39,9 @@ No lint, typecheck, test, or formatter scripts exist.
 | Stitch routes | `server/routes/stitch.ts` | `/api/stitch/*` — image gen (OpenAI), HTML gen (MiMo) |
 | RAG routes | `server/routes/rag.ts` | `/api/rag/*` — document upload, retrieval, RAG chat |
 | Agent routes | `server/routes/agent.ts` | `/api/agent/*` — agent chat with tool execution loop |
+| Library agent routes | `server/routes/libraryAgent.ts` | `/api/library-agent/*` — library agent chat via Vercel AI SDK |
+| Library agent tools | `lib/agent/tools/library.ts` | Tool definitions using Vercel AI SDK `tool()` |
+| Library agent provider | `lib/agent/provider.ts` | OpenAI-compatible provider adapter for AI SDK |
 | Server MiMo | `server/services/mimoService.ts` | Server-side MiMo API + language detection |
 | Server RAG | `server/services/ragService.ts` + `embeddingService.ts` | In-memory vector store + embeddings |
 | Server Agent | `server/services/agentService.ts` | Tool definitions + execution for agent loop |
