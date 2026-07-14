@@ -25,7 +25,8 @@ No lint, typecheck, test, or formatter scripts exist.
 | Layer | Files | Notes |
 |-------|-------|-------|
 | Entry | `index.tsx` → `App.tsx` | Single monolithic React root with React Router |
-| Components | `components/*.tsx` | 21 files; no index barrel |
+| Components | `components/*.tsx` | 25 files; no index barrel |
+| Chat sub-components | `components/chat/` | `MarkdownRenderer.tsx` (core markdown + code + word-stream), `ThinkingIndicator.tsx`, `SearchCitations.tsx`, `MessageActions.tsx` |
 | Client API | `services/apiService.ts` | Calls Express backend (`/api/*`) via SSE streaming |
 | Client services | `services/ragService.ts`, `stitchService.ts`, `agentService.ts` | Feature-specific client logic |
 | DB adapter | `services/databaseAdapter.ts` | Thin pass-through to IndexedDB |
@@ -50,7 +51,7 @@ Tailwind CSS v4 is installed as an npm package (`tailwindcss` + `@tailwindcss/vi
 
 ### shadcn/ui components
 
-All UI components follow the shadcn/ui pattern in `components/ui/`. There are 24 components: `avatar`, `badge`, `button`, `card`, `collapsible`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `sonner`, `switch`, `tabs`, `textarea`, `toggle`, `tooltip`, plus custom `code-editor-sheet`, `loader-2`, and `demo`. All use `cn()` from `lib/utils.ts`, `forwardRef`, and Radix UI primitives. Buttons have `cursor-pointer` by default.
+All UI components follow the shadcn/ui pattern in `components/ui/`. There are 25 components: `avatar`, `badge`, `button`, `card`, `chat-input`, `collapsible`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `sonner`, `switch`, `tabs`, `textarea`, `toggle`, `tooltip`, plus custom `agent-plan`, `code-editor-sheet`, and `math-curve-loader`. All use `cn()` from `lib/utils.ts`, `forwardRef`, and Radix UI primitives. Buttons have `cursor-pointer` by default.
 
 ### `Role.Assistant` = `'model'`, not `'assistant'`
 
@@ -98,7 +99,7 @@ Both are checked in `components/ModeSelector.tsx` (InlinePasswordModal, now usin
 
 ### Notifications via sonner
 
-The app uses `sonner` for toast notifications (`toast.success()` / `toast.error()` from `sonner`). The `<Toaster />` component is rendered in `App.tsx`. The old custom `Notification` component file is kept but no longer used.
+The app uses `sonner` for toast notifications (`toast.success()` / `toast.error()` from `sonner`). The `<Toaster />` component is rendered in `App.tsx`.
 
 ### Language detection
 
@@ -124,7 +125,7 @@ The Stitch feature is a Google Stitch-inspired visual design editor accessible f
 - **AI Generation**: Two modes — HTML generation (via MiMo) and image generation (via OpenAI `gpt-image-2`)
 - **Persistence**: IndexedDB `stitch_projects` store (DB version 7), boards serialized as JSON
 - **Export**: HTML file download, PNG export (via Fabric.js `toDataURL`), copy to clipboard
-- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace), `StitchCanvas` (Fabric.js wrapper), `StitchToolbar`, `StitchPromptBar`, `StitchImagePicker`, `StitchExportModal`
+- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace), `StitchPromptBar`, `StitchExportModal`
 - **Canvas scale**: Elements stored at real resolution but rendered at 0.5x scale for display
 
 ## Build Artifacts (all gitignored)

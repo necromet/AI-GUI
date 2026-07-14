@@ -95,6 +95,42 @@ router.post('/components', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/components/:id/duplicate', async (req: Request, res: Response) => {
+  try {
+    const original = library.getComponent(req.params.id);
+    if (!original) {
+      res.status(404).json({ error: 'Component not found' });
+      return;
+    }
+    const files = original.files ? original.files.map(f => ({
+      filename: f.filename,
+      contentType: f.contentType,
+      content: f.content,
+      sortOrder: f.sortOrder,
+      isEntry: f.isEntry,
+    })) : undefined;
+
+    const dup = await library.addComponent({
+      name: `${original.name} (Copy)`,
+      category: original.category,
+      contentType: original.contentType,
+      description: original.description,
+      tags: original.tags,
+      content: original.content,
+      metadata: original.metadata,
+      thumbnail: original.thumbnail,
+      isGlobal: original.isGlobal,
+      agentAccessible: original.agentAccessible,
+      folderId: original.folderId,
+      files,
+    });
+    res.json({ component: dup });
+  } catch (error: any) {
+    console.error('[library/components/:id/duplicate] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.put('/components/:id', (req: Request, res: Response) => {
   try {
     const updated = library.updateComponent(req.params.id, req.body);

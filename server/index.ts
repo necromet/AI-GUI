@@ -41,6 +41,43 @@ const PORT = process.env.SERVER_PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+app.use((req, res, next) => {
+  const start = Date.now();
+  const originalJson = res.json.bind(res);
+  const originalEnd = res.end.bind(res);
+  let responseBody: any = null;
+
+  res.json = function (body: any) {
+    responseBody = body;
+    return originalJson(body);
+  };
+
+  res.end = function (...args: any[]) {
+    const duration = Date.now() - start;
+    const isStream = res.getHeader('Content-Type') === 'text/event-stream';
+    const status = res.statusCode;
+    const method = req.method;
+    const url = req.originalUrl;
+
+    let log = `[api] ${method} ${url} → ${status} (${duration}ms)`;
+    if (responseBody && !isStream) {
+      const bodyStr = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
+      const truncated = bodyStr.length > 200 ? bodyStr.slice(0, 200) + '…' : bodyStr;
+      log += ` | ${truncated}`;
+    }
+
+    if (status >= 400) {
+      console.error(log);
+    } else {
+      console.log(log);
+    }
+
+    return originalEnd(...args);
+  } as any;
+
+  next();
+});
+
 app.use('/api/chat', chatRoutes);
 app.use('/api/stitch', stitchRoutes);
 app.use('/api/rag', ragRoutes);

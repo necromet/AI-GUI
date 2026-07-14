@@ -14,6 +14,7 @@ export interface Message {
   role: Role;
   content: string;
   isThinking?: boolean;
+  isSearching?: boolean;
   thinkingContent?: string;
   timestamp: number;
   messageOrder?: number;

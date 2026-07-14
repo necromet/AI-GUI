@@ -19,9 +19,14 @@ export function getProviderConfig(provider?: string): { key: string; base: strin
   const baseUrl = process.env.MIMO_BASE_URL || 'https://token-plan-sgp.xiaomimimo.com/v1';
   const directApiKey = process.env.MIMO_DIRECT_API_KEY || '';
   const directBaseUrl = process.env.MIMO_DIRECT_BASE_URL || 'https://api.xiaomimimo.com/v1';
+  const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
+  const deepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
 
   if (provider === 'mimo-direct') {
     return { key: directApiKey, base: directBaseUrl };
+  }
+  if (provider === 'deepseek') {
+    return { key: deepseekApiKey, base: deepseekBaseUrl };
   }
   return { key: apiKey, base: baseUrl };
 }

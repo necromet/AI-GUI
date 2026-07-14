@@ -192,6 +192,7 @@ html {
   font-family: var(--app-font-family);
 }
 
+
 body {
   background-color: #ffffff;
   color: #1a1a1a;
@@ -269,9 +270,27 @@ html:not(.dark) .prose pre {
   padding-left: 0rem;
   box-shadow: none;
   transition: all 0.3s ease;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: #1e1e2e !important;
   margin: 0 !important;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.prose .neon-code-block-container code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.prose .neon-code-block-container pre[class*="language-"],
+.prose .neon-code-block-container code[class*="language-"] {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 html:not(.dark) .prose .neon-code-block-container {

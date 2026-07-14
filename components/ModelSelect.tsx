@@ -30,8 +30,9 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
   const selectedConfig = models.find(m => m.id === currentModel) || models[0];
   const isDark = theme === 'dark';
 
-  const tokenPlanModels = models.filter(m => m.provider !== 'mimo-direct');
+  const mimoModels = models.filter(m => m.provider === 'mimo');
   const apiKeyModels = models.filter(m => m.provider === 'mimo-direct');
+  const deepseekModels = models.filter(m => m.provider === 'deepseek');
 
   const renderModel = (model: ModelConfig) => {
     const Icon = getModelIcon(model);
@@ -134,8 +135,9 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ currentModel, models, onSelec
           overflowY: 'auto',
         }}
       >
-        {renderSection('Token Plan', tokenPlanModels, false)}
-        {renderSection('API Key', apiKeyModels, tokenPlanModels.length > 0)}
+        {renderSection('MiMo Token Plan', mimoModels, false)}
+        {renderSection('MiMo API Key', apiKeyModels, mimoModels.length > 0)}
+        {renderSection('DeepSeek', deepseekModels, (mimoModels.length + apiKeyModels.length) > 0)}
       </PopoverContent>
     </Popover>
   );

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import ModelSelect from "./ModelSelect";
 
 import { cn } from "@/lib/utils";
 
@@ -192,9 +193,12 @@ interface PromptInputBoxProps {
   theme?: "dark" | "light";
   externalFiles?: File[];
   onExternalFilesConsumed?: () => void;
+  currentModel?: string;
+  models?: Array<{ id: string; name: string; modelType?: string; provider?: string; apiModelId?: string }>;
+  onSelectModel?: (modelId: string) => void;
 }
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
-  const { onSend = () => {}, isLoading = false, onStop, placeholder = "Message edward:labs...", className, theme = "dark", externalFiles, onExternalFilesConsumed } = props;
+  const { onSend = () => {}, isLoading = false, onStop, placeholder = "Message edward:labs...", className, theme = "dark", externalFiles, onExternalFilesConsumed, currentModel, models, onSelectModel } = props;
   const [input, setInput] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [filePreviews, setFilePreviews] = React.useState<{ [key: string]: string }>({});
@@ -415,6 +419,11 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                 isRecording ? "opacity-0 invisible h-0" : "opacity-100 visible"
               )}
             >
+              {currentModel && models && onSelectModel && (
+                <div className="mr-1">
+                  <ModelSelect currentModel={currentModel} models={models} onSelect={onSelectModel} theme={theme} />
+                </div>
+              )}
               <PromptInputAction tooltip="Upload image">
                   <button
                   onClick={() => uploadInputRef.current?.click()}

@@ -117,6 +117,42 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     apiModelId: 'mimo-v2.5-tts-voicedesign',
     modelType: 'tts-voicedesign',
   },
+  {
+    id: 'deepseek-chat',
+    name: "DeepSeek Chat",
+    description: "Fast general-purpose chat model",
+    isReasoning: false,
+    contextWindowSize: 65536,
+    provider: 'deepseek',
+    modelType: 'chat',
+  },
+  {
+    id: 'deepseek-reasoner',
+    name: "DeepSeek Reasoner",
+    description: "Deep reasoning model with thinking",
+    isReasoning: true,
+    contextWindowSize: 65536,
+    provider: 'deepseek',
+    modelType: 'chat',
+  },
+  {
+    id: 'deepseek-v4-flash',
+    name: "DeepSeek V4 Flash",
+    description: "Fast next-gen model for quick responses",
+    isReasoning: false,
+    contextWindowSize: 65536,
+    provider: 'deepseek',
+    modelType: 'chat',
+  },
+  {
+    id: 'deepseek-v4-pro',
+    name: "DeepSeek V4 Pro",
+    description: "Powerful next-gen reasoning model",
+    isReasoning: true,
+    contextWindowSize: 65536,
+    provider: 'deepseek',
+    modelType: 'chat',
+  },
 ];
 
 export const CHATGPT_LOGO = (

@@ -154,6 +154,19 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     });
   };
 
+  const handleDuplicate = async (component: LibraryComponent, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const response = await fetch(`/api/library/components/${component.id}/duplicate`, { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to duplicate');
+      const data = await response.json();
+      setComponents(prev => [data.component, ...prev]);
+      onNotification?.('Component duplicated', 'success');
+    } catch (err: any) {
+      onNotification?.(err.message, 'error');
+    }
+  };
+
   const handleEdit = (component: LibraryComponent, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setEditingComponent(component);
@@ -602,6 +615,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                       copiedId={copiedId}
                       onSelect={handleSelectComponent}
                       onCopy={handleCopy}
+                      onDuplicate={handleDuplicate}
                       onDelete={handleDelete}
                       onEdit={handleEdit}
                       onMoveToFolder={handleMoveToFolder}

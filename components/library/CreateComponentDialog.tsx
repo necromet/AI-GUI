@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_HTML_TEMPLATE, THEME_TSX_TEMPLATE } from './constants';
+import { CATEGORIES, deriveContentType, getFileIcon, THEME_CSS_TEMPLATE, THEME_HTML_TEMPLATE } from './constants';
 
 interface CreateComponentDialogProps {
   open: boolean;

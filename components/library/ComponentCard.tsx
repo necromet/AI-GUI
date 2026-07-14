@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Trash2, Copy, Check, FileCode, MoreVertical, Pencil, ArrowUpRight, FolderInput } from 'lucide-react';
+import { Trash2, Copy, Check, FileCode, MoreVertical, Pencil, ArrowUpRight, FolderInput, CopyPlus } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, LibraryComponentFile } from '../../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ interface ComponentCardProps {
   copiedId: string | null;
   onSelect: (comp: LibraryComponent) => void;
   onCopy: (comp: LibraryComponent, e?: React.MouseEvent) => void;
+  onDuplicate: (comp: LibraryComponent, e?: React.MouseEvent) => void;
   onDelete: (id: string, e?: React.MouseEvent) => void;
   onEdit: (comp: LibraryComponent, e?: React.MouseEvent) => void;
   onMoveToFolder?: (componentId: string, folderId: string | null) => void;
@@ -141,6 +142,7 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({
   copiedId,
   onSelect,
   onCopy,
+  onDuplicate,
   onDelete,
   onEdit,
   onMoveToFolder,
@@ -249,6 +251,14 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({
                   >
                     {copiedId === comp.id ? <Check size={13} style={{ color: '#4ade80' }} /> : <Copy size={13} />}
                     {copiedId === comp.id ? 'Copied!' : 'Copy content'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => onDuplicate(comp)}
+                    className="gap-2 text-xs"
+                    style={{ color: 'var(--text-200)' }}
+                  >
+                    <CopyPlus size={13} />
+                    Duplicate
                   </DropdownMenuItem>
                   {onMoveToFolder && folders && folders.length > 0 && (
                     <DropdownMenuSub>
