@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, X } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
@@ -9,6 +10,7 @@ import * as db from './services/apiDatabaseAdapter';
 import Sidebar, { type SidebarPanel } from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModeSelector from './components/ModeSelector';
+import { catppuccinLatte, catppuccinMocha } from './components/chat/MarkdownRenderer';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -1117,190 +1119,36 @@ const App: React.FC = () => {
             defaultSize={[40, 60]}
             className="flex flex-1 h-full min-h-0"
           >
-            <Splitter.Panel id="chat" className="flex flex-col relative h-full min-h-0">
-              <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
-                <Routes>
-                  <Route path="/chat" element={
-                    <RequireAuth isAuth={isChatAuthenticated}>
-                      {chatRouteElement || (messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                          <div className="relative mb-8">
-                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                          </div>
-                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                            How can I help you today?
-                          </h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                            {CHAT_SUGGESTIONS.map((suggestion, i) => (
-                              <Card key={i} onClick={() => setInput(suggestion)}
-                                className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]">
-                                <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <ChatMessageList
-                          messages={messages}
-                          isStreaming={isStreaming}
-                          onRegenerate={handleRegenerate}
-                          onFeedback={handleFeedback}
-                          onReattach={handleReattach}
-                          messagesEndRef={messagesEndRef}
-                        />
-                      ))}
-                    </RequireAuth>
-                  } />
-                  <Route path="/chat/:conversationId" element={
-                    <RequireAuth isAuth={isChatAuthenticated}>
-                      {chatRouteElement || (messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                          <div className="relative mb-8">
-                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                          </div>
-                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                            How can I help you today?
-                          </h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                            {CHAT_SUGGESTIONS.map((suggestion, i) => (
-                              <Card key={i} onClick={() => setInput(suggestion)}
-                                className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]">
-                                <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <ChatMessageList
-                          messages={messages}
-                          isStreaming={isStreaming}
-                          onRegenerate={handleRegenerate}
-                          onFeedback={handleFeedback}
-                          onReattach={handleReattach}
-                          messagesEndRef={messagesEndRef}
-                        />
-                      ))}
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments" element={<Navigate to="/experiments/rag" replace />} />
-                  <Route path="/experiments/rag" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <RAGRouteContent />
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments/rag/:conversationId" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <RAGRouteContent />
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments/plugin-agent" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <AgentRouteContent />
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments/plugin-agent/:conversationId" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <AgentRouteContent />
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments/stitch" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <div className={`h-full overflow-auto ${stitchActiveProject ? 'p-0' : 'p-6'}`}>
-                        <StitchPanel
-                          key={stitchResetKey}
-                          theme={theme}
-                          onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                          modelConfig={selectedModelConfig}
-                          models={models}
-                          onProjectChange={(project) => {
-                            setStitchActiveProject(project);
-                            if (project) {
-                              navigate(`/experiments/stitch/${project.id}`, { replace: true });
-                              setIsSidebarOpen(false);
-                            } else {
-                              navigate('/experiments/stitch', { replace: true });
-                            }
-                          }}
-                          onControlsChange={setStitchControls}
-                        />
-                      </div>
-                    </RequireAuth>
-                  } />
-                  <Route path="/experiments/stitch/:projectId" element={
-                    <RequireAuth isAuth={isExperimentsAuthenticated}>
-                      <div className="h-full overflow-auto p-0">
-                        <StitchPanel
-                          key={stitchResetKey}
-                          theme={theme}
-                          onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
-                          modelConfig={selectedModelConfig}
-                          models={models}
-                          initialProjectId={stitchProjectId}
-                          onProjectChange={(project) => {
-                            setStitchActiveProject(project);
-                            if (project) {
-                              navigate(`/experiments/stitch/${project.id}`, { replace: true });
-                              setIsSidebarOpen(false);
-                            } else {
-                              navigate('/experiments/stitch', { replace: true });
-                              setStitchControls(null);
-                            }
-                          }}
-                          onControlsChange={setStitchControls}
-                        />
-                      </div>
-                    </RequireAuth>
-                  } />
-                  <Route path="/library" element={
-                    <RequireAuth isAuth={isLibraryAuthenticated}>
-                      <div className="h-full">
-                        <LibraryPanel
-                          theme={theme}
-                          modelConfig={selectedModelConfig}
-                          onNotification={handleNotification}
-                          onControlsChange={setLibraryControls}
-                        />
-                      </div>
-                    </RequireAuth>
-                  } />
-                  <Route path="/library/:componentId" element={
-                    <RequireAuth isAuth={isLibraryAuthenticated}>
-                      <div className="h-full">
-                        <LibraryPanel
-                          theme={theme}
-                          modelConfig={selectedModelConfig}
-                          onNotification={handleNotification}
-                          onControlsChange={setLibraryControls}
-                        />
-                      </div>
-                    </RequireAuth>
-                  } />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+
+            <Splitter.Panel id="chat" className="flex flex-col h-full min-h-0">
+              <div className="flex items-center justify-between px-4 py-2 shrink-0" style={{ background: theme === 'dark' ? '#1a1a1a' : '#dce0e8' }}>
+                <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>html</span>
               </div>
-              {modelType === 'chat' && isChatMode && (
-                <div className="relative w-full pt-20 pb-6 px-4" style={{ background: `linear-gradient(to top, var(--bg-100) 50%, transparent)` }}>
-                  <div className="max-w-3xl mx-auto w-full">
-                    <PromptInputBox
-                      onSend={handleSendMessage}
-                      isLoading={isStreaming}
-                      onStop={handleStopGeneration}
-                      placeholder="Message edward:labs..."
-                      theme={theme}
-                      externalFiles={pendingFiles}
-                      onExternalFilesConsumed={() => setPendingFiles([])}
-                      currentModel={currentModelId}
-                      models={models}
-                      onSelectModel={handleSelectModel}
-                    />
-                    <div className="text-center mt-3">
-                      <p className="text-xs" style={{ color: 'rgba(122,122,122,0.6)' }}>
-                        MiMo can make mistakes. Check important information.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div className="flex-1 overflow-auto">
+                <SyntaxHighlighter
+                  language="html"
+                  style={theme === 'dark' ? catppuccinMocha : catppuccinLatte}
+                  wrapLongLines={true}
+                  customStyle={{
+                    margin: 0,
+                    padding: '1rem',
+                    background: theme === 'dark' ? '#1e1e2e' : '#eff1f5',
+                    fontSize: '12px',
+                    borderRadius: 0,
+                    fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
+                    minHeight: '100%',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                  codeTagProps={{
+                    style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }
+                  }}
+                >
+                  {htmlFullscreenCode}
+                </SyntaxHighlighter>
+              </div>
+              </div>
             </Splitter.Panel>
             <Splitter.ResizeTrigger id="chat:preview" className="rounded-full transition-colors duration-200 outline-none bg-[var(--border-300)] min-w-1.5 my-4" />
             <Splitter.Panel id="preview" className="flex flex-col h-full">
