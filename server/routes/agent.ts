@@ -32,7 +32,6 @@ router.post('/chat', async (req: Request, res: Response) => {
     const langInstruction = buildLanguageInstruction(detectedLang);
 
     const hasStitchTools = tools.includes('edit_html') || tools.includes('generate_html') || tools.includes('edit_spec') || tools.includes('generate_spec');
-    const hasSpecTools = tools.includes('edit_spec') || tools.includes('generate_spec');
 
     if (hasStitchTools && context?.images?.length > 0 && !context.imageAnalysis) {
       if (stream) {

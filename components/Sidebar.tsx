@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code } from 'lucide-react';
-import { ChatSession, Mode, ConversationType, ModelConfig } from '../types';
+import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,6 @@ interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   onNewChat: () => void;
-  onOpenSettings: () => void;
-  onOpenTokenStats?: () => void;
   conversations: ChatSession[];
   currentConversationId: number | null;
   onSelectConversation: (id: number) => Promise<void>;
@@ -62,8 +60,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
   onNewChat,
-  onOpenSettings,
-  onOpenTokenStats,
   conversations,
   currentConversationId,
   onSelectConversation,
@@ -110,6 +106,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   const sidebarItemClassName =
     'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)] transition-all duration-150';
 
+  const truncateTitle = (title: string) => {
+    const words = title.split(/\s+/);
+    return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : title;
+  };
+
   const renderConversation = (conv: ChatSession) => {
     const isActive = conv.dbConversationId === currentConversationId;
     return (
@@ -119,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`${itemClassName(isActive)} group cursor-pointer relative`}
         >
           <span className="truncate flex-1">
-            {conv.title}
+            {truncateTitle(conv.title)}
           </span>
           <Button
             variant="ghost"
@@ -530,16 +531,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span>Back to selector</span>
           </Button>
 
-          {onOpenTokenStats && (
-            <Button
-              variant="ghost"
-              className={sidebarItemClassName}
-              onClick={() => onSidebarPanelChange('token-stats')}
-            >
-              <BarChart3 size={16} />
-              <span>Token Stats</span>
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            className={sidebarItemClassName}
+            onClick={() => onSidebarPanelChange('token-stats')}
+          >
+            <BarChart3 size={16} />
+            <span>Token Stats</span>
+          </Button>
 
           <Button
             variant="ghost"

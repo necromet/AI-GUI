@@ -1,7 +1,8 @@
-import React, { useState, useCallback, memo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { Role, Message } from '../types';
-import { Paperclip } from 'lucide-react';
+import { Paperclip, Pencil, X, Check, UserRound, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import ThinkingIndicator from './chat/ThinkingIndicator';
 import MarkdownRenderer from './chat/MarkdownRenderer';
@@ -13,15 +14,58 @@ interface ChatMessageProps {
   onRegenerate?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: 'good' | 'bad') => void;
   onReattach?: (data: string, name: string, mimeType: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
   isStreaming?: boolean;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach, isStreaming }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach, onEdit, isStreaming }) => {
   const isUser = message.role === Role.User;
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+  const editRef = useRef<HTMLTextAreaElement>(null);
 
   const closeAttachment = useCallback(() => setSelectedAttachment(null), []);
+
+  useEffect(() => {
+    if (isEditing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.setSelectionRange(editRef.current.value.length, editRef.current.value.length);
+      editRef.current.style.height = 'auto';
+      editRef.current.style.height = editRef.current.scrollHeight + 'px';
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) setEditContent(message.content);
+  }, [message.content, isEditing]);
+
+  const handleStartEdit = () => {
+    setEditContent(message.content);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditContent(message.content);
+  };
+
+  const handleSubmitEdit = () => {
+    const trimmed = editContent.trim();
+    if (trimmed && trimmed !== message.content && onEdit) {
+      onEdit(message.id, trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitEdit();
+    }
+    if (e.key === 'Escape') handleCancelEdit();
+  };
 
   React.useEffect(() => {
     if (!selectedAttachment) return;
@@ -55,8 +99,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   return (
     <div className="group w-full animate-message-in">
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-3">
-        <div className="text-sm font-medium mb-2 select-none" style={{ color: 'var(--text-500)' }}>
-          {isUser ? 'You' : 'MiMo'}
+        <div className="text-sm font-medium mb-2 select-none flex items-center gap-2" style={{ color: isUser ? 'var(--text-500)' : 'var(--neon-color)' }}>
+          {isUser ? <><UserRound size={14} className="opacity-70" /> You</> : <><FlaskConical size={14} className="opacity-80" /> Labs</>}
+          {isUser && !isEditing && onEdit && (
+            <button
+              onClick={handleStartEdit}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--bg-300)]"
+              style={{ color: 'var(--text-500)' }}
+              title="Edit message"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
         </div>
 
         <div className="relative overflow-hidden">
@@ -65,6 +119,43 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               isSearching={message.isSearching}
               thinkingContent={message.thinkingContent}
             />
+          ) : isEditing ? (
+            <div className="space-y-2">
+              <Textarea
+                ref={editRef}
+                value={editContent}
+                onChange={(e) => {
+                  setEditContent(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onKeyDown={handleEditKeyDown}
+                className="text-base min-h-[120px] resize-y"
+                style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-100)' }}
+              />
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelEdit}
+                  className="h-7 px-3 text-xs"
+                  style={{ color: 'var(--text-500)' }}
+                >
+                  <X size={13} className="mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitEdit}
+                  disabled={!editContent.trim() || editContent.trim() === message.content}
+                  className="h-7 px-3 text-xs"
+                  style={{ background: 'var(--neon-color)', color: '#000' }}
+                >
+                  <Check size={13} className="mr-1" />
+                  Send
+                </Button>
+              </div>
+            </div>
           ) : (
             <div>
               {message.attachments && message.attachments.length > 0 && (

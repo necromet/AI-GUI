@@ -87,10 +87,6 @@ export interface LibraryComponentFile {
   updatedAt: string;
 }
 
-export interface LibraryComponentWithScore extends LibraryComponent {
-  score: number;
-}
-
 export interface LibraryFolder {
   id: string;
   name: string;
@@ -131,6 +127,9 @@ export interface ModelConfig {
   apiModelId?: string; // Actual model ID sent to the API (if different from id)
   maxTokens?: number; // Maximum tokens for model output
   modelType?: ModelType; // UI routing type (auto-derived from id if omitted)
+  supportsThinking?: boolean; // Can toggle thinking/reasoning mode
+  supportsSearch?: boolean; // Can use web search tool
+  supportsVision?: boolean; // Can accept image inputs
 }
 
 // ===== Stitch Types =====

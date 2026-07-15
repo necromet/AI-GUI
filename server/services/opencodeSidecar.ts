@@ -75,16 +75,3 @@ export function getAuth(): string {
 export function getBaseUrl(): string {
   return `http://127.0.0.1:${port}`;
 }
-
-export function isReady(): boolean {
-  return ready;
-}
-
-export async function stopOpenCode(): Promise<void> {
-  if (proc) {
-    proc.kill('SIGTERM');
-    proc = null;
-    ready = false;
-    starting = false;
-  }
-}

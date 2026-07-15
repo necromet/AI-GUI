@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Database, Upload, Trash2, FileText, Loader2 } from 'lucide-react';
-import { Role, Message, ModelConfig, ConversationType } from '../types';
+import { Role, Message, ModelConfig } from '../types';
 import { PromptInputBox } from './PromptInputBox';
 import ChatMessage from './ChatMessage';
 import * as db from '../services/apiDatabaseAdapter';
@@ -211,8 +211,6 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
     }
   };
 
-  const handleFeedback = (messageId: string, feedback: 'good' | 'bad') => {};
-
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col h-full">
       {/* Header */}
@@ -313,7 +311,7 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
         ) : (
           <div className="pb-4">
             {messages.map(msg => (
-              <ChatMessage key={msg.id} message={msg} onRegenerate={() => {}} onFeedback={handleFeedback} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
+              <ChatMessage key={msg.id} message={msg} onRegenerate={() => {}} onFeedback={() => {}} isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id} />
             ))}
             <div ref={messagesEndRef} />
           </div>

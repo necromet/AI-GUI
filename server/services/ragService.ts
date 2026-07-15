@@ -120,7 +120,7 @@ export async function retrieveRelevantChunks(query: string, topK: number = 5): P
   return scored.slice(0, topK).map(s => s.chunk);
 }
 
-export function buildRAGSystemPrompt(chunks: RAGChunk[], userQuery: string): string {
+export function buildRAGSystemPrompt(chunks: RAGChunk[]): string {
   if (chunks.length === 0) {
     return 'You are a helpful assistant. Answer the user based on your general knowledge.';
   }
