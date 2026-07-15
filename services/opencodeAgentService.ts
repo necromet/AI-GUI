@@ -164,19 +164,3 @@ export async function* sendOpenCodeMessage(
     }
   }
 }
-
-export async function abortSession(sessionId: string): Promise<void> {
-  await fetch(`${API_BASE}/session/${sessionId}/abort`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-export async function getOpenCodeHealth(): Promise<boolean> {
-  try {
-    const resp = await fetch(`${API_BASE}/health`);
-    return resp.ok;
-  } catch {
-    return false;
-  }
-}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TestTubeDiagonal, User } from 'lucide-react';
+import { TestTubeDiagonal } from 'lucide-react';
 import { MiMoModel, ModelConfig } from './types';
 
 export const DEFAULT_MODELS: ModelConfig[] = [
@@ -11,6 +11,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 32768,
     provider: 'mimo',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: true,
+    supportsVision: true,
   },
   {
     id: MiMoModel.V2Pro,
@@ -20,6 +23,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 32768,
     provider: 'mimo',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: true,
+    supportsVision: false,
   },
   {
     id: 'mimo-v2.5-asr',
@@ -66,6 +72,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     provider: 'mimo-direct',
     apiModelId: MiMoModel.V2,
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: true,
+    supportsVision: true,
   },
   {
     id: 'mimo-v2.5-pro-direct',
@@ -76,6 +85,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     provider: 'mimo-direct',
     apiModelId: MiMoModel.V2Pro,
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: true,
+    supportsVision: false,
   },
   {
     id: 'mimo-v2.5-asr-direct',
@@ -125,6 +137,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 65536,
     provider: 'deepseek',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: false,
+    supportsVision: false,
   },
   {
     id: 'deepseek-reasoner',
@@ -134,6 +149,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 65536,
     provider: 'deepseek',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: false,
+    supportsVision: false,
   },
   {
     id: 'deepseek-v4-flash',
@@ -143,6 +161,9 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 65536,
     provider: 'deepseek',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: false,
+    supportsVision: true,
   },
   {
     id: 'deepseek-v4-pro',
@@ -152,17 +173,14 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     contextWindowSize: 65536,
     provider: 'deepseek',
     modelType: 'chat',
+    supportsThinking: true,
+    supportsSearch: false,
+    supportsVision: false,
   },
 ];
 
 export const CHATGPT_LOGO = (
   <TestTubeDiagonal size={24} />
-);
-
-export const USER_AVATAR = (
-  <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-gray-300">
-    <User size={16} strokeWidth={2} />
-  </div>
 );
 
 export interface NeonVariant { rgb: string; tailwind: string }

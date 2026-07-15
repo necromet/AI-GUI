@@ -2,7 +2,7 @@
 
 ## Project
 
-**edward:labs** — AI chat web app (React 19 + Vite) using Xiaomi MiMo API.
+**edward:labs** — AI chat web app (React 19 + Vite) with Express 5 + SQLite backend, using Xiaomi MiMo, DeepSeek, and OpenAI APIs.
 
 ## Commands
 
@@ -12,70 +12,71 @@ npm run dev:server   # Express API server on localhost:3001
 npm run dev:all      # Run both server + Vite concurrently
 npm run build        # Production build → dist/
 npm run preview      # Preview production build
-npm run docker:build # Build Docker images
-npm run docker:up    # Start containers (frontend:80, backend:3001)
-npm run docker:down  # Stop containers
-npm run docker:logs  # Tail container logs
 ```
 
-No lint, typecheck, test, or formatter scripts exist.
+No lint, typecheck, test, or formatter scripts exist. The only verification is `npm run build`.
 
 ## Architecture
+
+Frontend is a single-page React app. Backend is Express 5 with SQLite (`better-sqlite3`). Client talks to backend via REST + SSE streaming — there is no direct DB access from the browser.
 
 | Layer | Files | Notes |
 |-------|-------|-------|
 | Entry | `index.tsx` → `App.tsx` | Single monolithic React root with React Router |
-| Components | `components/*.tsx` | 25 files; no index barrel |
-| Chat sub-components | `components/chat/` | `MarkdownRenderer.tsx` (core markdown + code + word-stream), `ThinkingIndicator.tsx`, `SearchCitations.tsx`, `MessageActions.tsx` |
-| Client API | `services/apiService.ts` | Calls Express backend (`/api/*`) via SSE streaming |
-| Client services | `services/ragService.ts`, `stitchService.ts`, `agentService.ts` | Feature-specific client logic |
-| DB adapter | `services/databaseAdapter.ts` | Thin pass-through to IndexedDB |
-| DB | `services/databaseService.ts` | IndexedDB via `idb` library (DB name: `ChatGPT_DB`, version 7) |
+| Components | `components/*.tsx` | ~21 files; no index barrel |
+| Library sub-components | `components/library/` | `ComponentEditor`, `ComponentCard`, `FolderCard`, `AgentSidebar`, dialogs |
+| Chat sub-components | `components/chat/` | `MarkdownRenderer.tsx`, `ThinkingIndicator.tsx`, `SearchCitations.tsx`, `MessageActions.tsx` |
+| Client DB adapter | `services/apiDatabaseAdapter.ts` | REST calls to Express backend (`/api/*`) — replaces old IndexedDB |
+| Client API | `services/apiService.ts` | SSE streaming to `/api/chat/*` |
+| Client services | `services/ragService.ts`, `stitchService.ts`, `agentService.ts`, `opencodeAgentService.ts` | Feature-specific client logic |
 | Types | `types.ts` | Shared interfaces and enums |
 | Constants | `constants.tsx` | Default model list, logo SVG, neon presets |
 | Utilities | `lib/utils.ts` | `cn()` helper (clsx + tailwind-merge) |
 | **Express server** | `server/index.ts` | Express 5 API backend on port 3001 |
+| Server DB | `server/db/index.ts` | SQLite via `better-sqlite3`, WAL mode, auto-migration. DB file: `data/edwardlabs.db` |
+| Server DB schema | `server/db/schema.ts` | `SCHEMA_SQL` + `SEED_SQL` constants, run on every startup |
 | Chat routes | `server/routes/chat.ts` | `/api/chat/*` — completions, title, TTS, ASR |
 | Stitch routes | `server/routes/stitch.ts` | `/api/stitch/*` — image gen (OpenAI), HTML gen (MiMo) |
 | RAG routes | `server/routes/rag.ts` | `/api/rag/*` — document upload, retrieval, RAG chat |
 | Agent routes | `server/routes/agent.ts` | `/api/agent/*` — agent chat with tool execution loop |
-| Library agent routes | `server/routes/libraryAgent.ts` | `/api/library-agent/*` — library agent chat via Vercel AI SDK |
-| Library agent tools | `lib/agent/tools/library.ts` | Tool definitions using Vercel AI SDK `tool()` |
-| Library agent provider | `lib/agent/provider.ts` | OpenAI-compatible provider adapter for AI SDK |
+| OpenCode agent routes | `server/routes/opencodeAgent.ts` | `/api/agent/opencode/*` — OpenCode sidecar proxy |
+| Library agent routes | `server/routes/libraryAgent.ts` | `/api/library-agent/*` — library agent via Vercel AI SDK |
+| Library routes | `server/routes/library.ts` | `/api/library/*` — CRUD for library components/folders |
 | Server MiMo | `server/services/mimoService.ts` | Server-side MiMo API + language detection |
 | Server RAG | `server/services/ragService.ts` + `embeddingService.ts` | In-memory vector store + embeddings |
 | Server Agent | `server/services/agentService.ts` | Tool definitions + execution for agent loop |
+| OpenCode sidecar | `server/services/opencodeSidecar.ts` | Manages OpenCode subprocess |
 
 ## Critical Quirks
 
-### Tailwind CSS via npm + shadcn/ui
+### Tailwind CSS v4 via npm + shadcn/ui
 
 Tailwind CSS v4 is installed as an npm package (`tailwindcss` + `@tailwindcss/vite` plugin). The Vite plugin is configured in `vite.config.ts`. All Tailwind customization (theme, animations, CSS variables) lives in `src/globals.css` using the `@theme` directive. The `tailwindcss-animate` plugin provides shadcn/ui animation utilities.
 
 ### shadcn/ui components
 
-All UI components follow the shadcn/ui pattern in `components/ui/`. There are 25 components: `avatar`, `badge`, `button`, `card`, `chat-input`, `collapsible`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `sonner`, `switch`, `tabs`, `textarea`, `toggle`, `tooltip`, plus custom `agent-plan`, `code-editor-sheet`, and `math-curve-loader`. All use `cn()` from `lib/utils.ts`, `forwardRef`, and Radix UI primitives. Buttons have `cursor-pointer` by default.
+All UI components follow the shadcn/ui pattern in `components/ui/`. They use `cn()` from `lib/utils.ts`, `forwardRef`, and Radix UI primitives. Buttons have `cursor-pointer` by default.
 
 ### `Role.Assistant` = `'model'`, not `'assistant'`
 
-In `types.ts:3`, `Role.Assistant` is the string `'model'` (for MiMo API compatibility). The App component handles conversion: it passes literal `'user'`/`'assistant'` strings to `saveMessageToDb`, and converts `'assistant'` back to `Role.Assistant` (`'model'`) when loading from IndexedDB (`App.tsx:314`).
+In `types.ts`, `Role.Assistant` is the string `'model'` (for MiMo API compatibility). The App component handles conversion: it passes literal `'user'`/`'assistant'` strings to `saveMessageToDb`, and converts `'assistant'` back to `Role.Assistant` (`'model'`) when loading from the database.
 
 ### Environment variables via Vite `define`, not `import.meta.env`
 
-`vite.config.ts:33-37` injects `process.env.MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_DIRECT_API_KEY`, `MIMO_DIRECT_BASE_URL` from `.env` via `define`. Services read `process.env.*` directly (string-replaced at build time). Requires `.env` with these 4 keys (see `.env.example`).
+`vite.config.ts` injects `process.env.MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_DIRECT_API_KEY`, `MIMO_DIRECT_BASE_URL` from `.env` via `define`. Services read `process.env.*` directly (string-replaced at build time). Requires `.env` with these keys (see `.env.example`).
 
-The Stitch image generation feature also requires `OPENAI_API_KEY` in `.env` (server-side only, not injected via Vite define).
+Server-side only (not injected via Vite): `OPENAI_API_KEY` (Stitch image gen), `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `SERVER_PORT`, `DATABASE_PATH`.
 
 ### Vite dev server proxies
 
-`vite.config.ts:13-28`:
+`vite.config.ts`:
 - `/mimo-api` → `https://token-plan-sgp.xiaomimimo.com/v1` (token-plan endpoint)
 - `/mimo-direct-api` → `https://api.xiaomimimo.com/v1` (direct API key endpoint)
 - `/api` → `http://localhost:3001` (Express backend — must be running for chat/TTS/ASR)
 
 ### Model type determines UI mode
 
-`types.ts:59-65` — `getModelType()` maps model ID prefixes to UI panels:
+`types.ts` — `getModelType()` maps model ID prefixes to UI panels:
 - `mimo-v2.5-tts-voicedesign` → Voice design panel (checked first)
 - `mimo-v2.5-tts-voiceclone` → Voice clone panel
 - `mimo-v2.5-tts` → TTS panel
@@ -86,19 +87,22 @@ Order matters — `voicedesign` and `voiceclone` are checked before the broader 
 
 ### TypeScript config
 
-- Path alias `@/*` maps to project root (`tsconfig.json:22` and `vite.config.ts:41`)
+- Path alias `@/*` maps to project root (`tsconfig.json` and `vite.config.ts`)
 - Target: ES2022, module: ESNext, moduleResolution: bundler
 
 ### localStorage key naming is inconsistent
 
-Some keys use `edward:labs_` prefix (`edward:labs_fontSize`, `edward:labs_defaultModel`, `edward:labs_session`), others don't (`neonColor`, `maxOutputTokens`). Be careful when adding new keys.
+Some keys use `edward:labs_` prefix (`edward:labs_fontSize`, `edward:labs_defaultModel`), others don't (`neonColor`, `maxOutputTokens`). When adding new keys, use the `edward:labs_` prefix.
 
-### Dual lock passwords
+### Triple lock passwords
 
-- **Chat**: password `thelordismyshepherd` — session key `edward:labs_chat_session`
-- **Experiments**: password `ilacknothing` — session key `edward:labs_experiments_session`
+Each mode has its own password and `sessionStorage` key, checked in `components/ModeSelector.tsx`:
 
-Both are checked in `components/ModeSelector.tsx` (InlinePasswordModal, now using shadcn Dialog).
+| Mode | Password | Session key |
+|------|----------|-------------|
+| Chat | `thelordismyshepherd` | `edward:labs_chat_session` |
+| Experiments | `ilacknothing` | `edward:labs_experiments_session` |
+| Library | `psalm23` | `edward:labs_library_session` |
 
 ### Notifications via sonner
 
@@ -112,7 +116,7 @@ The Express server auto-detects the user's language from the last message and pr
 
 `server/index.ts` manually parses `.env` via `readFileSync` + line splitting (no `dotenv` package). It only sets keys not already in `process.env`, so shell env vars take precedence. The `.env` is resolved from `process.cwd()`, so `npm run dev:server` must be run from the project root. The server uses top-level `await import(...)` — requires ESM (`"type": "module"` in package.json).
 
-`SERVER_PORT` env var controls the backend port (default: 3001).
+`SERVER_PORT` env var controls the backend port (default: 3001). `DATABASE_PATH` controls the SQLite file location (default: `data/edwardlabs.db`).
 
 ### Docker: nginx + Express
 
@@ -123,15 +127,18 @@ The Express server auto-detects the user's language from the last message and pr
 The Stitch feature is a Google Stitch-inspired visual design editor accessible from Experiments mode. Key architecture:
 
 - **Canvas**: Uses Fabric.js (`fabric@6`) for interactive drag/drop/resize/rotate canvas
-- **Layouts**: Supports `16:9` (landscape), `1:1` (square), `9:16` (Instagram/portrait)
-- **Elements**: Shapes (rect, circle, triangle, line, star), text, images, raw HTML blocks
+- **Layouts**: Supports `16:9`, `1:1`, `9:16`, `4:5`, `1.91:1`, `4:3`, `3:4`, `32:9`
 - **AI Generation**: Two modes — HTML generation (via MiMo) and image generation (via OpenAI `gpt-image-2`)
-- **Persistence**: IndexedDB `stitch_projects` store (DB version 7), boards serialized as JSON
+- **Persistence**: SQLite `stitch_projects` table, boards serialized as JSON
 - **Export**: HTML file download, PNG export (via Fabric.js `toDataURL`), copy to clipboard
-- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace), `StitchPromptBar`, `StitchExportModal`
-- **Canvas scale**: Elements stored at real resolution but rendered at 0.5x scale for display
+- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace + prompt bar), `StitchExportModal`, `StitchLibrary`
+
+### Library agent (Vercel AI SDK)
+
+The Library feature uses Vercel AI SDK (`ai` package) for its agent chat. Tool definitions are in `lib/agent/tools/library.ts`, provider adapter in `lib/agent/provider.ts`. The entry point `lib/agent/agent.ts` uses `ToolLoopAgent`. Do not confuse with the MiMo-based agent in `server/services/agentService.ts`.
 
 ## Build Artifacts (all gitignored)
 
 - `dist/` — Vite web build output
 - `generated_images/` — AI-generated image output
+- `data/` — SQLite database files

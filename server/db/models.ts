@@ -28,11 +28,6 @@ export function getModelById(id: number): DBModel | undefined {
   return db.prepare('SELECT * FROM models WHERE id = ?').get(id) as DBModel | undefined;
 }
 
-export function getModelByName(name: string): DBModel | undefined {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM models WHERE name = ?').get(name) as DBModel | undefined;
-}
-
 export function addModel(
   name: string,
   description: string | null,

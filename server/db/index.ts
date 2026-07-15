@@ -85,10 +85,3 @@ function migrateLibraryFiles(db: Database.Database): void {
     }
   }
 }
-
-export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
-}

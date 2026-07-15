@@ -88,7 +88,3 @@ function getTFIDFEmbedding(text: string): number[] {
   const vocab = Object.keys(freq).sort();
   return vocab.map(w => freq[w] / words.length);
 }
-
-export function cosineSimilarityTFIDF(a: number[], b: number[]): number {
-  return cosineSimilarity(a, b);
-}

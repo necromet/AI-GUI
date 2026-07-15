@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, ArrowRight, Grid3X3, LayoutGrid, Folder, ChevronRight } from 'lucide-react';
+import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, LayoutGrid, Folder, ChevronRight } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, ModelConfig } from '../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

@@ -22,7 +22,6 @@ import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
 import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
-import PluginAgentPanel from './components/PluginAgentPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import StitchPanel from './components/StitchPanel';
@@ -65,11 +64,12 @@ interface ChatMessageListProps {
   onRegenerate: (messageId: string) => void;
   onFeedback: (messageId: string, feedback: 'good' | 'bad') => void;
   onReattach: (data: string, name: string, mimeType: string) => void;
+  onEdit: (messageId: string, newContent: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const ChatMessageList = React.memo(function ChatMessageList({
-  messages, isStreaming, onRegenerate, onFeedback, onReattach, messagesEndRef,
+  messages, isStreaming, onRegenerate, onFeedback, onReattach, onEdit, messagesEndRef,
 }: ChatMessageListProps) {
   const lastId = messages[messages.length - 1]?.id;
   return (
@@ -81,6 +81,7 @@ const ChatMessageList = React.memo(function ChatMessageList({
           onRegenerate={onRegenerate}
           onFeedback={onFeedback}
           onReattach={onReattach}
+          onEdit={onEdit}
           isStreaming={isStreaming && msg.id === lastId}
         />
       ))}
@@ -125,35 +126,45 @@ async function processStreamResponse(
     ));
   };
 
-  for await (const chunk of streamResult) {
-    const chunkUsageMetadata = (chunk as any).usageMetadata;
-    if (chunkUsageMetadata) {
-      usageMetadata = {
-        promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
-        candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
-        totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0,
-      };
+  let aborted = false;
+  try {
+    for await (const chunk of streamResult) {
+      const chunkUsageMetadata = (chunk as any).usageMetadata;
+      if (chunkUsageMetadata) {
+        usageMetadata = {
+          promptTokens: chunkUsageMetadata.promptTokenCount || chunkUsageMetadata.prompt_tokens || 0,
+          candidatesTokens: chunkUsageMetadata.candidatesTokenCount || chunkUsageMetadata.completion_tokens || 0,
+          totalTokens: chunkUsageMetadata.totalTokenCount || chunkUsageMetadata.total_tokens || 0,
+        };
+      }
+      if ((chunk as any).annotations) {
+        searchAnnotations.push(...(chunk as any).annotations);
+      }
+      if ((chunk as any).thinkingText) {
+        fullThinkingText += (chunk as any).thinkingText;
+      }
+      if (chunk.text) {
+        fullText += chunk.text;
+      }
+      dirty = true;
+      if (!flushTimer) {
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          flush();
+        }, 32);
+      }
     }
-    if ((chunk as any).annotations) {
-      searchAnnotations.push(...(chunk as any).annotations);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      aborted = true;
+    } else {
+      throw e;
     }
-    if ((chunk as any).thinkingText) {
-      fullThinkingText += (chunk as any).thinkingText;
-    }
-    if (chunk.text) {
-      fullText += chunk.text;
-    }
-    dirty = true;
-    if (!flushTimer) {
-      flushTimer = setTimeout(() => {
-        flushTimer = null;
-        flush();
-      }, 32);
-    }
+  } finally {
+    if (flushTimer) clearTimeout(flushTimer);
+    flush();
   }
-  if (flushTimer) clearTimeout(flushTimer);
-  flush();
-  return { fullText, usageMetadata, searchAnnotations };
+  return { fullText, usageMetadata, searchAnnotations, aborted };
 }
 
 const App: React.FC = () => {
@@ -596,7 +607,7 @@ const App: React.FC = () => {
           { search: options?.search, think: options?.think },
         );
 
-        const { fullText, usageMetadata, searchAnnotations } = await processStreamResponse(
+        const { fullText, usageMetadata, searchAnnotations, aborted } = await processStreamResponse(
           streamResult, aiMessageId, setMessages, abortController.signal,
         );
 
@@ -609,18 +620,18 @@ const App: React.FC = () => {
             searchAnnotations.length > 0 ? searchAnnotations : null,
           );
         }
-    } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+
+        if (aborted) {
           setMessages(prev => {
             const msg = prev.find(m => m.id === aiMessageId);
             if (msg && !msg.content && !msg.thinkingContent) return prev.filter(m => m.id !== aiMessageId);
             return prev.map(m => m.id === aiMessageId ? { ...m, isThinking: false, isSearching: false } : m);
           });
-        } else {
-          console.error("Generation error:", error);
-          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-          handleStreamError(errorMsg, aiMessageId, setMessages, options?.think);
         }
+    } catch (error) {
+        console.error("Generation error:", error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        handleStreamError(errorMsg, aiMessageId, setMessages, options?.think);
     } finally {
         abortControllerRef.current = null;
         setIsStreaming(false);
@@ -693,7 +704,7 @@ const App: React.FC = () => {
         abortController.signal,
       );
 
-      const { fullText, usageMetadata, searchAnnotations } = await processStreamResponse(
+      const { fullText, usageMetadata, searchAnnotations, aborted } = await processStreamResponse(
         streamResult, aiMessageId, setMessages, abortController.signal,
       );
 
@@ -706,23 +717,108 @@ const App: React.FC = () => {
           searchAnnotations.length > 0 ? searchAnnotations : null,
         );
       }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+
+      if (aborted) {
         setMessages(prev => {
           const msg = prev.find(m => m.id === aiMessageId);
           if (msg && !msg.content && !msg.thinkingContent) return prev.filter(m => m.id !== aiMessageId);
           return prev.map(m => m.id === aiMessageId ? { ...m, isThinking: false, isSearching: false } : m);
         });
-      } else {
-        console.error("Regeneration error:", error);
-        handleStreamError(error instanceof Error ? error.message : 'Unknown error', aiMessageId, setMessages);
       }
+    } catch (error) {
+      console.error("Regeneration error:", error);
+      handleStreamError(error instanceof Error ? error.message : 'Unknown error', aiMessageId, setMessages);
     } finally {
       abortControllerRef.current = null;
       setIsStreaming(false);
     }
   };
   const handleRegenerate = useCallback((messageId: string) => regenerateRef.current?.(messageId), []);
+
+  const editMessageRef = useRef<((messageId: string, newContent: string) => Promise<void>) | null>(null);
+  editMessageRef.current = async (messageId: string, newContent: string) => {
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1 || isStreaming) return;
+    if (messages[messageIndex].role !== Role.User) return;
+
+    const subsequentMessages = messages.slice(messageIndex + 1);
+    for (const msg of subsequentMessages) {
+      if (msg.dbMessageId) {
+        try { await db.deleteMessage(msg.dbMessageId); } catch {}
+      }
+    }
+
+    const oldUserMsg = messages[messageIndex];
+    if (oldUserMsg.dbMessageId) {
+      try { await db.deleteMessage(oldUserMsg.dbMessageId); } catch {}
+    }
+
+    setMessages(prev => {
+      const updated = prev.slice(0, messageIndex);
+      const edited: Message = { ...oldUserMsg, content: newContent };
+      updated.push(edited);
+      return updated;
+    });
+
+    const conversationId = await ensureConversation();
+    const userDbMessageId = await saveMessageToDb(conversationId, 'user', newContent);
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, dbMessageId: userDbMessageId } : m));
+
+    const aiMessageId = generateId();
+    const aiMessagePlaceholder: Message = {
+      id: aiMessageId,
+      role: Role.Assistant,
+      content: '',
+      isThinking: true,
+      timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, aiMessagePlaceholder]);
+    setIsStreaming(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      const history = messages.slice(0, messageIndex).map(m => ({ role: m.role, content: m.content }));
+      history.push({ role: Role.User, content: newContent });
+
+      const streamResult = await generateResponseStream(
+        selectedModelConfig.apiModelId || selectedModelConfig.id,
+        newContent, history, selectedModelConfig.systemInstruction,
+        selectedModelConfig.provider, selectedModelConfig.maxTokens || maxOutputTokens,
+        abortController.signal,
+      );
+
+      const { fullText, usageMetadata, searchAnnotations, aborted } = await processStreamResponse(
+        streamResult, aiMessageId, setMessages, abortController.signal,
+      );
+
+      if (fullText) {
+        await saveMessageToDb(
+          conversationId, 'assistant', fullText,
+          usageMetadata?.totalTokens || null,
+          usageMetadata?.promptTokens || null,
+          usageMetadata?.candidatesTokens || null,
+          searchAnnotations.length > 0 ? searchAnnotations : null,
+        );
+      }
+
+      if (aborted) {
+        setMessages(prev => {
+          const msg = prev.find(m => m.id === aiMessageId);
+          if (msg && !msg.content && !msg.thinkingContent) return prev.filter(m => m.id !== aiMessageId);
+          return prev.map(m => m.id === aiMessageId ? { ...m, isThinking: false, isSearching: false } : m);
+        });
+      }
+    } catch (error) {
+      console.error("Edit regeneration error:", error);
+      handleStreamError(error instanceof Error ? error.message : 'Unknown error', aiMessageId, setMessages);
+    } finally {
+      abortControllerRef.current = null;
+      setIsStreaming(false);
+    }
+  };
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => editMessageRef.current?.(messageId, newContent), []);
 
   const handleFeedback = useCallback((messageId: string, feedback: 'good' | 'bad') => {
     console.log(`Feedback for message ${messageId}: ${feedback}`);
@@ -861,8 +957,6 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen} 
         onToggle={() => setIsSidebarOpen(false)}
         onNewChat={handleNewChat}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenTokenStats={() => setIsTokenStatsOpen(true)}
         conversations={filteredConversations}
         currentConversationId={currentConversationId}
         onSelectConversation={async (id) => {
@@ -1148,7 +1242,6 @@ const App: React.FC = () => {
                   {htmlFullscreenCode}
                 </SyntaxHighlighter>
               </div>
-              </div>
             </Splitter.Panel>
             <Splitter.ResizeTrigger id="chat:preview" className="rounded-full transition-colors duration-200 outline-none bg-[var(--border-300)] min-w-1.5 my-4" />
             <Splitter.Panel id="preview" className="flex flex-col h-full">
@@ -1188,6 +1281,7 @@ const App: React.FC = () => {
                         onRegenerate={handleRegenerate}
                         onFeedback={handleFeedback}
                         onReattach={handleReattach}
+                        onEdit={handleEditMessage}
                         messagesEndRef={messagesEndRef}
                       />
                     ))}
@@ -1219,6 +1313,7 @@ const App: React.FC = () => {
                         onRegenerate={handleRegenerate}
                         onFeedback={handleFeedback}
                         onReattach={handleReattach}
+                        onEdit={handleEditMessage}
                         messagesEndRef={messagesEndRef}
                       />
                     ))}
@@ -1341,6 +1436,9 @@ const App: React.FC = () => {
                     currentModel={currentModelId}
                     models={models}
                     onSelectModel={handleSelectModel}
+                    supportsThinking={selectedModelConfig.supportsThinking !== false}
+                    supportsSearch={selectedModelConfig.supportsSearch !== false}
+                    supportsVision={selectedModelConfig.supportsVision !== false}
                   />
                   <div className="text-center mt-3">
                     <p className="text-xs" style={{ color: 'rgba(122,122,122,0.6)' }}>

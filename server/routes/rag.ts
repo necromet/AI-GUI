@@ -88,7 +88,7 @@ router.post('/query', async (req: Request, res: Response) => {
 
     const userQuery = query || messages?.[messages.length - 1]?.content || '';
     const chunks = await retrieveRelevantChunks(userQuery, 5);
-    const ragPrompt = buildRAGSystemPrompt(chunks, userQuery);
+    const ragPrompt = buildRAGSystemPrompt(chunks);
 
     const detectedLang = detectLanguage(userQuery);
     const langInstruction = buildLanguageInstruction(detectedLang);

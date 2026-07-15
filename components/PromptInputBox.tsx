@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, Mic, Globe, BrainCog, ImageOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AIVoiceInput } from "./AIVoiceInput";
 import { Button } from "@/components/ui/button";
@@ -196,9 +196,12 @@ interface PromptInputBoxProps {
   currentModel?: string;
   models?: Array<{ id: string; name: string; modelType?: string; provider?: string; apiModelId?: string }>;
   onSelectModel?: (modelId: string) => void;
+  supportsThinking?: boolean;
+  supportsSearch?: boolean;
+  supportsVision?: boolean;
 }
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
-  const { onSend = () => {}, isLoading = false, onStop, placeholder = "Message edward:labs...", className, theme = "dark", externalFiles, onExternalFilesConsumed, currentModel, models, onSelectModel } = props;
+  const { onSend = () => {}, isLoading = false, onStop, placeholder = "Message edward:labs...", className, theme = "dark", externalFiles, onExternalFilesConsumed, currentModel, models, onSelectModel, supportsThinking = true, supportsSearch = true, supportsVision = true } = props;
   const [input, setInput] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [filePreviews, setFilePreviews] = React.useState<{ [key: string]: string }>({});
@@ -249,6 +252,11 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
       onExternalFilesConsumed?.();
     }
   }, [externalFiles]);
+
+  React.useEffect(() => {
+    if (!supportsSearch && showSearch) setShowSearch(false);
+    if (!supportsThinking && showThink) setShowThink(false);
+  }, [supportsSearch, supportsThinking]);
 
   const handleDragOver = React.useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -424,6 +432,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                   <ModelSelect currentModel={currentModel} models={models} onSelect={onSelectModel} theme={theme} />
                 </div>
               )}
+              {supportsVision ? (
               <PromptInputAction tooltip="Upload image">
                   <button
                   onClick={() => uploadInputRef.current?.click()}
@@ -447,8 +456,19 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                   />
                 </button>
               </PromptInputAction>
+              ) : (
+              <PromptInputAction tooltip="Image input not supported by this model">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full cursor-not-allowed"
+                  style={{ color: 'var(--text-500)', opacity: 0.4 }}
+                >
+                  <ImageOff className="h-4 w-4" />
+                </div>
+              </PromptInputAction>
+              )}
 
               <div className="flex items-center">
+                {supportsSearch && (
                 <button
                   type="button"
                   onClick={() => handleToggleChange("search")}
@@ -483,9 +503,11 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     )}
                   </AnimatePresence>
                 </button>
+                )}
 
-                <CustomDivider />
+                {supportsSearch && supportsThinking && <CustomDivider />}
 
+                {supportsThinking && (
                 <button
                   type="button"
                   onClick={() => handleToggleChange("think")}
@@ -520,6 +542,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     )}
                   </AnimatePresence>
                 </button>
+                )}
               </div>
             </div>
 

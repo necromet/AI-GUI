@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Moon, Sun, Monitor, Palette, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { Moon, Sun, ChevronDown, ChevronUp } from 'lucide-react';
 import { ModelConfig } from '../types';
 import { NEON_PRESETS, INDIVIDUAL_COLORS } from '../constants';
 import { Input } from '@/components/ui/input';
@@ -73,11 +73,6 @@ const SidebarSettingsPanel: React.FC<SidebarSettingsPanelProps> = ({
   const [maxTokensInput, setMaxTokensInput] = useState(maxOutputTokens?.toString() || '');
   const [showIndividualColors, setShowIndividualColors] = useState(false);
   const mode = theme === 'dark' ? 'dark' : 'light';
-
-  const resetPassword = () => {
-    sessionStorage.removeItem('edward:labs_session');
-    window.location.reload();
-  };
 
   const section = (title: string) => (
     <div className="pt-4 pb-1.5">

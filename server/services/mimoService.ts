@@ -1,5 +1,3 @@
-import { Request } from 'express';
-
 export interface ChatMessage {
   role: string;
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;

@@ -73,8 +73,3 @@ export function getNextMessageOrder(conversationId: number): number {
   ).get(conversationId) as { max_order: number | null } | undefined;
   return (row?.max_order || 0) + 1;
 }
-
-export function clearConversationMessages(conversationId: number): void {
-  const db = getDatabase();
-  db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(conversationId);
-}

@@ -9,7 +9,6 @@ import { getLayoutDimensions } from '../lib/layoutUtils';
 import { renderSlide, renderAllSlides, validateDesignSpec } from '../services/stitchService';
 import { sendAgentMessage, ToolResult } from '../services/agentService';
 import * as db from '../services/apiDatabaseAdapter';
-import StitchPromptBar from './StitchPromptBar';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
