@@ -15,33 +15,10 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
     },
   },
   {
-    name: 'create_component',
-    description: 'Create a new component in the library. Supports multi-file components. One file must be marked as the entry point. Use this when the user wants a separate helper component.',
-    parameters: {
-      name: { type: 'string', description: 'Component name' },
-      category: { type: 'string', description: 'Category: ui-widget, template, theme' },
-      description: { type: 'string', description: 'What the component does' },
-      tags: { type: 'array', description: 'Array of tag strings' },
-      files: { type: 'array', description: 'Array of { filename, contentType, content, isEntry }. At least one file required.' },
-    },
-  },
-  {
     name: 'read_component',
     description: 'Read a component by ID, including all its files and metadata. Use this to inspect the current component before editing, or to read reference components.',
     parameters: {
       id: { type: 'string', description: 'Component ID' },
-    },
-  },
-  {
-    name: 'update_component',
-    description: 'Update component metadata (name, description, tags, category) and/or replace its files.',
-    parameters: {
-      id: { type: 'string', description: 'Component ID' },
-      name: { type: 'string', description: 'New name (optional)' },
-      description: { type: 'string', description: 'New description (optional)' },
-      tags: { type: 'array', description: 'New tags array (optional)' },
-      category: { type: 'string', description: 'New category (optional)' },
-      files: { type: 'array', description: 'Replace files: array of { filename, contentType, content, isEntry } (optional)' },
     },
   },
   {
@@ -60,7 +37,7 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'write_component_file',
-    description: 'Write or update a single file within a component. Creates the file if it does not exist, updates it if it does. This is the primary tool for editing the current component. For ui-widget components, only components.tsx and usage.tsx are allowed. CRITICAL: The content must be PURE code only — no XML tags, no markdown, no tool call syntax, no prose. Every file must be complete (not truncated, no diffs). Do NOT use type/interface declarations — use inline type annotations instead.',
+    description: 'Write or update a single file within a component. Creates the file if it does not exist, updates it if it does. This is the primary tool for editing the current component. CRITICAL: The content must be PURE code only — no XML tags, no markdown, no tool call syntax, no prose. Every file must be complete (not truncated, no diffs). Do NOT use type/interface declarations — use inline type annotations instead.',
     parameters: {
       componentId: { type: 'string', description: 'Component ID' },
       filename: { type: 'string', description: 'File to write (e.g. "components.tsx", "usage.tsx")' },
@@ -95,23 +72,6 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
     parameters: {},
   },
   {
-    name: 'create_folder',
-    description: 'Create a new folder to group related components together. Folders help organize the library and can be referenced by agents.',
-    parameters: {
-      name: { type: 'string', description: 'Folder name' },
-      description: { type: 'string', description: 'What components belong in this folder' },
-      color: { type: 'string', description: 'Hex color code (e.g. #6366f1)' },
-    },
-  },
-  {
-    name: 'move_to_folder',
-    description: 'Move a component into a folder or remove it from its current folder. Use list_folders to find available folder IDs.',
-    parameters: {
-      componentId: { type: 'string', description: 'Component ID to move' },
-      folderId: { type: 'string', description: 'Folder ID to move into, or empty string to remove from folder' },
-    },
-  },
-  {
     name: 'list_folder_contents',
     description: 'List all components in a specific folder. Returns component IDs, names, categories, and descriptions.',
     parameters: {
@@ -140,6 +100,7 @@ Available tools:
 ${toolDescriptions}
 
 ### Tool Usage Rules
+- ALWAYS write a short sentence describing what you are about to do and WHY before every tool call. Never call a tool silently.
 - Always read_component before modifying files — never edit blindly.
 - write_component_file is your primary editing tool. Write the COMPLETE file content (not a diff).
 - CRITICAL: write_component_file content must be PURE CODE ONLY. Never include tool call blocks (\`\`\`tool), XML tags (<invoke>, <parameter>, <t>), markdown, or prose in file content.
@@ -162,15 +123,13 @@ Now let me analyze...
 - Content types: html, tsx, css, js, json, markdown.
 - Categories: ui-widget, template, theme.
 
-### Widget (ui-widget) File Structure
-- Exactly 2 files: components.tsx and usage.tsx
-- components.tsx: React component definitions with named exports. Mark as isEntry: true. Use inline type annotations (props: { name: string }) — do NOT use \`interface\` or \`type\` declarations.
-- usage.tsx: Imports from './components', renders with sample props. MUST end with:
-  \`\`\`const root = ReactDOM.createRoot(document.getElementById('root'));
-  root.render(<ComponentName />);\`\`\`
-- Do NOT use "export default" in usage.tsx — just define the function and render it.
+### Component File Structure
+- Components can have any number of files with any filenames.
+- One file must be marked as isEntry: true — this is the main entry point for rendering.
+- The entry file is stored in the database with isEntry: true. When reading a component, check the files list to identify it.
+- You do NOT need to create a usage.tsx or any specific filename. Just provide the main component file as the entry.
+- Use inline type annotations (props: { name: string }) — do NOT use \`interface\` or \`type\` declarations.
 - Do NOT include "import React from 'react'" — React is a global.
-- For non-widget categories, any filenames are allowed.
 
 ### Verify Flow
 - verify_component triggers a live render in the preview iframe.
@@ -227,65 +186,6 @@ export async function executeLibraryTool(
         break;
       }
 
-      case 'create_component': {
-        const { name, category, description, tags, files } = call.arguments;
-        if (!name) {
-          result.output = 'Error: Missing required field: name';
-          result.error = 'Missing name';
-          break;
-        }
-
-        const cat = category || 'template';
-
-        if (cat === 'ui-widget') {
-          if (!files || !Array.isArray(files) || files.length === 0) {
-            result.output = 'Error: ui-widget components require files. Provide components.tsx and usage.tsx.';
-            result.error = 'No files';
-            break;
-          }
-          const allowedNames = ['components.tsx', 'usage.tsx'];
-          const badFile = files.find((f: any) => !allowedNames.includes(f.filename));
-          if (badFile) {
-            result.output = `Error: ui-widget components may only contain components.tsx and usage.tsx. Found: ${badFile.filename}`;
-            result.error = 'Invalid filename';
-            break;
-          }
-        }
-
-        if (!files || !Array.isArray(files) || files.length === 0) {
-          result.output = 'Error: At least one file is required. Provide files array with { filename, contentType, content, isEntry }.';
-          result.error = 'No files';
-          break;
-        }
-        const invalidFile = files.find((f: any) => !f.filename || typeof f.filename !== 'string');
-        if (invalidFile) {
-          result.output = 'Error: Every file must have a string "filename" field (e.g. "index.html", "style.css").';
-          result.error = 'Missing filename';
-          break;
-        }
-        const entryFile = files.find((f: any) => f.isEntry) || files[0];
-        const created = await library.addComponent({
-          name,
-          category: cat,
-          contentType: entryFile.contentType || 'html',
-          description: description || '',
-          tags: tags || [],
-          content: entryFile.content || '',
-          isGlobal: true,
-          agentAccessible: true,
-          files: files.map((f: any, i: number) => ({
-            filename: f.filename,
-            contentType: f.contentType || 'html',
-            content: f.content || '',
-            isEntry: f.isEntry ?? (i === 0),
-            sortOrder: i,
-          })) as any,
-        });
-        result.output = `Component created successfully:\n  ID: ${created.id}\n  Name: ${created.name}\n  Category: ${created.category}\n  Files: ${(created.files || []).map((f: any) => f.filename).join(', ')}`;
-        onProgress?.(`Created component: ${created.name} (${created.id})`);
-        break;
-      }
-
       case 'read_component': {
         const id = call.arguments.id;
         if (!id) {
@@ -312,53 +212,6 @@ export async function executeLibraryTool(
           return fileHeader + truncated;
         }).join('\n\n');
         result.output = header + filesSummary;
-        break;
-      }
-
-      case 'update_component': {
-        const { id, name, description, tags, category, files } = call.arguments;
-        if (!id) {
-          result.output = 'Error: Missing required field: id';
-          result.error = 'Missing id';
-          break;
-        }
-        const existingComp = library.getComponent(id);
-        if (!existingComp) {
-          result.output = `Component not found: ${id}`;
-          result.error = 'Not found';
-          break;
-        }
-        const targetCategory = category || existingComp.category;
-        if (targetCategory === 'ui-widget' && files && Array.isArray(files)) {
-          const allowedNames = ['components.tsx', 'usage.tsx'];
-          const badFile = files.find((f: any) => !allowedNames.includes(f.filename));
-          if (badFile) {
-            result.output = `Error: ui-widget components may only contain components.tsx and usage.tsx. Found: ${badFile.filename}`;
-            result.error = 'Invalid filename';
-            break;
-          }
-        }
-        const updates: any = {};
-        if (name !== undefined) updates.name = name;
-        if (description !== undefined) updates.description = description;
-        if (tags !== undefined) updates.tags = tags;
-        if (category !== undefined) updates.category = category;
-        if (files && Array.isArray(files) && files.length > 0) {
-          updates.files = files.map((f: any, i: number) => ({
-            filename: f.filename,
-            contentType: f.contentType || 'html',
-            content: f.content || '',
-            isEntry: f.isEntry ?? (i === 0),
-            sortOrder: i,
-          }));
-        }
-        const updated = library.updateComponent(id, updates);
-        if (!updated) {
-          result.output = `Component not found: ${id}`;
-          result.error = 'Not found';
-        } else {
-          result.output = `Component updated:\n  ID: ${updated.id}\n  Name: ${updated.name}\n  Category: ${updated.category}\n  Files: ${(updated.files || []).map((f: any) => f.filename).join(', ')}`;
-        }
         break;
       }
 
@@ -407,14 +260,6 @@ export async function executeLibraryTool(
           result.error = 'Not found';
           break;
         }
-        if (targetComp.category === 'ui-widget') {
-          const allowed = ['components.tsx', 'usage.tsx'];
-          if (!allowed.includes(filename)) {
-            result.output = `Error: ui-widget components may only contain components.tsx and usage.tsx. Cannot write: ${filename}`;
-            result.error = 'Invalid filename';
-            break;
-          }
-        }
         const written = library.writeComponentFile(componentId, filename, content);
         result.output = `File written successfully:\n  Component ID: ${componentId}\n  Filename: ${written.filename}\n  Content type: ${written.contentType}\n  Size: ${content.length} chars`;
         onProgress?.(`Wrote ${filename} (${content.length} chars)`);
@@ -437,11 +282,6 @@ export async function executeLibraryTool(
         if (!targetComp) {
           result.output = `Component not found: ${componentId}`;
           result.error = 'Not found';
-          break;
-        }
-        if (targetComp.category === 'ui-widget') {
-          result.output = `Error: Cannot delete files from ui-widget components. They must always have components.tsx and usage.tsx.`;
-          result.error = 'Cannot delete ui-widget files';
           break;
         }
         const fileToDelete = (targetComp.files || []).find(f => f.filename === filename);
@@ -468,16 +308,23 @@ export async function executeLibraryTool(
       }
 
       case 'create_todo_list': {
-        const { tasks } = call.arguments;
-        if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+        let { tasks } = call.arguments;
+        if (typeof tasks === 'string') {
+          try { tasks = JSON.parse(tasks); } catch {
+            result.output = 'Error: tasks must be a JSON array.';
+            result.error = 'Invalid tasks';
+            break;
+          }
+        }
+        if (!Array.isArray(tasks) || tasks.length === 0) {
           result.output = 'Error: Provide a non-empty tasks array.';
           result.error = 'No tasks';
           break;
         }
         const validTasks = tasks.map((t: any, i: number) => ({
-          id: t.id || String(i + 1),
-          title: t.title || `Task ${i + 1}`,
-          description: t.description || '',
+          id: (t.id || t.task_id || String(i + 1)).toString(),
+          title: t.title || t.name || t.task || `Task ${i + 1}`,
+          description: t.description || t.desc || '',
           priority: ['high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
         }));
         result.output = JSON.stringify({ todo_list: true, tasks: validTasks });
@@ -498,7 +345,7 @@ export async function executeLibraryTool(
           result.error = 'Not found';
           break;
         }
-        result.output = JSON.stringify({ verify_component: true, componentId });
+        result.output = 'Verification triggered. The preview will render the component and check for errors.';
         onProgress?.(`Verifying component: ${comp.name}`);
         break;
       }
@@ -506,63 +353,13 @@ export async function executeLibraryTool(
       case 'list_folders': {
         const allFolders = library.listFolders();
         if (allFolders.length === 0) {
-          result.output = 'No folders exist yet. Use create_folder to create one.';
+          result.output = 'No folders exist yet.';
         } else {
           const summary = allFolders.map(f =>
             `[${f.id}] ${f.name} — ${f.componentCount ?? 0} component(s)${f.description ? '\n  ' + f.description : ''}`
           ).join('\n\n');
           result.output = `Found ${allFolders.length} folder(s):\n\n${summary}`;
         }
-        break;
-      }
-
-      case 'create_folder': {
-        const { name: folderName, description: folderDesc, color } = call.arguments;
-        if (!folderName) {
-          result.output = 'Error: Missing required field: name';
-          result.error = 'Missing name';
-          break;
-        }
-        const newFolder = library.addFolder({
-          name: folderName,
-          description: folderDesc || '',
-          color: color || '#6366f1',
-          icon: 'folder',
-          sortOrder: 0,
-          agentAccessible: true,
-        });
-        result.output = `Folder created:\n  ID: ${newFolder.id}\n  Name: ${newFolder.name}\n  Color: ${newFolder.color}`;
-        onProgress?.(`Created folder: ${newFolder.name} (${newFolder.id})`);
-        break;
-      }
-
-      case 'move_to_folder': {
-        const { componentId: moveCompId, folderId: targetFolderId } = call.arguments;
-        if (!moveCompId) {
-          result.output = 'Error: Missing required field: componentId';
-          result.error = 'Missing componentId';
-          break;
-        }
-        const moveComp = library.getComponent(moveCompId);
-        if (!moveComp) {
-          result.output = `Component not found: ${moveCompId}`;
-          result.error = 'Not found';
-          break;
-        }
-        const folderIdValue = targetFolderId || null;
-        if (folderIdValue) {
-          const targetFolder = library.getFolder(folderIdValue);
-          if (!targetFolder) {
-            result.output = `Folder not found: ${folderIdValue}`;
-            result.error = 'Folder not found';
-            break;
-          }
-        }
-        const moved = library.moveComponentToFolder(moveCompId, folderIdValue);
-        result.output = moved
-          ? `Moved "${moveComp.name}" ${folderIdValue ? `to folder ${folderIdValue}` : 'out of folder'}`
-          : 'Move failed';
-        if (!moved) result.error = 'Move failed';
         break;
       }
 

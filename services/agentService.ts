@@ -36,6 +36,7 @@ export async function* sendAgentMessage(
   provider?: string,
   signal?: AbortSignal,
   context?: Record<string, any>,
+  systemPromptAppend?: string,
 ): AsyncGenerator<AgentStreamChunk> {
   const response = await fetch(`${API_BASE}/agent/chat`, {
     method: 'POST',
@@ -47,6 +48,7 @@ export async function* sendAgentMessage(
       provider,
       stream: true,
       context,
+      systemPromptAppend,
     }),
     signal,
   });

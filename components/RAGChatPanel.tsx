@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getSystemPromptAppend } from '../lib/agentConfig';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -170,7 +171,7 @@ const RAGChatPanel: React.FC<RAGChatPanelProps> = ({
       let fullThinking = '';
       let sources: RAGSource[] | undefined;
 
-      for await (const chunk of queryRAG(text, history, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal)) {
+      for await (const chunk of queryRAG(text, history, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal, getSystemPromptAppend('rag'))) {
         if (chunk.thinkingText) {
           fullThinking += chunk.thinkingText;
           setMessages(prev => prev.map(msg =>

@@ -20,7 +20,7 @@ const MAX_AGENT_ITERATIONS = 5;
 
 router.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { messages, tools = [], model, provider, systemInstruction, stream = true, max_tokens, context } = req.body;
+    const { messages, tools = [], model, provider, systemInstruction, stream = true, max_tokens, context, systemPromptAppend } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'Missing messages' });
@@ -50,7 +50,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     const toolPrompt = !hasStitchTools && tools.length > 0 ? buildToolSystemPrompt(tools) : '';
 
     const apiMessages: ChatMessage[] = [];
-    const fullSystem = [stitchPrompt, systemInstruction, toolPrompt, langInstruction].filter(Boolean).join('\n\n');
+    const fullSystem = [stitchPrompt, systemInstruction, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
     apiMessages.push({ role: 'system', content: fullSystem });
 
     for (const msg of messages) {

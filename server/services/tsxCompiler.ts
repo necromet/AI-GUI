@@ -116,6 +116,10 @@ export default cn;
         return { path: args.path, namespace: 'unresolved-stub' };
       });
 
+      build.onResolve({ filter: /^(next|@next)\// }, () => {
+        return { path: 'next-stub', namespace: 'unresolved-stub' };
+      });
+
       build.onResolve({ filter: /.*/ }, (args) => {
         if (args.path.startsWith('.') || args.path.startsWith('/') || args.path.startsWith('http')) return undefined;
         if (EXTERNAL_PACKAGES.includes(args.path)) return undefined;
@@ -155,7 +159,7 @@ export default cn;
       });
 
       build.onLoad({ filter: /.*/, namespace: 'esm-sh' }, (args) => {
-        return { contents: `export * from "${args.path}";`, loader: 'js' };
+        return { contents: `import * as __esm_ns from "${args.path}"; export default __esm_ns.default; export * from "${args.path}";`, loader: 'js' };
       });
     },
   };
@@ -188,11 +192,18 @@ export async function compileComponent(files: LibraryComponentFile[]): Promise<s
       entryWithRender = `import { createRoot } from 'react-dom/client';\n` + entryWithRender;
     }
   } else if (!hasCreateRoot) {
-    const defaultMatch = entryContent.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-    const namedMatch = entryContent.match(/export\s+(?:function|const)\s+(\w+)/);
-    const localMatch = entryContent.match(/(?:function|const)\s+(\w+)\s*(?:=\s*(?:\([^)]*\)\s*=>|\([^)]*\)\s*:\s*\w+))/);
-    const componentName = defaultMatch?.[1] || namedMatch?.[1] || localMatch?.[1] || 'App';
-    entryWithRender += `\nimport { createRoot } from 'react-dom/client';\nimport React from 'react';\ncreateRoot(document.getElementById('root')).render(React.createElement(${componentName}));\n`;
+    const hasDefaultExport = /export\s+default\s+/.test(entryContent);
+    if (!hasDefaultExport) {
+      const namedExportMatch = entryContent.match(/export\s+(?:function|const|class)\s+(\w+)/);
+      if (namedExportMatch) {
+        entryWithRender += `\nexport default ${namedExportMatch[1]};\n`;
+      } else {
+        const localMatch = entryContent.match(/(?:function|const)\s+(\w+)\s*(?:=\s*(?:\([^)]*\)\s*=>|\([^)]*\)\s*:\s*\w+))/);
+        if (localMatch) {
+          entryWithRender += `\nexport { ${localMatch[1]} as default };\n`;
+        }
+      }
+    }
   }
 
   const entryLoader = entryFile.filename.endsWith('.tsx') ? 'tsx' as const

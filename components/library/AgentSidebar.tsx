@@ -12,10 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AgentPlan, AgentTask } from '@/components/ui/agent-plan';
+import { getSystemPromptAppend } from '../../lib/agentConfig';
 
 type MessageBlock =
   | { type: 'text'; content: string }
-  | { type: 'tool_call'; name: string; arguments: Record<string, any>; result?: { output: string; error?: string }; collapsed?: boolean; progress?: string }
+  | { type: 'tool_call'; id?: string; name: string; arguments: Record<string, any>; result?: { output: string; error?: string }; collapsed?: boolean; progress?: string }
   | { type: 'ask_user'; question: string }
   | { type: 'agent_plan'; tasks: AgentTask[] };
 
@@ -255,190 +256,247 @@ export const AgentSidebar: React.FC<AgentSidebarProps> = ({
     abortControllerRef.current = abortController;
 
     try {
-      const history = [...messages, userMsg].map(m => {
+      const MAX_AGENT_ROUNDS = 10;
+      let round = 0;
+
+      const serverMessages: any[] = [];
+      for (const m of messages) {
         const entry: any = { role: m.role, content: m.content };
         if (m.blocks) {
           const tcs = m.blocks.filter((b: any) => b.type === 'tool_call');
           if (tcs.length > 0) {
-            entry.tool_calls = tcs.map((tc: any) => ({
-              id: tc.id || Math.random().toString(36).slice(2),
-              type: 'function',
-              function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-            }));
+            const allHaveResults = tcs.every((tc: any) => tc.result);
+            if (allHaveResults) {
+              entry.tool_calls = tcs.map((tc: any) => ({
+                id: tc.id || Math.random().toString(36).slice(2),
+                type: 'function',
+                function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+              }));
+              serverMessages.push(entry);
+              for (const tc of tcs) {
+                serverMessages.push({
+                  role: 'tool',
+                  tool_call_id: tc.id || Math.random().toString(36).slice(2),
+                  tool_name: tc.name,
+                  content: tc.result.error ? `Error: ${tc.result.error}` : tc.result.output,
+                });
+              }
+            } else {
+              serverMessages.push({ role: m.role, content: m.content });
+            }
+            continue;
           }
         }
-        return entry;
-      });
+        serverMessages.push(entry);
+      }
+      serverMessages.push({ role: 'user', content: text });
 
-      const response = await fetch('/api/library-agent/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: history,
-          model: modelConfig?.apiModelId || modelConfig?.id || 'mimo-v2.5',
-          provider: modelConfig?.provider,
-          stream: true,
-          componentId: selectedComponent.id,
-        }),
-        signal: abortController.signal,
-      });
+      while (round < MAX_AGENT_ROUNDS) {
+        round++;
 
-      if (!response.ok) throw new Error(await response.text());
+        const response = await fetch('/api/library-agent/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: serverMessages,
+            model: modelConfig?.apiModelId || modelConfig?.id || 'mimo-v2.5',
+            provider: modelConfig?.provider,
+            stream: true,
+            componentId: selectedComponent.id,
+            systemPromptAppend: getSystemPromptAppend('library'),
+          }),
+          signal: abortController.signal,
+        });
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
+        if (!response.ok) throw new Error(await response.text());
 
-      const decoder = new TextDecoder();
-      let buffer = '';
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let roundHadToolCalls = false;
+        let roundHadAskUser = false;
+        let roundTextContent = '';
+        const roundToolCalls: Array<{ id: string; name: string; arguments: any }> = [];
+        const roundToolResults: Array<{ toolCallId: string; name: string; output: string; error?: string }> = [];
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trim();
-          if (data === '[DONE]') continue;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-          let parsed: any;
-          try { parsed = JSON.parse(data); } catch { continue; }
-          if (parsed.error) throw new Error(parsed.error);
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data:')) continue;
+            const data = trimmed.slice(5).trim();
+            if (data === '[DONE]') continue;
 
-          if (parsed.content) {
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              blocks.push({ type: 'text', content: parsed.content });
-              return { ...m, blocks, isThinking: false };
-            }));
-          }
+            let parsed: any;
+            try { parsed = JSON.parse(data); } catch { continue; }
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.done) continue;
 
-          if (parsed.reasoning) {
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              return { ...m, thinkingContent: ((m as any).thinkingContent || '') + parsed.reasoning };
-            }));
-          }
-
-          if (parsed.tool_call) {
-            const toolName = parsed.tool_call.name;
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              blocks.push({ type: 'tool_call', name: toolName, arguments: parsed.tool_call.arguments, collapsed: true });
-              return { ...m, blocks, isThinking: false };
-            }));
-            const tasks = agentPlanTasksRef.current;
-            if (tasks.length > 0) {
-              const match = tasks.find(t =>
-                toolName.includes(t.title.toLowerCase().split(' ')[0]) ||
-                (toolName === 'read_component' && t.title.toLowerCase().includes('read')) ||
-                (toolName === 'create_todo_list' && t.title.toLowerCase().includes('plan')) ||
-                (toolName === 'write_component_file' && t.title.toLowerCase().includes('writ')) ||
-                (toolName === 'verify_component' && t.title.toLowerCase().includes('verif'))
-              );
-              if (match) setTaskStatuses(prev => ({ ...prev, [match.id]: 'in-progress' }));
-            }
-          }
-
-          if (parsed.tool_progress) {
-            const { name, chunk } = parsed.tool_progress;
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              for (let i = blocks.length - 1; i >= 0; i--) {
-                if (blocks[i].type === 'tool_call' && blocks[i].name === name && !blocks[i].result) {
-                  blocks[i] = { ...blocks[i], progress: chunk };
-                  break;
+            if (parsed.content) {
+              roundTextContent += parsed.content;
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                const blocks = m.blocks ? [...m.blocks] : [];
+                const lastBlock = blocks[blocks.length - 1];
+                if (lastBlock && lastBlock.type === 'text') {
+                  blocks[blocks.length - 1] = { ...lastBlock, content: lastBlock.content + parsed.content };
+                } else {
+                  blocks.push({ type: 'text', content: parsed.content });
                 }
-              }
-              return { ...m, blocks };
-            }));
-          }
-
-          if (parsed.tool_result) {
-            const { name: resultName, error: resultError } = parsed.tool_result;
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              for (let i = blocks.length - 1; i >= 0; i--) {
-                if (blocks[i].type === 'tool_call' && blocks[i].name === resultName && !blocks[i].result) {
-                  blocks[i] = { ...blocks[i], result: { output: parsed.tool_result.output, error: resultError }, progress: undefined };
-                  break;
-                }
-              }
-              return { ...m, blocks };
-            }));
-            const tasks = agentPlanTasksRef.current;
-            if (tasks.length > 0) {
-              const match = tasks.find(t =>
-                resultName.includes(t.title.toLowerCase().split(' ')[0]) ||
-                (resultName === 'read_component' && t.title.toLowerCase().includes('read')) ||
-                (resultName === 'create_todo_list' && t.title.toLowerCase().includes('plan')) ||
-                (resultName === 'write_component_file' && t.title.toLowerCase().includes('writ')) ||
-                (resultName === 'verify_component' && t.title.toLowerCase().includes('verif'))
-              );
-              if (match) setTaskStatuses(prev => ({ ...prev, [match.id]: resultError ? 'failed' : 'completed' }));
+                return { ...m, blocks, isThinking: false };
+              }));
             }
-          }
 
-          if (parsed.ask_user) {
-            setPendingAskUser(parsed.ask_user.question);
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              blocks.push({ type: 'ask_user', question: parsed.ask_user.question });
-              return { ...m, blocks, isThinking: false };
-            }));
-          }
+            if (parsed.reasoning) {
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                return { ...m, thinkingContent: ((m as any).thinkingContent || '') + parsed.reasoning };
+              }));
+            }
 
-          if (parsed.verify_component) {
-            verifyingComponentRef.current = parsed.verify_component.componentId;
-            window.dispatchEvent(new CustomEvent('agent-verify-component', {
-              detail: { componentId: parsed.verify_component.componentId },
-            }));
-          }
+            if (parsed.tool_call) {
+              const toolName = parsed.tool_call.name;
+              const toolId = parsed.tool_call.id || `tc_${Math.random().toString(36).slice(2)}`;
+              roundHadToolCalls = true;
+              roundToolCalls.push({ id: toolId, name: toolName, arguments: parsed.tool_call.arguments });
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                const blocks = m.blocks ? [...m.blocks] : [];
+                blocks.push({ type: 'tool_call', id: toolId, name: toolName, arguments: parsed.tool_call.arguments, collapsed: true });
+                return { ...m, blocks, isThinking: false };
+              }));
+              const tasks = agentPlanTasksRef.current;
+              if (tasks.length > 0) {
+                const match = tasks.find(t =>
+                  toolName.includes(t.title.toLowerCase().split(' ')[0]) ||
+                  (toolName === 'read_component' && t.title.toLowerCase().includes('read')) ||
+                  (toolName === 'create_todo_list' && t.title.toLowerCase().includes('plan')) ||
+                  (toolName === 'write_component_file' && t.title.toLowerCase().includes('writ')) ||
+                  (toolName === 'verify_component' && t.title.toLowerCase().includes('verif'))
+                );
+                if (match) setTaskStatuses(prev => ({ ...prev, [match.id]: 'in-progress' }));
+              }
+            }
 
-          if (parsed.component_created) {
-            onNotification?.(`Created: ${parsed.component_created.name}`, 'success');
-            onComponentsReload?.();
-            window.dispatchEvent(new CustomEvent('agent-file-changed', {
-              detail: { componentId: parsed.component_created.id, files: parsed.component_created.files },
-            }));
-          }
+            if (parsed.tool_result) {
+              const { name: resultName, toolCallId, error: resultError } = parsed.tool_result;
+              roundToolResults.push({ toolCallId, name: resultName, output: parsed.tool_result.output, error: resultError });
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                const blocks = m.blocks ? [...m.blocks] : [];
+                for (let i = blocks.length - 1; i >= 0; i--) {
+                  const b = blocks[i];
+                  if (b.type === 'tool_call' && !b.result) {
+                    if (b.id === toolCallId || b.name === resultName) {
+                      blocks[i] = { ...b, result: { output: parsed.tool_result.output, error: resultError }, progress: undefined };
+                      break;
+                    }
+                  }
+                }
+                return { ...m, blocks };
+              }));
+              const tasks = agentPlanTasksRef.current;
+              if (tasks.length > 0) {
+                const match = tasks.find(t =>
+                  resultName.includes(t.title.toLowerCase().split(' ')[0]) ||
+                  (resultName === 'read_component' && t.title.toLowerCase().includes('read')) ||
+                  (resultName === 'create_todo_list' && t.title.toLowerCase().includes('plan')) ||
+                  (resultName === 'write_component_file' && t.title.toLowerCase().includes('writ')) ||
+                  (resultName === 'verify_component' && t.title.toLowerCase().includes('verif'))
+                );
+                if (match) setTaskStatuses(prev => ({ ...prev, [match.id]: resultError ? 'failed' : 'completed' }));
+              }
+            }
 
-          if (parsed.component_updated) {
-            onComponentUpdated?.(parsed.component_updated);
-            onComponentsReload?.();
-            window.dispatchEvent(new CustomEvent('agent-file-changed', {
-              detail: { componentId: parsed.component_updated.id, files: parsed.component_updated.files },
-            }));
-          }
+            if (parsed.ask_user) {
+              roundHadAskUser = true;
+              setPendingAskUser(parsed.ask_user.question);
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                const blocks = m.blocks ? [...m.blocks] : [];
+                blocks.push({ type: 'ask_user', question: parsed.ask_user.question });
+                return { ...m, blocks, isThinking: false };
+              }));
+            }
 
-          if (parsed.todo_list && Array.isArray(parsed.todo_list)) {
-            const tasks: AgentTask[] = parsed.todo_list.map((t: any) => ({
-              id: String(t.id),
-              title: t.title || `Task ${t.id}`,
-              description: t.description || '',
-              status: 'pending',
-              priority: t.priority || 'medium',
-              subtasks: [],
-            }));
-            setAgentPlanTasks(tasks);
-            setTaskStatuses({});
-            setMessages(prev => prev.map(m => {
-              if (m.id !== aiMsgId) return m;
-              const blocks = m.blocks ? [...m.blocks] : [];
-              blocks.push({ type: 'agent_plan', tasks });
-              return { ...m, blocks, isThinking: false };
-            }));
+            if (parsed.verify_component) {
+              verifyingComponentRef.current = parsed.verify_component.componentId;
+              window.dispatchEvent(new CustomEvent('agent-verify-component', {
+                detail: { componentId: parsed.verify_component.componentId },
+              }));
+            }
+
+            if (parsed.component_created) {
+              onNotification?.(`Created: ${parsed.component_created.name}`, 'success');
+              onComponentsReload?.();
+              window.dispatchEvent(new CustomEvent('agent-file-changed', {
+                detail: { componentId: parsed.component_created.id, files: parsed.component_created.files },
+              }));
+            }
+
+            if (parsed.component_updated) {
+              onComponentUpdated?.(parsed.component_updated);
+              onComponentsReload?.();
+              window.dispatchEvent(new CustomEvent('agent-file-changed', {
+                detail: { componentId: parsed.component_updated.id, files: parsed.component_updated.files },
+              }));
+            }
+
+            if (parsed.todo_list && Array.isArray(parsed.todo_list)) {
+              const tasks: AgentTask[] = parsed.todo_list.map((t: any) => ({
+                id: String(t.id),
+                title: t.title || `Task ${t.id}`,
+                description: t.description || '',
+                status: 'pending',
+                priority: t.priority || 'medium',
+                subtasks: [],
+              }));
+              setAgentPlanTasks(tasks);
+              setTaskStatuses({});
+              setMessages(prev => prev.map(m => {
+                if (m.id !== aiMsgId) return m;
+                const blocks = m.blocks ? [...m.blocks] : [];
+                blocks.push({ type: 'agent_plan', tasks });
+                return { ...m, blocks, isThinking: false };
+              }));
+            }
           }
         }
+
+        if (!roundHadToolCalls || roundHadAskUser) break;
+
+        serverMessages.push({
+          role: 'assistant',
+          content: roundTextContent || '',
+          tool_calls: roundToolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+          })),
+        });
+        for (const tr of roundToolResults) {
+          serverMessages.push({
+            role: 'tool',
+            tool_call_id: tr.toolCallId,
+            tool_name: tr.name,
+            content: tr.error ? `Error: ${tr.error}` : tr.output,
+          });
+        }
+
+        await new Promise(r => setTimeout(r, 300));
+        if (abortController.signal.aborted) break;
+
+        setMessages(prev => prev.map(m =>
+          m.id === aiMsgId ? { ...m, isThinking: true } : m
+        ));
       }
 
       setMessages(prev => prev.map(m =>

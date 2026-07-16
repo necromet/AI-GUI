@@ -725,7 +725,21 @@ try {
   if (!window.ReactDOM) window.ReactDOM = { ...ReactDOM };
   if (!window.ReactDOM.createRoot) window.ReactDOM.createRoot = ReactDOMClient.createRoot;
 
-  await import('/api/library/components/${componentId}/compiled');
+  var mod = await import('/api/library/components/${componentId}/compiled');
+
+  var root = document.getElementById('root');
+  if (root && !root.hasChildNodes()) {
+    var Component = mod.default;
+    if (Component == null) {
+      var named = Object.entries(mod).find(function(e) { return e[0] !== 'default' && e[0][0] !== '_' && typeof e[1] === 'function'; });
+      if (named) Component = named[1];
+    }
+    if (Component != null) {
+      ReactDOMClient.createRoot(root).render(React.createElement(Component));
+    } else {
+      showError('No component found. Export a React component from your file.');
+    }
+  }
 
   try {
     window.parent.postMessage({ type: 'preview-errors', errors: [], loadErrors: [], complete: true }, '*');

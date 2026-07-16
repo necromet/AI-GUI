@@ -67,6 +67,7 @@ export async function* queryRAG(
   model?: string,
   provider?: string,
   signal?: AbortSignal,
+  systemPromptAppend?: string,
 ): AsyncGenerator<RAGStreamChunk> {
   const response = await fetch(`${API_BASE}/rag/query`, {
     method: 'POST',
@@ -77,6 +78,7 @@ export async function* queryRAG(
       model,
       provider,
       stream: true,
+      systemPromptAppend,
     }),
     signal,
   });

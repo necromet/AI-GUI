@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile } from '../types';
@@ -9,10 +9,10 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import SidebarSettingsPanel from './SidebarSettingsPanel';
 import SidebarTokenStatsPanel from './SidebarTokenStatsPanel';
+import { SETTINGS_TABS, type SettingsTab } from './SettingsPage';
 
-export type SidebarPanel = 'none' | 'settings' | 'token-stats';
+export type SidebarPanel = 'none' | 'token-stats';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -27,23 +27,6 @@ interface SidebarProps {
   currentModelName?: string;
   sidebarPanel: SidebarPanel;
   onSidebarPanelChange: (panel: SidebarPanel) => void;
-  settingsProps: {
-    neonColor: string;
-    onChangeNeonColor: (color: string) => void;
-    neonPreset: string;
-    onChangeNeonPreset: (preset: string) => void;
-    models: ModelConfig[];
-    onAddModel: (model: ModelConfig) => void;
-    onDeleteModel: (id: string) => void;
-    defaultModelId: string;
-    onChangeDefaultModel: (id: string) => void;
-    maxOutputTokens: number | undefined;
-    onChangeMaxOutputTokens: (value: number | undefined) => void;
-    fontSize: string;
-    onChangeFontSize: (size: string) => void;
-    fontFamily: string;
-    onChangeFontFamily: (family: string) => void;
-  };
   availableModels: ModelConfig[];
   libraryControls?: LibraryControls | null;
 }
@@ -69,14 +52,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentModelName,
   sidebarPanel,
   onSidebarPanelChange,
-  settingsProps,
   availableModels,
   libraryControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const activeSettingsTab = searchParams.get('tab') as SettingsTab | null;
   const isChatMode = location.pathname.startsWith('/chat');
   const isLibraryMode = location.pathname.startsWith('/library');
+  const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : 'experiments';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
     if (isChatMode) return 'chat';
@@ -84,6 +69,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (location.pathname.includes('/stitch')) return 'stitch';
     return 'rag';
   })();
+
+  const prevPathRef = useRef<string>('/chat');
+  useEffect(() => {
+    if (!isSettingsPage) {
+      prevPathRef.current = location.pathname;
+    }
+  }, [location.pathname, isSettingsPage]);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today);
@@ -155,7 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         color: 'var(--neon-color)',
       }}
     >
-      {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : 'Lab'}
+      {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : isSettingsPage ? 'Settings' : 'Lab'}
     </Badge>
   );
 
@@ -192,28 +184,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {sidebarPanel === 'settings' ? (
-          /* Settings panel */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onSidebarPanelChange('none')}
-                className="h-7 w-7 text-[var(--text-500)] hover:text-[var(--text-100)]"
-              >
-                <ArrowLeft size={14} />
-              </Button>
-              <SettingsIcon size={14} style={{ color: 'var(--neon-color)' }} />
-              <span className="text-xs font-semibold text-[var(--text-100)]">Settings</span>
-            </div>
-            <SidebarSettingsPanel
-              theme={theme}
-              onToggleTheme={onToggleTheme}
-              {...settingsProps}
-            />
-          </div>
-        ) : sidebarPanel === 'token-stats' ? (
+        {sidebarPanel === 'token-stats' ? (
           /* Token Stats panel */
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
@@ -229,6 +200,41 @@ const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-xs font-semibold text-[var(--text-100)]">Token Stats</span>
             </div>
             <SidebarTokenStatsPanel availableModels={availableModels} />
+          </div>
+        ) : isSettingsPage ? (
+          /* Settings: tab navigation */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-2 pt-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)] transition-all duration-150"
+                onClick={() => navigate(prevPathRef.current)}
+              >
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </Button>
+            </div>
+            {sectionLabel('Settings')}
+            <nav className="px-2 space-y-0.5">
+              {SETTINGS_TABS.map((tab) => {
+                const isActive = (activeSettingsTab || 'appearance') === tab.id;
+                return (
+                  <Button
+                    key={tab.id}
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3 py-2.5 h-auto rounded-lg text-sm font-medium transition-all duration-150"
+                    style={{
+                      backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
+                      color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                    }}
+                    onClick={() => navigate(`/settings?tab=${tab.id}`)}
+                  >
+                    <tab.icon size={16} />
+                    <span>{tab.label}</span>
+                  </Button>
+                );
+              })}
+            </nav>
           </div>
         ) : currentMode === 'experiments' ? (
           /* Experiments mode: tool navigation + conversation history */
@@ -522,28 +528,33 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-2 space-y-0.5">
           <Separator className="mx-1 my-1 bg-[var(--border-300)]" />
 
-          <Button
-            variant="ghost"
-            className={sidebarItemClassName}
-            onClick={() => navigate('/')}
-          >
-            <Home size={16} />
-            <span>Back to selector</span>
-          </Button>
+          {!isSettingsPage && (
+            <>
+              <Button
+                variant="ghost"
+                className={sidebarItemClassName}
+                onClick={() => navigate('/')}
+              >
+                <Home size={16} />
+                <span>Back to selector</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                className={sidebarItemClassName}
+                onClick={() => onSidebarPanelChange('token-stats')}
+              >
+                <BarChart3 size={16} />
+                <span>Token Stats</span>
+              </Button>
+            </>
+          )}
 
           <Button
             variant="ghost"
             className={sidebarItemClassName}
-            onClick={() => onSidebarPanelChange('token-stats')}
-          >
-            <BarChart3 size={16} />
-            <span>Token Stats</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            className={sidebarItemClassName}
-            onClick={() => onSidebarPanelChange('settings')}
+            onClick={() => navigate('/settings')}
+            style={isSettingsPage ? { backgroundColor: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)' } : undefined}
           >
             <SettingsIcon size={16} />
             <span>Settings</span>

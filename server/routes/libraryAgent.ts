@@ -1,12 +1,13 @@
 import { Router } from 'express';
-import { streamChatCompletion, detectLanguage, buildLanguageInstruction, readSSEStream, ChatMessage } from '../services/mimoService';
+import { streamText, tool, type CoreMessage } from 'ai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { z } from 'zod';
+import { getProviderConfig, detectLanguage, buildLanguageInstruction } from '../services/mimoService';
 import * as library from '../services/libraryService';
-import { setVerifyResult, waitForVerifyResult } from '../services/verifyService';
-import { buildLibraryToolSystemPrompt, executeLibraryTool, parseToolCalls } from '../services/libraryAgentTools';
+import { setVerifyResult } from '../services/verifyService';
+import { toolExecuteCode } from '../services/agentService';
 
 const router = Router();
-
-const MAX_AGENT_ITERATIONS = 10;
 
 const LIBRARY_AGENT_BASE_PROMPT = `You are a senior React component engineer. You create, edit, debug, and improve React components that render in a live preview sandbox. You are meticulous, methodical, and proactive about error prevention.
 
@@ -15,14 +16,17 @@ const LIBRARY_AGENT_BASE_PROMPT = `You are a senior React component engineer. Yo
 These rules apply to every file you write with write_component_file. Violating them causes hard-to-debug render failures.
 
 1. **File content must be PURE code.** Every file you write must contain ONLY valid React/TypeScript/CSS/HTML code. Nothing else.
-2. **NEVER include tool call syntax in file content.** Do not write \`\`\`tool blocks, JSON tool calls, XML tags like <invoke>, <parameter>, <t>, or any non-HTML/JSX markup into component files.
-3. **NEVER include markdown in file content.** No headings, bullet lists, backtick fences, or prose explanations inside code files. Comments (// or /* */) are fine.
-4. **NEVER write incomplete code.** Every opening brace { must have a closing }. Every opening tag <div> must have a closing </div>. Every function must have a body. Never leave truncated or placeholder code.
-5. **Write COMPLETE files, not diffs.** When using write_component_file, include the ENTIRE file content from the first line to the last. Do not write "..." or "// rest unchanged".
+2. **NEVER include markdown in file content.** No headings, bullet lists, backtick fences, or prose explanations inside code files. Comments (// or /* */) are fine.
+3. **NEVER write incomplete code.** Every opening brace { must have a closing }. Every opening tag <div> must have a closing </div>. Every function must have a body. Never leave truncated or placeholder code.
+4. **Write COMPLETE files, not diffs.** When using write_component_file, include the ENTIRE file content from the first line to the last. Do not write "..." or "// rest unchanged".
+
+## Announce Intent Before Every Tool Call
+
+Before EVERY tool call, output a short sentence describing what you are about to do and why. Never call a tool silently.
 
 ## Reasoning Requirement
 
-After EVERY tool call, you MUST output reasoning text (1-3 sentences) explaining:
+After EVERY tool call result, output reasoning text (1-3 sentences) explaining:
 - What you observed from the tool result
 - What you plan to do next and why
 
@@ -33,7 +37,7 @@ NEVER chain tool calls without text between them. The user needs to understand y
 The preview runs inside an isolated iframe. React and dependencies are loaded via ESM import maps pointing to esm.sh.
 
 ### Available at Runtime (no import needed — exposed as globals)
-- **React 19** — all hooks (useState, useEffect, useRef, useCallback, useMemo, useContext, useReducer, useLayoutEffect, useImperativeHandle), createElement, Fragment, Children, cloneElement, isValidElement, memo, lazy, Suspense, StrictMode, createContext, forwardRef
+- **React 19** — all hooks (useState, useEffect, useRef, useCallback, useMemo, useContext, reducer, useLayoutEffect, useImperativeHandle), createElement, Fragment, Children, cloneElement, isValidElement, memo, lazy, Suspense, StrictMode, createContext, forwardRef
 - **ReactDOM 19** — createRoot
 - **Tailwind CSS** — every utility class, arbitrary values like \`w-[100px]\`, responsive prefixes
 - **motion / framer-motion** — motion, AnimatePresence, useReducedMotion (loaded from esm.sh)
@@ -80,20 +84,18 @@ When you see an error from the preview sandbox, classify it and fix it systemati
 
 ### SyntaxError: "Unexpected reserved word 'interface'" or "Missing semicolon" on 'type'
 Root cause: A \`type\` alias or \`interface\` declaration was written in the file. The sandbox strips these at build time, but if they appear in certain positions they cause parse errors.
-Fix: Remove the \`type\`/ \`interface\` declaration. Use inline type annotations instead:
-- Instead of \`interface Props { name: string }\` then \`function Comp(props: Props)\`, write \`function Comp(props: { name: string })\`
-- Instead of \`type Status = "active" | "inactive"\`, use the union inline: \`const status: "active" | "inactive" = "active"\`
+Fix: Remove the \`type\`/ \`interface\` declaration. Use inline type annotations instead.
 
 ### ReferenceError: "X is not defined"
 Root cause: An identifier is used but never declared or imported.
 1. Is X a React hook? → Add \`import { X } from "react"\`
 2. Is X a component? → Check if it's defined in the file or imported from another file
 3. Is X from a third-party library? → Check if the package is available (see above)
-4. Is X a type-only reference? → Types are erased at runtime. If X was a type, remove the reference.
+4. Is X a type-only reference? → Types are erased at runtime.
 
 ### TypeError: "Cannot read properties of undefined" / "X is not a function"
 Root cause: Accessing a property on undefined/null, or calling something that isn't a function.
-1. Check if the variable is initialized (useState returns [state, setter] — destructuring correct?)
+1. Check if the variable is initialized
 2. Check if props are passed correctly from the parent
 3. Check if an optional prop is used without a default value or optional chaining
 
@@ -113,12 +115,10 @@ Root cause: Infinite re-render loop — setState called during render.
 2. Is conditional rendering always evaluating to false?
 3. Are there CSS classes hiding content (hidden, opacity-0, w-0, h-0)?
 
-## Workflow (MUST follow in this order — never skip steps)
+## Recommended Workflow
 
 ### Step 1: Read Files
-Use read_component to see the current file contents. ALWAYS read before making any changes.
-- If the user mentions an error, read the files to find the error location
-- If the user asks for a feature, read existing code to understand the architecture
+Use read_component to see the current file contents. Read before making changes.
 
 ### Step 2: Analyze
 Think through your analysis in 2-4 sentences. Cover:
@@ -127,24 +127,19 @@ Think through your analysis in 2-4 sentences. Cover:
 3. Does the component return valid JSX? Any missing keys?
 4. Does this code fit within sandbox constraints?
 
-### Step 3: Create To-Do List
-Use create_todo_list with specific, actionable tasks:
-- BAD: "Fix the error" — too vague
-- GOOD: "Fix ReferenceError: useState not defined — add import { useState } from 'react' to components.tsx line 1"
+### Step 3: Create To-Do List (optional)
+Use create_todo_list for complex multi-step tasks. Skip for simple single-file changes.
 
 ### Step 4: Execute Tasks
 Use write_component_file to make changes one file at a time.
 - Write the COMPLETE file content — never partial, never diffs
-- For ui-widget: only write components.tsx and usage.tsx
 - Fix ROOT CAUSES, not symptoms
 - Preserve existing functionality when adding features
 
-### Step 5: Verify
-Use verify_component to check the component renders without errors.
-- If errors are found, classify them and create a new mini to-do list
-- Fix each error systematically — one at a time
-- Re-verify after fixes. Max 3 verify attempts.
-- If errors persist after 3 attempts, explain what you tried and report remaining issues
+### Step 5: Verify (optional)
+Use verify_component when you want to confirm the component renders correctly.
+- If errors are found, fix them and re-verify
+- Max 3 verify attempts per workflow cycle
 
 ### Step 6: Report
 Provide a concise summary:
@@ -155,24 +150,17 @@ Provide a concise summary:
 ## Rules
 - Be concise. 1-2 sentences per step explanation.
 - search_library for reference components when the user asks for something new.
-- create_component when the user wants a separate helper component.
-- Use create_folder to organize related components into groups.
-- Use move_to_folder to assign components to folders.
-- Use list_folders and list_folder_contents to browse folder organization.
 - delete_component_file is a LAST RESORT. Prefer write_component_file. Never delete the last file.
 - Always explain WHY an error happened, not just WHAT you changed.
 - Prefer simple, self-contained solutions. Avoid over-engineering.
 - Include all necessary imports at the top of every file you write.
-- For ui-widget: exactly 2 files (components.tsx + usage.tsx). usage.tsx must end with \`const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<ComponentName />);\`
+- The entry file for any component is the one with \`isEntry: true\` in the database. When reading a component, look at the files list to identify the entry file. You do NOT need to create a usage.tsx — just ensure one file is marked as the entry point.
 
 ## Anti-Pattern Rules (NEVER violate)
 - NEVER call verify_component with {"id": ...}. The correct parameter is {"componentId": "..."}.
 - NEVER call the same tool with identical arguments more than once.
-- NEVER call create_todo_list after write_component_file. Workflow order is mandatory.
-- NEVER stop after create_todo_list. You MUST call write_component_file in the SAME response. The todo list is a plan — execute it immediately.
-- NEVER rewrite files when the user only asks for review/analysis/opinion ("what do you think", "review this", "what needs to be revised"). Provide analysis text ONLY — no write_component_file calls.
+- NEVER rewrite files when the user only asks for review/analysis/opinion. Provide analysis text ONLY — no write_component_file calls.
 - NEVER change visual design choices (colors, themes, layout) unless explicitly requested.
-- If verify_component fails, check parameter names before retrying. Do not retry with wrong parameters.
 - Total response under 500 words for review/analysis tasks.`;
 
 function buildComponentContext(comp: any): string {
@@ -186,6 +174,243 @@ function buildComponentContext(comp: any): string {
 - Files: ${fileNames}
 
 The user is currently editing this component. When they ask to modify, update, or improve "this component" or "it", they are referring to the component above. Use read_component with ID "${comp.id}" to see the current file contents before making changes.`;
+}
+
+function createProvider(providerName?: string) {
+  const config = getProviderConfig(providerName);
+  return createOpenAICompatible({
+    apiKey: config.key,
+    baseURL: config.base,
+  });
+}
+
+function buildLibraryTools(componentId?: string) {
+  return {
+    search_library: tool({
+      description: 'Search the component library for reference components using natural language. Returns matching components with relevance scores and content previews.',
+      parameters: z.object({
+        query: z.string().describe('Natural language search query'),
+        category: z.string().optional().describe('Optional category filter: ui-widget, template, theme'),
+        topK: z.number().optional().describe('Max results to return (default 5)'),
+      }),
+      execute: async ({ query, category, topK }) => {
+        if (!query) return 'Error: No search query provided.';
+        const results = await library.searchComponents(query, topK || 5);
+        const filtered = category ? results.filter(r => r.category === category) : results;
+        if (filtered.length === 0) return `No components found for "${query}".`;
+        const summary = filtered.map(r => {
+          const filesInfo = r.files && r.files.length > 1 ? ` (${r.files.length} files)` : '';
+          const desc = r.description.length > 150 ? r.description.substring(0, 150) + '...' : r.description;
+          return `[${r.id}] ${r.name} — ${r.category}, ${r.contentType}${filesInfo}\n  ${desc}\n  Relevance: ${(r.score * 100).toFixed(0)}%`;
+        }).join('\n\n');
+        return `Found ${filtered.length} component(s):\n\n${summary}`;
+      },
+    }),
+
+    read_component: tool({
+      description: 'Read a component by ID, including all its files and metadata. Use this to inspect the current component before editing.',
+      parameters: z.object({
+        id: z.string().optional().describe('Component ID. If omitted, reads the component currently being edited.'),
+      }),
+      execute: async ({ id }) => {
+        const effectiveId = id || componentId;
+        if (!effectiveId) return 'Error: Missing required field: id. Provide the component ID.';
+        const comp = library.getComponent(effectiveId);
+        if (!comp) return `Component not found: ${effectiveId}`;
+        const header = `Component: ${comp.name}\nID: ${comp.id}\nCategory: ${comp.category}\nDescription: ${comp.description}\nTags: ${comp.tags.join(', ')}\nCreated: ${comp.createdAt}\nUpdated: ${comp.updatedAt}\n\nFiles:\n`;
+        const MAX_TOTAL = 12000;
+        let remaining = MAX_TOTAL - header.length;
+        const filesSummary = (comp.files || []).map(f => {
+          if (remaining <= 0) return `  ${f.filename} [skipped — output limit reached]`;
+          const fileHeader = `  ${f.isEntry ? '[ENTRY] ' : ''}${f.filename} (${f.contentType}, ${f.content.length} chars)\n`;
+          const budget = Math.min(remaining - fileHeader.length, 4000);
+          if (budget <= 0) return fileHeader.trim();
+          const truncated = f.content.length <= budget ? f.content : f.content.substring(0, budget) + `\n... [truncated, ${f.content.length} chars total]`;
+          remaining -= fileHeader.length + truncated.length;
+          return fileHeader + truncated;
+        }).join('\n\n');
+        return header + filesSummary;
+      },
+    }),
+
+    ask_user: tool({
+      description: 'Ask the user a clarifying question. Use this when you need more information before proceeding. Do NOT call any other tools in the same response when using ask_user.',
+      parameters: z.object({
+        question: z.string().describe('The question to ask the user'),
+      }),
+      execute: async ({ question }) => {
+        if (!question) return 'Error: No question provided.';
+        return JSON.stringify({ ask_user: true, question });
+      },
+    }),
+
+    execute_code: tool({
+      description: 'Execute JavaScript code in a sandboxed environment and return the output. Use console.log() to see results.',
+      parameters: z.object({
+        code: z.string().describe('JavaScript code to execute'),
+      }),
+      execute: async ({ code }) => {
+        if (!code) return 'Error: No code provided.';
+        return await toolExecuteCode(code);
+      },
+    }),
+
+    write_component_file: tool({
+      description: 'Write or update a single file within a component. Creates the file if it does not exist, updates it if it does. This is the primary tool for editing the current component. CRITICAL: The content must be PURE code only — no XML tags, no markdown, no tool call syntax, no prose. Every file must be complete (not truncated, no diffs). Do NOT use type/interface declarations — use inline type annotations instead.',
+      parameters: z.object({
+        componentId: z.string().describe('Component ID'),
+        filename: z.string().describe('File to write (e.g. "components.tsx")'),
+        content: z.string().describe('Full file content to write. Must be valid, complete code.'),
+      }),
+      execute: async ({ componentId, filename, content }) => {
+        if (!componentId) return 'Error: Missing required field: componentId';
+        if (!filename) return 'Error: Missing required field: filename';
+        if (content === undefined || content === null) return 'Error: Missing required field: content';
+        const targetComp = library.getComponent(componentId);
+        if (!targetComp) return `Component not found: ${componentId}`;
+        const written = library.writeComponentFile(componentId, filename, content);
+        return `File written successfully:\n  Component ID: ${componentId}\n  Filename: ${written.filename}\n  Content type: ${written.contentType}\n  Size: ${content.length} chars`;
+      },
+    }),
+
+    delete_component_file: tool({
+      description: 'Delete a single file from a component by filename. Use this only as a last resort. Prefer write_component_file instead.',
+      parameters: z.object({
+        componentId: z.string().describe('Component ID'),
+        filename: z.string().describe('Filename to delete'),
+      }),
+      execute: async ({ componentId, filename }) => {
+        if (!componentId) return 'Error: Missing required field: componentId';
+        if (!filename) return 'Error: Missing required field: filename';
+        const targetComp = library.getComponent(componentId);
+        if (!targetComp) return `Component not found: ${componentId}`;
+        const fileToDelete = (targetComp.files || []).find(f => f.filename === filename);
+        if (!fileToDelete) return `File not found: ${filename} in component ${componentId}`;
+        const remainingFiles = (targetComp.files || []).filter(f => f.filename !== filename);
+        if (remainingFiles.length === 0) return 'Error: Cannot delete the last file in a component.';
+        const deleted = library.deleteComponentFile(fileToDelete.id);
+        if (deleted && fileToDelete.isEntry && remainingFiles.length > 0) {
+          library.updateComponentFile(remainingFiles[0].id, { isEntry: true } as any);
+        }
+        return deleted
+          ? `File deleted: ${filename} from component ${componentId}. Remaining files: ${remainingFiles.map(f => f.filename).join(', ')}`
+          : `Failed to delete file: ${filename}`;
+      },
+    }),
+
+    create_todo_list: tool({
+      description: 'Create a structured to-do list of tasks to accomplish. Call this after reading files and analyzing issues. Tasks are displayed visually to the user as a checklist.',
+      parameters: z.object({
+        tasks: z.any().describe('Array of task objects, each with "title" (string), optional "id", "description", and "priority" ("high"|"medium"|"low")'),
+      }),
+      execute: async ({ tasks }) => {
+        let parsedTasks = tasks;
+        if (typeof parsedTasks === 'string') {
+          try { parsedTasks = JSON.parse(parsedTasks); } catch { return 'Error: tasks must be a JSON array.'; }
+        }
+        if (!Array.isArray(parsedTasks) || parsedTasks.length === 0) return 'Error: Provide a non-empty tasks array.';
+        const validTasks = parsedTasks.map((t: any, i: number) => ({
+          id: (t.id || t.task_id || String(i + 1)).toString(),
+          title: t.title || t.name || t.task || `Task ${i + 1}`,
+          description: t.description || t.desc || '',
+          priority: (['high', 'medium', 'low'].includes(t.priority || '') ? t.priority : 'medium') as string,
+        }));
+        return JSON.stringify({ todo_list: true, tasks: validTasks });
+      },
+    }),
+
+    verify_component: tool({
+      description: 'Verify the component renders correctly in the preview sandbox. Triggers a live preview render and checks for React/runtime errors. The result is reported asynchronously — continue working after calling this.',
+      parameters: z.object({
+        componentId: z.string().describe('Component ID to verify'),
+      }),
+      execute: async ({ componentId }) => {
+        if (!componentId) return 'Error: Missing componentId. Use {"componentId": "..."} not {"id": "..."}';
+        const comp = library.getComponent(componentId);
+        if (!comp) return `Component not found: ${componentId}`;
+        return 'Verification triggered. The preview will render the component and check for errors. You can continue working — the result will be shown to the user.';
+      },
+    }),
+
+    list_folders: tool({
+      description: 'List all library folders with their IDs, names, descriptions, and component counts.',
+      parameters: z.object({}),
+      execute: async () => {
+        const allFolders = library.listFolders();
+        if (allFolders.length === 0) return 'No folders exist yet.';
+        const summary = allFolders.map(f =>
+          `[${f.id}] ${f.name} — ${f.componentCount ?? 0} component(s)${f.description ? '\n  ' + f.description : ''}`
+        ).join('\n\n');
+        return `Found ${allFolders.length} folder(s):\n\n${summary}`;
+      },
+    }),
+
+    list_folder_contents: tool({
+      description: 'List all components in a specific folder.',
+      parameters: z.object({
+        folderId: z.string().describe('Folder ID'),
+      }),
+      execute: async ({ folderId }) => {
+        if (!folderId) return 'Error: Missing required field: folderId';
+        const listFolder = library.getFolder(folderId);
+        if (!listFolder) return `Folder not found: ${folderId}`;
+        const folderComps = library.getComponentsInFolder(folderId);
+        if (folderComps.length === 0) return `Folder "${listFolder.name}" is empty.`;
+        const summary = folderComps.map(c =>
+          `[${c.id}] ${c.name} — ${c.category}${c.description ? '\n  ' + c.description.substring(0, 100) : ''}`
+        ).join('\n\n');
+        return `Folder "${listFolder.name}" contains ${folderComps.length} component(s):\n\n${summary}`;
+      },
+    }),
+  };
+}
+
+function convertToCoreMessages(messages: any[]): CoreMessage[] {
+  const result: CoreMessage[] = [];
+
+  for (const msg of messages) {
+    const role = msg.role === 'model' ? 'assistant' : msg.role;
+
+    if (role === 'user') {
+      result.push({ role: 'user', content: msg.content || '' });
+    } else if (role === 'assistant') {
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        const parts: any[] = [];
+        if (msg.content) {
+          parts.push({ type: 'text', text: msg.content });
+        }
+        for (const tc of msg.tool_calls) {
+          let input: any;
+          try {
+            input = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          } catch {
+            input = {};
+          }
+          parts.push({
+            type: 'tool-call',
+            toolCallId: tc.id || `tc_${Math.random().toString(36).slice(2)}`,
+            toolName: tc.function.name,
+            input,
+          });
+        }
+        result.push({ role: 'assistant', content: parts } as any);
+      } else {
+        result.push({ role: 'assistant', content: msg.content || '' });
+      }
+    } else if (role === 'tool') {
+      result.push({
+        role: 'tool',
+        content: [{
+          type: 'tool-result',
+          toolCallId: msg.tool_call_id || '',
+          toolName: msg.tool_name || msg.name || '',
+          output: { type: 'text', value: msg.content || '' },
+        }],
+      } as any);
+    }
+  }
+
+  return result;
 }
 
 router.post('/verify-result', (req, res) => {
@@ -205,7 +430,7 @@ router.post('/verify-result', (req, res) => {
 
 router.post('/chat', async (req, res) => {
   try {
-    const { messages, model, provider, max_tokens, componentId } = req.body;
+    const { messages, model, provider, componentId, max_tokens, systemPromptAppend } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'Missing messages' });
@@ -221,184 +446,112 @@ router.post('/chat', async (req, res) => {
     const userQuery = messages[messages.length - 1]?.content || '';
     const detectedLang = detectLanguage(userQuery);
     const langInstruction = buildLanguageInstruction(detectedLang);
-    const toolPrompt = buildLibraryToolSystemPrompt();
 
-    const fullSystem = [LIBRARY_AGENT_BASE_PROMPT, componentContext, toolPrompt, langInstruction].filter(Boolean).join('\n\n');
+    const fullSystem = [LIBRARY_AGENT_BASE_PROMPT, componentContext, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
 
-    const apiMessages: ChatMessage[] = [];
-    apiMessages.push({ role: 'system', content: fullSystem });
+    const coreMessages = convertToCoreMessages(messages);
 
-    for (const msg of messages) {
-      if (msg.role === 'tool' && msg.tool_call_id) {
-        apiMessages.push({ role: msg.role, content: msg.content } as any);
-      } else if (msg.role === 'assistant' && msg.tool_calls) {
-        const content = msg.content || '';
-        apiMessages.push({ role: 'assistant', content });
-        for (const tc of msg.tool_calls) {
-          const toolMsg = `[Tool: ${tc.function?.name}] Result:\n${tc.function?.arguments || '{}'}`;
-          apiMessages.push({ role: 'user', content: toolMsg });
-        }
-      } else {
-        const role = msg.role === 'model' ? 'assistant' : msg.role;
-        apiMessages.push({ role, content: msg.content });
-      }
-    }
+    const aiProvider = createProvider(provider);
+    const tools = buildLibraryTools(componentId);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    const toolResults: any[] = [];
-    let iteration = 0;
-    let askUserDetected = false;
+    const emitEvent = (event: any) => {
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
 
-    while (iteration < MAX_AGENT_ITERATIONS) {
-      iteration++;
+    let reqClosed = false;
+    req.on('close', () => { reqClosed = true; });
 
-      const response = await streamChatCompletion({
-        model: model || 'mimo-v2.5',
-        messages: apiMessages,
-        stream: true,
-        thinking: { type: 'disabled' },
-        ...(max_tokens ? { max_tokens } : {}),
-      }, provider);
+    const aiModel = aiProvider.chatModel(model || 'mimo-v2.5');
 
-      if (!response.ok) {
-        const errorText = (await response.text()).substring(0, 500);
-        res.write(`data: ${JSON.stringify({ error: errorText })}\n\n`);
-        break;
-      }
+    const result = streamText({
+      model: aiModel,
+      system: fullSystem,
+      messages: coreMessages,
+      tools,
+      maxSteps: 1,
+      ...(max_tokens ? { maxTokens: max_tokens } : {}),
+    });
 
-      let fullResponse = '';
+    const stream = result.textStream;
+    let fullText = '';
+    for await (const chunk of stream) {
+      fullText += chunk;
+      emitEvent({ content: chunk });
+    }
 
-      try {
-        await readSSEStream(response, (chunk) => {
-          if (chunk.content) {
-            fullResponse += chunk.content;
-          }
-          if (chunk.reasoning) {
-            res.write(`data: ${JSON.stringify({ reasoning: chunk.reasoning })}\n\n`);
-          }
-        });
-      } catch {
-        break;
-      }
+    const toolCalls = await result.toolCalls;
+    const finishReason = await result.finishReason;
 
-      const toolCalls = parseToolCalls(fullResponse);
-      if (toolCalls.length === 0) {
-        if (fullResponse.trim()) {
-          res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
+    if (toolCalls && toolCalls.length > 0) {
+      for (const tc of toolCalls) {
+        emitEvent({ tool_call: { id: tc.toolCallId, name: tc.toolName, arguments: tc.input } });
+        if (tc.toolName === 'verify_component') {
+          emitEvent({ verify_component: { componentId: (tc.input as any).componentId } });
         }
-        break;
       }
+    }
 
-      let cleanContent = fullResponse;
-      cleanContent = cleanContent.replace(/<tool_call>\s*<tool_name>\s*[\s\S]*?\s*<\/tool_name>\s*<arguments>\s*[\s\S]*?\s*<\/arguments>\s*<\/tool_call>/g, '');
-      cleanContent = cleanContent.replace(/```(?:tool|json)\s*\n?[\s\S]*?```/g, (match) => {
-        try {
-          const inner = match.replace(/^```(?:tool|json)\s*\n?/, '').replace(/\n?```$/, '');
-          const parsed = JSON.parse(inner.trim());
-          if (parsed.name && parsed.arguments) return '';
-        } catch {}
-        return match;
-      });
-      cleanContent = cleanContent.replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g, (match) => {
-        try {
-          const parsed = JSON.parse(match);
-          if (parsed.name && parsed.arguments) return '';
-        } catch {}
-        return match;
-      });
-      cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n').trim();
+    const toolResults = await result.toolResults;
 
-      if (cleanContent) {
-        res.write(`data: ${JSON.stringify({ content: cleanContent })}\n\n`);
+    console.log('[library-agent] complete, text:', fullText.length, 'toolCalls:', toolCalls?.length || 0, 'toolResults:', toolResults?.length || 0, 'finishReason:', finishReason);
+
+    if (toolCalls && toolCalls.length > 0) {
+      const resultIds = new Set((toolResults || []).map(r => r.toolCallId));
+      for (const tc of toolCalls) {
+        if (!resultIds.has(tc.toolCallId)) {
+          emitEvent({ tool_result: { toolCallId: tc.toolCallId, name: tc.toolName, output: '', error: 'Tool execution failed (invalid arguments or validation error)' } });
+        }
       }
+    }
 
-      apiMessages.push({ role: 'assistant', content: fullResponse });
+    if (toolResults && toolResults.length > 0) {
+      for (let i = 0; i < toolResults.length; i++) {
+        const tr = toolResults[i];
+        const outputStr = typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output);
+        emitEvent({ tool_result: { toolCallId: tr.toolCallId, name: tr.toolName, output: outputStr } });
 
-      for (const call of toolCalls) {
-        res.write(`data: ${JSON.stringify({ tool_call: { name: call.name, arguments: call.arguments } })}\n\n`);
-
-        if (call.name === 'ask_user') {
-          const question = call.arguments?.question || '';
-          res.write(`data: ${JSON.stringify({ ask_user: { question } })}\n\n`);
-          const result = { name: call.name, input: call.arguments, output: JSON.stringify({ ask_user: true, question }) };
-          toolResults.push(result);
-          res.write(`data: ${JSON.stringify({ tool_result: result })}\n\n`);
-          askUserDetected = true;
-          break;
-        }
-
-        const onProgress = (chunk: string) => {
-          res.write(`data: ${JSON.stringify({ tool_progress: { name: call.name, chunk } })}\n\n`);
-        };
-
-        const result = await executeLibraryTool(call, onProgress);
-
-        if (call.name === 'verify_component' && !result.error) {
-          try {
-            const parsed = JSON.parse(result.output);
-            if (parsed.verify_component) {
-              res.write(`data: ${JSON.stringify({ verify_component: { componentId: parsed.componentId } })}\n\n`);
-              const renderResult = await waitForVerifyResult(parsed.componentId, 10000);
-              if (renderResult) {
-                result.output = renderResult.success
-                  ? 'Verification passed: Component renders without errors.'
-                  : `Verification failed with errors:\n${renderResult.errors.join('\n')}`;
-                if (!renderResult.success) result.error = 'Render errors';
-              } else {
-                result.output = 'Verification timed out. Assuming component renders correctly.';
-              }
-            }
-          } catch {}
-        }
-
-        toolResults.push(result);
-
-        if (call.name === 'create_component' && !result.error) {
-          const match = result.output.match(/ID:\s*(\w+)/);
+        if (tr.toolName === 'create_component' && !outputStr.startsWith('Error:')) {
+          const match = outputStr.match(/ID:\s*(\w+)/);
           if (match) {
             const comp = library.getComponent(match[1]);
-            if (comp) res.write(`data: ${JSON.stringify({ component_created: comp })}\n\n`);
+            if (comp) emitEvent({ component_created: comp });
           }
         }
 
-        if ((call.name === 'write_component_file' || call.name === 'update_component') && !result.error) {
-          const compIdMatch = result.output.match(/Component ID:\s*(\w+)/) || result.output.match(/ID:\s*(\w+)/);
-          if (compIdMatch) {
-            const comp = library.getComponent(compIdMatch[1]);
-            if (comp) res.write(`data: ${JSON.stringify({ component_updated: comp })}\n\n`);
+        if ((tr.toolName === 'write_component_file' || tr.toolName === 'update_component' || tr.toolName === 'delete_component_file') && !outputStr.startsWith('Error:')) {
+          const match = outputStr.match(/Component ID:\s*(\w+)/) || outputStr.match(/ID:\s*(\w+)/) || outputStr.match(/component\s+(\w+)/i);
+          if (match) {
+            const comp = library.getComponent(match[1]);
+            if (comp) emitEvent({ component_updated: comp });
           }
         }
 
-        if (call.name === 'create_todo_list' && !result.error) {
+        if (tr.toolName === 'create_todo_list' && !outputStr.startsWith('Error:')) {
           try {
-            const parsed = JSON.parse(result.output);
-            if (parsed.todo_list) {
-              res.write(`data: ${JSON.stringify({ todo_list: parsed.tasks })}\n\n`);
-            }
+            const parsed = JSON.parse(outputStr);
+            if (parsed.todo_list) emitEvent({ todo_list: parsed.tasks });
           } catch {}
         }
 
-        const toolMsg = result.error
-          ? `[Tool: ${result.name}] Error: ${result.error}`
-          : `[Tool: ${result.name}] Result:\n${result.output}`;
-        apiMessages.push({ role: 'user', content: toolMsg });
-        res.write(`data: ${JSON.stringify({ tool_result: result })}\n\n`);
+        if (tr.toolName === 'ask_user' && !outputStr.startsWith('Error:')) {
+          try {
+            const parsed = JSON.parse(outputStr);
+            if (parsed.ask_user) emitEvent({ ask_user: { question: parsed.question } });
+          } catch {}
+        }
       }
-
-      if (askUserDetected) break;
     }
 
-    if (toolResults.length > 0) {
-      res.write(`data: ${JSON.stringify({ tool_summary: toolResults })}\n\n`);
-    }
+    emitEvent({ done: true });
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
-    console.error('[library-agent/chat] Error:', error.message);
+    console.error('[library-agent/chat] Error:', error.message, error.stack?.substring(0, 300));
     if (!res.headersSent) {
       res.status(500).json({ error: error.message });
     } else {

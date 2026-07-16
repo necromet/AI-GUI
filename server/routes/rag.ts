@@ -79,7 +79,7 @@ router.delete('/documents/:id', (req: Request, res: Response) => {
 
 router.post('/query', async (req: Request, res: Response) => {
   try {
-    const { query, messages, model, provider, systemInstruction, stream = true, max_tokens } = req.body;
+    const { query, messages, model, provider, systemInstruction, stream = true, max_tokens, systemPromptAppend } = req.body;
 
     if (!query && !messages?.length) {
       res.status(400).json({ error: 'Missing query or messages' });
@@ -94,9 +94,7 @@ router.post('/query', async (req: Request, res: Response) => {
     const langInstruction = buildLanguageInstruction(detectedLang);
 
     const apiMessages: ChatMessage[] = [];
-    const fullSystem = systemInstruction
-      ? `${systemInstruction}\n\n${ragPrompt}\n\n${langInstruction}`
-      : `${ragPrompt}\n\n${langInstruction}`;
+    const fullSystem = [systemInstruction, ragPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
     apiMessages.push({ role: 'system', content: fullSystem });
 
     const history = messages || [{ role: 'user', content: userQuery }];

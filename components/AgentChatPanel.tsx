@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
+import { getEnabledTools, getSystemPromptAppend } from '../lib/agentConfig';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -39,7 +40,7 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [enabledTools, setEnabledTools] = useState<string[]>(['web_browse', 'execute_code', 'search_web']);
+  const [enabledTools, setEnabledTools] = useState<string[]>(() => getEnabledTools('plugin'));
   const [availableTools, setAvailableTools] = useState<ToolDefinition[]>([]);
   const [toolResults, setToolResults] = useState<ToolResult[]>([]);
   const [showToolResults, setShowToolResults] = useState(true);
@@ -189,7 +190,7 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       } else {
         const history = messages.map(m => ({ role: m.role === Role.Assistant ? 'assistant' : 'user', content: m.content }));
 
-        for await (const chunk of sendAgentMessage(history, enabledTools, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal)) {
+        for await (const chunk of sendAgentMessage(history, enabledTools, modelConfig.apiModelId || modelConfig.id, modelConfig.provider, abortController.signal, undefined, getSystemPromptAppend('plugin'))) {
           if (chunk.toolCall) {
             setToolResults(prev => [...prev, { name: chunk.toolCall!.name, input: chunk.toolCall!.arguments, output: '' }]);
           }

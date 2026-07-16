@@ -28,6 +28,7 @@ import StitchPanel from './components/StitchPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
 import { StitchControls } from './components/StitchEditor';
+import SettingsPage from './components/SettingsPage';
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 const fileToAttachment = (file: File): Promise<Attachment> => {
@@ -175,6 +176,7 @@ const App: React.FC = () => {
   const isChatMode = location.pathname.startsWith('/chat');
   const isExperimentsMode = location.pathname.startsWith('/experiments');
   const isLibraryMode = location.pathname.startsWith('/library');
+  const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : 'library';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
     if (isChatMode) return 'chat';
@@ -979,23 +981,6 @@ const App: React.FC = () => {
         currentModelName={selectedModelConfig.name}
         sidebarPanel={sidebarPanel}
         onSidebarPanelChange={setSidebarPanel}
-        settingsProps={{
-          neonColor,
-          onChangeNeonColor: (color) => { setNeonColor(color); setNeonPreset(''); },
-          neonPreset,
-          onChangeNeonPreset: setNeonPreset,
-          models,
-          onAddModel: handleAddModel,
-          onDeleteModel: handleDeleteModel,
-          defaultModelId,
-          onChangeDefaultModel: handleChangeDefaultModel,
-          maxOutputTokens,
-          onChangeMaxOutputTokens: setMaxOutputTokens,
-          fontSize,
-          onChangeFontSize: setFontSize,
-          fontFamily,
-          onChangeFontFamily: setFontFamily,
-        }}
         availableModels={models}
         libraryControls={libraryControls}
       />
@@ -1013,7 +998,29 @@ const App: React.FC = () => {
           </button>
         )}
 
-        {/* Top bar */}
+        {/* Top bar — hidden on settings page */}
+        {isSettingsPage ? (
+          <RequireAuth isAuth={isChatAuthenticated}>
+            <SettingsPage
+              theme={theme}
+              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              neonColor={neonColor}
+              onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
+              neonPreset={neonPreset}
+              onChangeNeonPreset={setNeonPreset}
+              models={models}
+              defaultModelId={defaultModelId}
+              onChangeDefaultModel={handleChangeDefaultModel}
+              maxOutputTokens={maxOutputTokens}
+              onChangeMaxOutputTokens={setMaxOutputTokens}
+              fontSize={fontSize}
+              onChangeFontSize={setFontSize}
+              fontFamily={fontFamily}
+              onChangeFontFamily={setFontFamily}
+            />
+          </RequireAuth>
+        ) : (
+        <>
         {(!isLibraryMode || libraryControls) && (
         <div className="flex items-center px-2 py-1.5 md:px-3 md:py-1.5 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
@@ -1412,7 +1419,7 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
 
@@ -1449,6 +1456,8 @@ const App: React.FC = () => {
               </div>
             )}
           </>
+        )}
+        </>
         )}
 
         <Toaster />

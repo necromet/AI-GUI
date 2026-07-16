@@ -9,6 +9,7 @@ import { getLayoutDimensions } from '../lib/layoutUtils';
 import { renderSlide, renderAllSlides, validateDesignSpec } from '../services/stitchService';
 import { sendAgentMessage, ToolResult } from '../services/agentService';
 import * as db from '../services/apiDatabaseAdapter';
+import { getEnabledTools as getStitchEnabledTools, getSystemPromptAppend as getStitchSystemPromptAppend } from '../lib/agentConfig';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
@@ -275,7 +276,14 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
       context.totalSlides = project.boards.length;
     }
 
-    const tools = isIgContent ? ['generate_spec', 'edit_spec'] : ['edit_html', 'generate_html'];
+    const stitchEnabledTools = getStitchEnabledTools('stitch');
+    const defaultTools = isIgContent ? ['generate_spec', 'edit_spec'] : ['edit_html', 'generate_html'];
+    const tools = defaultTools.filter(t => stitchEnabledTools.includes(t));
+    if (tools.length === 0) {
+      onNotification?.('All stitch tools are disabled. Enable them in Settings → Agents.', 'error');
+      setIsGenerating(false);
+      return;
+    }
 
     let fullText = '';
     let fullThinking = '';
@@ -292,6 +300,7 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
         activeModel?.provider,
         abortController.signal,
         context,
+        getStitchSystemPromptAppend('stitch'),
       );
 
       for await (const chunk of stream) {
