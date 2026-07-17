@@ -31,6 +31,7 @@ const { default: modelRoutes } = await import('./routes/models');
 const { default: conversationRoutes } = await import('./routes/conversations');
 const { default: messageRoutes } = await import('./routes/messages');
 const { default: statsRoutes } = await import('./routes/stats');
+const { default: pythonRoutes } = await import('./routes/python');
 const { getDatabase } = await import('./db');
 
 getDatabase();
@@ -89,6 +90,7 @@ app.use('/api/models', modelRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/db', messageRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/python', pythonRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

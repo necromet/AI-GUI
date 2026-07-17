@@ -227,6 +227,58 @@ export const NEON_PRESETS: NeonPresetDef[] = [
   },
 ];
 
+export interface ThemePresetDef {
+  id: string;
+  name: string;
+  light: Record<string, string>;
+  dark: Record<string, string>;
+  neon?: {
+    light: { primary: NeonVariant; secondary: NeonVariant; accent: NeonVariant };
+    dark: { primary: NeonVariant; secondary: NeonVariant; accent: NeonVariant };
+  };
+}
+
+export const THEME_PRESETS: ThemePresetDef[] = [
+  {
+    id: 'default',
+    name: 'Default',
+    light: {},
+    dark: {},
+  },
+  {
+    id: 'mint-garden',
+    name: 'Mint Garden',
+    light: {
+      '--bg-100': '#ffffff',
+      '--bg-200': '#f7f9f3',
+      '--bg-300': '#f0f0f0',
+      '--bg-400': '#d4d4d4',
+      '--text-100': '#000000',
+      '--text-300': '#333333',
+      '--text-500': '#737373',
+      '--border-300': 'rgba(0,0,0,0.12)',
+      '--border-200': 'rgba(0,0,0,0.06)',
+      '--surface-hover': 'rgba(0,0,0,0.04)',
+    },
+    dark: {
+      '--bg-100': '#000000',
+      '--bg-200': '#1a212b',
+      '--bg-300': '#333333',
+      '--bg-400': '#545454',
+      '--text-100': '#ffffff',
+      '--text-300': '#cccccc',
+      '--text-500': '#888888',
+      '--border-300': 'rgba(255,255,255,0.12)',
+      '--border-200': 'rgba(255,255,255,0.06)',
+      '--surface-hover': 'rgba(255,255,255,0.03)',
+    },
+    neon: {
+      light: { primary: v(79,70,229), secondary: v(20,184,166), accent: v(245,158,11) },
+      dark:  { primary: v(129,140,248), secondary: v(45,212,191), accent: v(252,211,77) },
+    },
+  },
+];
+
 export const INDIVIDUAL_COLORS: Record<string, { dark: NeonVariant; light: NeonVariant }> = {
   red:    { dark: v(248,113,113), light: v(180,40,40) },
   orange: { dark: v(251,146,60),  light: v(190,80,15) },

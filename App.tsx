@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, X } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
-import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS } from './constants';
+import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
@@ -218,6 +218,9 @@ const App: React.FC = () => {
   const [neonPreset, setNeonPreset] = useState<string>(() => {
     return localStorage.getItem('neonPreset') || 'cyber';
   });
+  const [themePreset, setThemePreset] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_themePreset') || 'default';
+  });
   const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
     const stored = localStorage.getItem('maxOutputTokens');
     if (stored) {
@@ -323,6 +326,30 @@ const App: React.FC = () => {
     localStorage.setItem('neonPreset', neonPreset);
     localStorage.setItem('neonColor', neonColor);
   }, [neonColor, neonPreset, theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const mode = theme === 'dark' ? 'dark' : 'light';
+    const preset = THEME_PRESETS.find(p => p.id === themePreset) || THEME_PRESETS[0];
+    const vars = preset[mode];
+
+    const defaultVars = THEME_PRESETS[0][mode];
+    for (const key of new Set([...Object.keys(vars), ...Object.keys(defaultVars)])) {
+      root.style.setProperty(key, vars[key] || '');
+    }
+
+    if (preset.neon) {
+      const neonColors = preset.neon[mode];
+      root.style.setProperty('--neon-rgb', neonColors.primary.rgb);
+      root.style.setProperty('--neon-color', neonColors.primary.tailwind);
+      root.style.setProperty('--neon-secondary-rgb', neonColors.secondary.rgb);
+      root.style.setProperty('--neon-secondary', neonColors.secondary.tailwind);
+      root.style.setProperty('--neon-accent-rgb', neonColors.accent.rgb);
+      root.style.setProperty('--neon-accent', neonColors.accent.tailwind);
+    }
+
+    localStorage.setItem('edward:labs_themePreset', themePreset);
+  }, [themePreset, theme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--app-font-size', `${FONT_SIZE_MAP[fontSize] || 15}px`);
@@ -1000,7 +1027,7 @@ const App: React.FC = () => {
 
         {/* Top bar — hidden on settings page */}
         {isSettingsPage ? (
-          <RequireAuth isAuth={isChatAuthenticated}>
+          <RequireAuth isAuth={isChatAuthenticated || isExperimentsAuthenticated || isLibraryAuthenticated}>
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -1008,6 +1035,8 @@ const App: React.FC = () => {
               onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
               neonPreset={neonPreset}
               onChangeNeonPreset={setNeonPreset}
+              themePreset={themePreset}
+              onChangeThemePreset={setThemePreset}
               models={models}
               defaultModelId={defaultModelId}
               onChangeDefaultModel={handleChangeDefaultModel}
@@ -1491,6 +1520,10 @@ const App: React.FC = () => {
           models={models.filter(m => m.modelType === 'chat').map(m => ({ id: m.id, name: m.name }))}
           selectedModelId={currentModelId}
           onModelChange={handleSelectModel}
+          onUndoAgent={libraryControls.onUndoAgent}
+          onRedoAgent={libraryControls.onRedoAgent}
+          canUndoAgent={libraryControls.canUndoAgent}
+          canRedoAgent={libraryControls.canRedoAgent}
         />
       )}
     </div>

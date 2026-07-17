@@ -308,7 +308,13 @@ function buildLibraryTools(componentId?: string) {
         if (typeof parsedTasks === 'string') {
           try { parsedTasks = JSON.parse(parsedTasks); } catch { return 'Error: tasks must be a JSON array.'; }
         }
-        if (!Array.isArray(parsedTasks) || parsedTasks.length === 0) return 'Error: Provide a non-empty tasks array.';
+        if (parsedTasks && typeof parsedTasks === 'object' && !Array.isArray(parsedTasks)) {
+          parsedTasks = [parsedTasks];
+        }
+        if (!Array.isArray(parsedTasks)) return 'Error: tasks must be an array of task objects.';
+        if (parsedTasks.length === 0) {
+          return JSON.stringify({ todo_list: true, tasks: [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }] });
+        }
         const validTasks = parsedTasks.map((t: any, i: number) => ({
           id: (t.id || t.task_id || String(i + 1)).toString(),
           title: t.title || t.name || t.task || `Task ${i + 1}`,
@@ -473,7 +479,7 @@ router.post('/chat', async (req, res) => {
       system: fullSystem,
       messages: coreMessages,
       tools,
-      maxSteps: 1,
+      maxSteps: 6,
       ...(max_tokens ? { maxTokens: max_tokens } : {}),
     });
 

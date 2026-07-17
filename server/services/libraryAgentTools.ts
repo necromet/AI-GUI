@@ -46,7 +46,7 @@ export const LIBRARY_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'delete_component_file',
-    description: 'Delete a single file from a component by filename. Use this only as a last resort when a file truly needs to be removed (e.g. after splitting code into new files and the old combined file is no longer needed). Prefer overwriting files with write_component_file instead of deleting.',
+    description: 'Delete a single file from a component by filename. IMPORTANT: You MUST call ask_user first to get explicit confirmation from the user before using this tool. Never delete a file without asking. Prefer overwriting files with write_component_file instead of deleting.',
     parameters: {
       componentId: { type: 'string', description: 'Component ID' },
       filename: { type: 'string', description: 'Filename to delete (e.g. "old-style.css")' },
@@ -119,6 +119,7 @@ INCORRECT (no blank line — breaks parsing):
 Now let me analyze...
 - Do NOT use \`type Foo = ...\` or \`interface Foo { ... }\` declarations in files — the sandbox strips them. Use inline type annotations instead.
 - When you use ask_user, do NOT call any other tools in the same response.
+- NEVER call delete_component_file without first calling ask_user to get the user's explicit approval. Show the user which file you want to delete and why, then wait for their response before proceeding.
 - execute_code runs JavaScript in a sandboxed VM (Node.js-like). Use it for data transformations, NOT for React rendering.
 - Content types: html, tsx, css, js, json, markdown.
 - Categories: ui-widget, template, theme.
@@ -316,10 +317,16 @@ export async function executeLibraryTool(
             break;
           }
         }
-        if (!Array.isArray(tasks) || tasks.length === 0) {
-          result.output = 'Error: Provide a non-empty tasks array.';
-          result.error = 'No tasks';
+        if (tasks && typeof tasks === 'object' && !Array.isArray(tasks)) {
+          tasks = [tasks];
+        }
+        if (!Array.isArray(tasks)) {
+          result.output = 'Error: tasks must be an array of task objects.';
+          result.error = 'Invalid tasks';
           break;
+        }
+        if (tasks.length === 0) {
+          tasks = [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }];
         }
         const validTasks = tasks.map((t: any, i: number) => ({
           id: (t.id || t.task_id || String(i + 1)).toString(),

@@ -60,8 +60,8 @@ export type Mode = 'selector' | 'chat' | 'experiments' | 'library';
 export interface LibraryComponent {
   id: string;
   name: string;
-  category: 'ui-widget' | 'template' | 'theme';
-  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  category: 'ui-widget' | 'template' | 'theme' | 'python';
+  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown' | 'python';
   description: string;
   tags: string[];
   content: string;
@@ -79,7 +79,7 @@ export interface LibraryComponentFile {
   id: string;
   componentId: string;
   filename: string;
-  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown';
+  contentType: 'tsx' | 'ts' | 'html' | 'css' | 'js' | 'json' | 'markdown' | 'python';
   content: string;
   sortOrder: number;
   isEntry: boolean;

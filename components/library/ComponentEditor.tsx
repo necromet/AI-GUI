@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Code, Eye, Undo2, Redo2, Maximize2, Minimize2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, X, Code, Eye, Undo2, Redo2, Maximize2, Minimize2, Play, Square, Terminal } from 'lucide-react';
 import { LibraryComponent, LibraryComponentFile } from '../../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,10 @@ export interface LibraryControls {
   onDeleteFile: (fileId: string) => void;
   viewMode: 'code' | 'preview';
   onViewModeChange: (mode: 'code' | 'preview') => void;
+  onUndoAgent: () => void;
+  onRedoAgent: () => void;
+  canUndoAgent: boolean;
+  canRedoAgent: boolean;
 }
 
 interface ComponentEditorProps {
@@ -57,9 +61,15 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const [previewErrors, setPreviewErrors] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const [pythonOutput, setPythonOutput] = useState<{ stdout: string; stderr: string; exitCode: number; timedOut: boolean } | null>(null);
+  const [pythonRunning, setPythonRunning] = useState(false);
+  const [pythonRequirements, setPythonRequirements] = useState('');
+  const pythonAbortRef = useRef<AbortController | null>(null);
   const editorRef = useRef<any>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const previewErrorsRef = useRef<{ errors: string[]; loadErrors: string[]; complete: boolean }>({ errors: [], loadErrors: [], complete: false });
+  const agentHistoryRef = useRef<LibraryComponentFile[][]>([]);
+  const agentFutureRef = useRef<LibraryComponentFile[][]>([]);
 
   const activeFile = useMemo(() => editFiles.find(f => f.id === activeFileId) || null, [editFiles, activeFileId]);
   const [previewHtml, setPreviewHtml] = useState('');
@@ -84,6 +94,65 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
+  }, []);
+
+  const handleUndoAgent = () => {
+    if (agentHistoryRef.current.length === 0) return;
+    const prev = agentHistoryRef.current.pop()!;
+    agentFutureRef.current.push(editFiles.map(f => ({ ...f })));
+    setEditFiles(prev);
+    setIsDirty(true);
+    onNotification?.('Undone', 'success');
+  };
+
+  const handleRedoAgent = () => {
+    if (agentFutureRef.current.length === 0) return;
+    const next = agentFutureRef.current.pop()!;
+    agentHistoryRef.current.push(editFiles.map(f => ({ ...f })));
+    setEditFiles(next);
+    setIsDirty(true);
+    onNotification?.('Redone', 'success');
+  };
+
+  const handleRunPython = useCallback(async () => {
+    if (!activeFile || activeFile.contentType !== 'python' || pythonRunning) return;
+    const controller = new AbortController();
+    pythonAbortRef.current = controller;
+    setPythonRunning(true);
+    setPythonOutput(null);
+    try {
+      const reqs = pythonRequirements
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      const res = await fetch('/api/python/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: activeFile.content, requirements: reqs.length > 0 ? reqs : undefined }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        setPythonOutput({ stdout: '', stderr: err.error || 'Request failed', exitCode: 1, timedOut: false });
+      } else {
+        const data = await res.json();
+        setPythonOutput(data);
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setPythonOutput({ stdout: '', stderr: 'Execution cancelled', exitCode: 130, timedOut: false });
+      } else {
+        setPythonOutput({ stdout: '', stderr: err.message, exitCode: 1, timedOut: false });
+      }
+    } finally {
+      pythonAbortRef.current = null;
+      setPythonRunning(false);
+    }
+  }, [activeFile, pythonRunning, pythonRequirements]);
+
+  const handleStopPython = useCallback(() => {
+    pythonAbortRef.current?.abort();
+    setPythonRunning(false);
   }, []);
 
   useEffect(() => {
@@ -111,8 +180,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       onDeleteFile: (fileId: string) => setDeleteFileDialog(fileId),
       viewMode,
       onViewModeChange: setViewMode,
+      onUndoAgent: handleUndoAgent,
+      onRedoAgent: handleRedoAgent,
+      canUndoAgent: agentHistoryRef.current.length > 0,
+      canRedoAgent: agentFutureRef.current.length > 0,
     });
-  }, [selectedComponent, isDirty, isSaving, onControlsChange, editFiles, activeFileId, viewMode, openFileIds]);
+  }, [selectedComponent, isDirty, isSaving, onControlsChange, editFiles, activeFileId, viewMode, openFileIds, handleUndoAgent, handleRedoAgent]);
 
   useEffect(() => {
     return () => { onControlsChange?.(null); };
@@ -141,6 +214,10 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           changedIds.add(newFile.id);
         }
       }
+
+      agentHistoryRef.current.push(editFiles.map(f => ({ ...f })));
+      if (agentHistoryRef.current.length > 50) agentHistoryRef.current.shift();
+      agentFutureRef.current = [];
 
       setEditFiles(newFiles);
       setOpenFileIds(prev => {
@@ -432,6 +509,16 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                     >
                       <Redo2 size={12} />
                     </button>
+                    {activeFile.contentType === 'python' && (
+                      <button
+                        onClick={pythonRunning ? handleStopPython : handleRunPython}
+                        className="p-1.5 rounded-lg transition-colors hover:opacity-80 ml-1"
+                        style={{ color: pythonRunning ? '#ef4444' : 'var(--neon-color)' }}
+                        title={pythonRunning ? 'Stop' : 'Run Python'}
+                      >
+                        {pythonRunning ? <Square size={12} /> : <Play size={12} />}
+                      </button>
+                    )}
                     {!activeFile.isEntry && (
                       <button
                         onClick={() => handleSetEntryFile(activeFile.id)}
@@ -452,6 +539,63 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                     className="absolute inset-0"
                   />
                 </div>
+                {activeFile.contentType === 'python' && (pythonOutput || pythonRunning) && (
+                  <div className="flex-shrink-0 flex flex-col" style={{ maxHeight: '40%', borderTop: '1px solid var(--border-300)' }}>
+                    <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0" style={{ backgroundColor: '#0d1117', borderBottom: '1px solid #21262d' }}>
+                      <div className="flex items-center gap-1.5">
+                        <Terminal size={11} style={{ color: '#8b949e' }} />
+                        <span className="text-[11px] font-medium" style={{ color: '#8b949e' }}>Output</span>
+                        {pythonRunning && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>
+                            running...
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={pythonRequirements}
+                          onChange={e => setPythonRequirements(e.target.value)}
+                          placeholder="pip packages (comma-separated)"
+                          className="text-[11px] px-2 py-0.5 rounded outline-none"
+                          style={{ backgroundColor: '#161b22', border: '1px solid #30363d', color: '#c9d1d9', width: '200px' }}
+                          title="Enter pip package names separated by commas"
+                        />
+                        {pythonOutput && (
+                          <span className="text-[10px]" style={{ color: pythonOutput.exitCode === 0 ? '#3fb950' : '#f85149' }}>
+                            exit {pythonOutput.exitCode}
+                            {pythonOutput.timedOut ? ' (timed out)' : ''}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => { setPythonOutput(null); }}
+                          className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ color: '#8b949e', backgroundColor: 'rgba(255,255,255,0.05)' }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-auto p-3" style={{ backgroundColor: '#0d1117' }}>
+                      {pythonOutput?.stdout && (
+                        <pre className="text-xs whitespace-pre-wrap mb-2" style={{ color: '#c9d1d9', fontFamily: "'JetBrains Mono', monospace" }}>
+                          {pythonOutput.stdout}
+                        </pre>
+                      )}
+                      {pythonOutput?.stderr && (
+                        <pre className="text-xs whitespace-pre-wrap" style={{ color: '#f85149', fontFamily: "'JetBrains Mono', monospace" }}>
+                          {pythonOutput.stderr}
+                        </pre>
+                      )}
+                      {pythonRunning && !pythonOutput && (
+                        <div className="flex items-center gap-2 py-2">
+                          <div className="w-3 h-3 rounded-full animate-spin" style={{ border: '2px solid #30363d', borderTopColor: 'var(--neon-color)' }} />
+                          <span className="text-xs" style={{ color: '#8b949e' }}>Executing...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-500)' }}>

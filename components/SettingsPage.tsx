@@ -4,7 +4,7 @@ import {
   Moon, Sun, Palette, Type, Bot, Shield, Sparkles, Wrench, RotateCcw,
 } from 'lucide-react';
 import { ModelConfig } from '../types';
-import { NEON_PRESETS, INDIVIDUAL_COLORS } from '../constants';
+import { NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from '../constants';
 import { FONT_SIZE_MAP, FONT_FAMILY_MAP } from '../App';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,8 @@ interface SettingsPageProps {
   onChangeNeonColor: (color: string) => void;
   neonPreset: string;
   onChangeNeonPreset: (preset: string) => void;
+  themePreset: string;
+  onChangeThemePreset: (preset: string) => void;
   models: ModelConfig[];
   defaultModelId: string;
   onChangeDefaultModel: (id: string) => void;
@@ -79,6 +81,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeNeonColor,
   neonPreset,
   onChangeNeonPreset,
+  themePreset,
+  onChangeThemePreset,
   models,
   defaultModelId,
   onChangeDefaultModel,
@@ -140,6 +144,56 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
           <Switch checked={theme === 'dark'} onCheckedChange={onToggleTheme} />
+        </div>
+      </div>
+
+      <div>
+        {sectionTitle('Theme Preset', 'Full visual theme including backgrounds, text, and accent colors')}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {THEME_PRESETS.map((preset) => {
+            const isActive = themePreset === preset.id;
+            const previewColors = preset.id === 'default'
+              ? (mode === 'dark' ? ['#0e0e0e', '#1a1a1a', '#f87171'] : ['#ffffff', '#f7f7f8', '#f87171'])
+              : preset.neon
+                ? [preset[mode]['--bg-100'] || (mode === 'dark' ? '#0e0e0e' : '#fff'), preset[mode]['--bg-200'] || (mode === 'dark' ? '#1a1a1a' : '#f7f7f8'), preset.neon[mode].primary.tailwind]
+                : [preset[mode]['--bg-100'] || '#fff', preset[mode]['--bg-200'] || '#f7f7f8', 'var(--neon-color)'];
+            return (
+              <button
+                key={preset.id}
+                onClick={() => onChangeThemePreset(preset.id)}
+                className="group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200"
+                style={{
+                  backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'var(--bg-200)',
+                  border: `1px solid ${isActive ? 'rgba(var(--neon-rgb), 0.25)' : 'var(--border-300)'}`,
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  {previewColors.map((c, i) => (
+                    <div
+                      key={i}
+                      className="w-5 h-5 rounded-full transition-all duration-200"
+                      style={{
+                        backgroundColor: c,
+                        marginLeft: i > 0 ? '-4px' : '0',
+                        border: '1px solid var(--border-300)',
+                        boxShadow: isActive ? `0 0 8px ${c}80` : 'none',
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="text-left">
+                  <span className="text-sm font-medium" style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-100)' }}>
+                    {preset.name}
+                  </span>
+                </div>
+                {isActive && (
+                  <div className="ml-auto">
+                    <Sparkles size={14} style={{ color: 'var(--neon-color)' }} />
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -401,7 +455,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
 
   const agentLabels: Record<AgentType, string> = {
     plugin: 'Plugin Agent',
-    library: 'Library Agent',
+    library: 'Librarian',
     stitch: 'Stitch Agent',
     rag: 'RAG Agent',
   };

@@ -7,12 +7,14 @@ export const CATEGORIES = [
   { key: 'ui-widget', label: 'Widgets', icon: React.createElement(LayoutGrid, { size: 12 }) },
   { key: 'template', label: 'Templates', icon: React.createElement(Layers, { size: 12 }) },
   { key: 'theme', label: 'Themes', icon: React.createElement(Palette, { size: 12 }) },
+  { key: 'python', label: 'Python', icon: React.createElement(FileCode, { size: 12 }) },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'ui-widget': 'Widget',
   'template': 'Template',
   'theme': 'Theme',
+  'python': 'Python',
 };
 
 export const THEME_CSS_TEMPLATE = `:root {
@@ -642,10 +644,11 @@ export const EXT_TO_CONTENT_TYPE: Record<string, string> = {
   ts: 'ts', tsx: 'tsx',
   json: 'json',
   md: 'markdown', markdown: 'markdown',
+  py: 'python',
 };
 
-export const ACE_LANG_MAP: Record<string, 'html' | 'css' | 'javascript' | 'typescript' | 'json' | 'markdown'> = {
-  html: 'html', css: 'css', js: 'javascript', ts: 'typescript', tsx: 'typescript', json: 'json', markdown: 'markdown',
+export const ACE_LANG_MAP: Record<string, 'html' | 'css' | 'javascript' | 'typescript' | 'json' | 'markdown' | 'python'> = {
+  html: 'html', css: 'css', js: 'javascript', ts: 'typescript', tsx: 'typescript', json: 'json', markdown: 'markdown', python: 'python',
 };
 
 export function deriveContentType(filename: string): string {
@@ -658,6 +661,7 @@ export function getFileIcon(filename: string) {
   if (filename.endsWith('.css')) return React.createElement(FileCode, { size: 12 });
   if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.tsx')) return React.createElement(FileType, { size: 12 });
   if (filename.endsWith('.json')) return React.createElement(FileJson, { size: 12 });
+  if (filename.endsWith('.py')) return React.createElement(FileCode, { size: 12 });
   return React.createElement(FileText, { size: 12 });
 }
 
@@ -800,6 +804,11 @@ export function buildPreviewHtml(files: LibraryComponentFile[], componentId?: st
 
   if (entry.contentType === 'css') {
     return `<!DOCTYPE html><html><head>${themeStyle}<style>${entry.content}</style></head><body><div style="font-family:system-ui;padding:2rem;color:${isDark ? '#b4b4b4' : '#888'}"><p>CSS Preview</p><p class="test">This text uses the component's stylesheet.</p></div></body></html>`;
+  }
+
+  if (entry.contentType === 'python') {
+    const escaped = entry.content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<!DOCTYPE html><html><head>${themeStyle}</head><body><div style="padding:1rem;min-height:100vh"><div style="font-family:system-ui;font-size:12px;color:#888;margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Python Preview (run from editor)</div><pre style="font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;padding:1rem;background:#1e1e2e;color:#cdd6f4;border-radius:8px;overflow:auto;white-space:pre-wrap">${escaped}</pre></div></body></html>`;
   }
 
   return `<!DOCTYPE html><html><head>${themeStyle}</head><body><pre style="font-family:monospace;padding:1rem;color:${bodyColor};background:${bodyBg};min-height:100vh;white-space:pre-wrap">${entry.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
