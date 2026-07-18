@@ -12,6 +12,7 @@ import * as db from '../services/apiDatabaseAdapter';
 import { getEnabledTools as getStitchEnabledTools, getSystemPromptAppend as getStitchSystemPromptAppend } from '../lib/agentConfig';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
+import StitchPromptBar from './StitchPromptBar';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
 import { MathCurveLoader } from '@/components/ui/math-curve-loader';
 import { ScrollArea } from '@/components/ui/scroll-area';

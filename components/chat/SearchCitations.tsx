@@ -3,6 +3,14 @@ import { Search, ChevronDown, Globe, ExternalLink } from 'lucide-react';
 import { SearchAnnotation } from '../../types';
 import { Card } from '@/components/ui/card';
 
+const getHostname = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace('www.', '');
+  } catch {
+    return url || '';
+  }
+};
+
 const GRADIENTS = [
   'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -107,7 +115,7 @@ const SearchCitations: React.FC<SearchCitationsProps> = ({ annotations }) => {
                 className="inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white mt-0.5"
                 style={{ background: GRADIENTS[idx % GRADIENTS.length] }}
               >
-                {(annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')).charAt(0).toUpperCase()}
+                {(annotation.site_name || getHostname(annotation.url)).charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold transition-colors line-clamp-2 leading-snug tracking-tight" style={{ color: 'var(--text-100)' }}>
@@ -120,7 +128,7 @@ const SearchCitations: React.FC<SearchCitationsProps> = ({ annotations }) => {
                     <Globe size={11} style={{ color: 'var(--text-500)' }} />
                   )}
                   <span className="text-xs font-medium truncate tracking-wide uppercase" style={{ color: 'var(--text-500)' }}>
-                    {annotation.site_name || new URL(annotation.url).hostname.replace('www.', '')}
+                    {annotation.site_name || getHostname(annotation.url)}
                   </span>
                   {annotation.publish_time && (
                     <>
