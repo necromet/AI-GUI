@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile } from '../types';
 import type { LibraryControls } from './LibraryPanel';
@@ -63,10 +63,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isLibraryMode = location.pathname.startsWith('/library');
   const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : 'experiments';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
     if (location.pathname.includes('/stitch')) return 'stitch';
+    if (location.pathname.includes('/python')) return 'python';
     return 'rag';
   })();
 
@@ -272,11 +273,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <span className="truncate">Stitch</span>
                   </Button>
                 </li>
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={itemClassName(activeView === 'python')}
+                    onClick={() => navigate('/experiments/python')}
+                  >
+                    <Terminal size={16} className={activeView === 'python' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
+                    <span className="truncate">Python</span>
+                  </Button>
+                </li>
               </ul>
             </div>
 
             {/* Experiment conversation history */}
-            {activeView !== 'stitch' && (
+            {activeView !== 'stitch' && activeView !== 'python' && (
               <>
                 <div className="px-2 pt-1">
                   <Button

@@ -180,7 +180,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       id: 'experiments' as const,
       icon: FlaskConical,
       title: 'Experiments',
-      description: 'RAG, Plugin Agent, Stitch, and experimental tools',
+      description: 'RAG, Plugin Agent, Stitch, Python, and experimental tools',
       locked: !isExperimentsAuthenticated,
       onClick: handleExperimentsClick,
     },

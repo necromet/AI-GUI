@@ -234,3 +234,62 @@ export const saveStitchProject = async (project: {
 export const deleteStitchProject = async (id: string) => {
   await apiFetch<any>(`/stitch/projects/${id}`, { method: 'DELETE' });
 };
+
+// ===== Python Projects =====
+
+export interface PythonProjectFile {
+  filename: string;
+  content: string;
+  isEntry: boolean;
+}
+
+export interface PythonProject {
+  id: string;
+  title: string;
+  description: string;
+  files: PythonProjectFile[];
+  settings: { requirements?: string[] } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getPythonProjects = async (): Promise<PythonProject[]> => {
+  const data = await apiFetch<{ projects: PythonProject[] }>('/python/projects');
+  return data.projects;
+};
+
+export const getPythonProject = async (id: string): Promise<PythonProject> => {
+  const data = await apiFetch<{ project: PythonProject }>(`/python/projects/${id}`);
+  return data.project;
+};
+
+export const createPythonProject = async (title: string, files?: PythonProjectFile[]): Promise<PythonProject> => {
+  const data = await apiFetch<{ project: PythonProject }>('/python/projects', {
+    method: 'POST',
+    body: JSON.stringify({ title, files: files || [{ filename: 'main.py', content: '', isEntry: true }] }),
+  });
+  return data.project;
+};
+
+export const savePythonProject = async (project: {
+  id: string;
+  title: string;
+  description?: string;
+  files: PythonProjectFile[];
+  settings?: { requirements?: string[] } | null;
+}): Promise<PythonProject> => {
+  const data = await apiFetch<{ project: PythonProject }>(`/python/projects/${project.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      title: project.title,
+      description: project.description,
+      files: project.files,
+      settings: project.settings,
+    }),
+  });
+  return data.project;
+};
+
+export const deletePythonProject = async (id: string) => {
+  await apiFetch<any>(`/python/projects/${id}`, { method: 'DELETE' });
+};

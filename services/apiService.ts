@@ -210,6 +210,28 @@ export async function transcribeAudio(params: {
   return data.text || '';
 }
 
+export async function parseDocument(file: File): Promise<{ text: string; filename: string; truncated: boolean }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/chat/parse-document`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMsg = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMsg = parsed.error || errorText;
+    } catch {}
+    throw new Error(errorMsg);
+  }
+
+  return response.json();
+}
+
 export const BUILT_IN_VOICES = [
   'mimo_default',
   'default_zh',

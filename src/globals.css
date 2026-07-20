@@ -58,6 +58,14 @@
   --animate-block-in: block-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   --animate-block-expand: block-expand 0.25s ease-out forwards;
   --animate-tool-shimmer: tool-shimmer 2s ease-in-out infinite;
+  --animate-modal-fs-in: modal-fs-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-modal-fs-out: modal-fs-out 0.2s ease-in;
+  --animate-slide-in-up: slide-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-out-down: slide-out-down 0.2s ease-in;
+  --animate-expand-in: expand-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-expand-out: expand-out 0.15s ease-in;
+  --animate-fade-slide-in: fade-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-panel-in: panel-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
@@ -123,6 +131,38 @@
   @keyframes tool-shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
+  }
+  @keyframes modal-fs-in {
+    0% { opacity: 0; transform: scale(0.97) translateY(8px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes modal-fs-out {
+    0% { opacity: 1; transform: scale(1) translateY(0); }
+    100% { opacity: 0; transform: scale(0.97) translateY(8px); }
+  }
+  @keyframes slide-in-up {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-out-down {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(12px); }
+  }
+  @keyframes expand-in {
+    0% { opacity: 0; max-height: 0; transform: translateY(-4px); }
+    100% { opacity: 1; max-height: 60px; transform: translateY(0); }
+  }
+  @keyframes expand-out {
+    0% { opacity: 1; max-height: 60px; transform: translateY(0); }
+    100% { opacity: 0; max-height: 0; transform: translateY(-4px); }
+  }
+  @keyframes fade-slide-in {
+    0% { opacity: 0; transform: translateX(12px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes panel-in {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
 }
 

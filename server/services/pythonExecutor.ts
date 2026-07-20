@@ -11,6 +11,81 @@ const TMP_DIR = resolve(process.cwd(), 'data', 'tmp');
 
 const installedPackages = new Set<string>();
 
+const STDLIB_MODULES = new Set([
+  'os', 'sys', 'json', 're', 'math', 'datetime', 'collections', 'itertools',
+  'pathlib', 'io', 'csv', 'urllib', 'http', 'typing', 'functools', 'dataclasses',
+  'abc', 'enum', 'copy', 'hashlib', 'uuid', 'random', 'time', 'threading',
+  'subprocess', 'argparse', 'logging', 'unittest', 'contextlib', 'textwrap',
+  'string', 'struct', 'binascii', 'base64', 'tempfile', 'shutil', 'glob',
+  'fnmatch', 'socket', 'ssl', 'email', 'html', 'xml', 'multiprocessing',
+  'concurrent', 'asyncio', 'pprint', 'traceback', 'warnings', 'inspect', 'ast',
+  'dis', 'types', 'operator', 'heapq', 'bisect', 'array', 'queue', 'weakref',
+  'numbers', 'decimal', 'fractions', 'statistics', 'secrets', 'hmac', 'zlib',
+  'gzip', 'bz2', 'lzma', 'zipfile', 'tarfile', 'configparser', 'tomllib',
+  'netrc', 'plistlib', 'signal', 'mmap', 'codecs', 'unicodedata', 'locale',
+  'gettext', 'pdb', 'profile', 'cProfile', 'timeit', 'resource', 'sysconfig',
+  'platform', 'ctypes', 'errno', 'select', 'selectors', 'pickle', 'shelve',
+  'dbm', 'sqlite3', 'xmlrpc', 'ftplib', 'smtplib', 'imaplib', 'poplib',
+  'nntplib', 'telnetlib', 'cgi', 'wsgiref', 'venv', 'site', 'pkgutil',
+  'importlib', 'compileall', 'py_compile', 'pydoc', 'doctest', 'cmath',
+  'posixpath', 'ntpath', 'posix', 'nt', '_thread', 'gc', 'atexit',
+  'builtins', '__future__', '_io', '_collections_abc',
+]);
+
+const PACKAGE_ALIASES: Record<string, string> = {
+  'PIL': 'Pillow',
+  'cv2': 'opencv-python',
+  'sklearn': 'scikit-learn',
+  'yaml': 'PyYAML',
+  'bs4': 'beautifulsoup4',
+  'attr': 'attrs',
+  'usb': 'pyusb',
+  'serial': 'pyserial',
+  'gi': 'PyGObject',
+  'gi.repository': 'PyGObject',
+  'wx': 'wxPython',
+  'kivy': 'Kivy',
+  'Crypto': 'pycryptodome',
+  'Cryptodome': 'pycryptodome',
+  'dateutil': 'python-dateutil',
+  'dotenv': 'python-dotenv',
+  'magic': 'python-magic',
+  'git': 'GitPython',
+  'h5py': 'h5py',
+  'lxml': 'lxml',
+  'MySQLdb': 'mysqlclient',
+  'psycopg2': 'psycopg2-binary',
+  'pymongo': 'pymongo',
+  'redis': 'redis',
+  'jwt': 'PyJWT',
+  'jose': 'python-jose',
+  'passlib': 'passlib',
+  'multipart': 'python-multipart',
+  'watchdog': 'watchdog',
+  'paramiko': 'paramiko',
+  'fabric': 'Fabric',
+  'invoke': 'invoke',
+};
+
+export function autoDetectImports(code: string): string[] {
+  const packages = new Set<string>();
+
+  const importRegex = /^(\s*)(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/gm;
+  let match;
+  while ((match = importRegex.exec(code)) !== null) {
+    const raw = match[2];
+    const topLevel = raw.split('.')[0];
+
+    if (STDLIB_MODULES.has(topLevel)) continue;
+    if (topLevel.startsWith('_')) continue;
+
+    const resolved = PACKAGE_ALIASES[topLevel] || PACKAGE_ALIASES[raw] || topLevel;
+    packages.add(resolved);
+  }
+
+  return Array.from(packages);
+}
+
 function ensureDirs() {
   if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 }
@@ -79,7 +154,7 @@ export interface PythonResult {
   timedOut: boolean;
 }
 
-export async function executePython(code: string, requirements?: string[]): Promise<PythonResult> {
+export async function executePython(code: string, requirements?: string[], cwd?: string): Promise<PythonResult> {
   ensureDirs();
 
   await createVenv();
@@ -88,8 +163,13 @@ export async function executePython(code: string, requirements?: string[]): Prom
     await installPackages(requirements);
   }
 
+  let patchedCode = code;
+  if (/^\s*(import\s+matplotlib|from\s+matplotlib)/m.test(code) && !/matplotlib\.use\(/.test(code)) {
+    patchedCode = `import matplotlib\nmatplotlib.use('Agg')\n${code}`;
+  }
+
   const tmpFile = join(TMP_DIR, `py_${randomBytes(8).toString('hex')}.py`);
-  writeFileSync(tmpFile, code, 'utf-8');
+  writeFileSync(tmpFile, patchedCode, 'utf-8');
 
   return new Promise((resolve) => {
     let stdout = '';
@@ -99,6 +179,7 @@ export async function executePython(code: string, requirements?: string[]): Prom
     const proc = spawn(getVenvPython(), [tmpFile], {
       timeout: PYTHON_TIMEOUT_MS,
       env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+      cwd: cwd || undefined,
     });
 
     proc.stdout.on('data', (data: Buffer) => {

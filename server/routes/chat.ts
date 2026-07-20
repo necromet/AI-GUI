@@ -11,6 +11,7 @@ import {
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const docUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 router.post('/completions', async (req: Request, res: Response) => {
   try {
@@ -46,11 +47,17 @@ router.post('/completions', async (req: Request, res: Response) => {
       const role = msg.role === 'model' ? 'assistant' : msg.role;
       if (msg.attachments && msg.attachments.length > 0) {
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
-        if (msg.content) {
-          content.push({ type: 'text', text: msg.content });
-        }
+        const docParts: string[] = [];
         for (const att of msg.attachments) {
-          content.push({ type: 'image_url', image_url: { url: att.data } });
+          if (att.textContent) {
+            docParts.push(`<document name="${att.name}">\n${att.textContent}\n</document>`);
+          } else if (att.data) {
+            content.push({ type: 'image_url', image_url: { url: att.data } });
+          }
+        }
+        const fullText = [...docParts, msg.content].filter(Boolean).join('\n\n');
+        if (fullText) {
+          content.unshift({ type: 'text', text: fullText });
         }
         apiMessages.push({ role, content });
       } else {
@@ -189,6 +196,81 @@ router.post('/tts', async (req: Request, res: Response) => {
     res.json({ audio: audioBase64, format: 'mp3' });
   } catch (error: any) {
     console.error('[chat/tts] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const MAX_TEXT_LENGTH = 50000;
+
+router.post('/parse-document', docUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'Missing file' });
+      return;
+    }
+
+    const file = req.file;
+    const name = file.originalname;
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    let content = '';
+    let truncated = false;
+
+    if (ext === 'pdf') {
+      try {
+        const pdfParse = (await import('pdf-parse')).default;
+        const data = await pdfParse(file.buffer);
+        content = data.text;
+      } catch (err: any) {
+        res.status(500).json({ error: `Failed to parse PDF: ${err.message}` });
+        return;
+      }
+    } else if (ext === 'docx') {
+      try {
+        const mammoth = await import('mammoth');
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        content = result.value;
+      } catch (err: any) {
+        res.status(500).json({ error: `Failed to parse DOCX: ${err.message}` });
+        return;
+      }
+    } else if (ext === 'doc') {
+      res.status(400).json({ error: 'Legacy .doc format is not supported. Please convert to .docx and try again.' });
+      return;
+    } else if (ext === 'xlsx') {
+      try {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+        const sheets: string[] = [];
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const csv = XLSX.utils.sheet_to_csv(sheet);
+          if (csv.trim()) sheets.push(`[Sheet: ${sheetName}]\n${csv}`);
+        }
+        content = sheets.join('\n\n');
+      } catch (err: any) {
+        res.status(500).json({ error: `Failed to parse XLSX: ${err.message}` });
+        return;
+      }
+    } else if (['txt', 'csv', 'md', 'html', 'htm', 'json', 'log', 'xml', 'yaml', 'yml'].includes(ext)) {
+      content = file.buffer.toString('utf-8');
+    } else {
+      res.status(400).json({ error: `Unsupported file type: .${ext}. Supported: PDF, DOCX, XLSX, TXT, CSV, MD, HTML, JSON, LOG, XML, YAML` });
+      return;
+    }
+
+    if (!content.trim()) {
+      res.status(400).json({ error: 'Document is empty or could not be parsed' });
+      return;
+    }
+
+    if (content.length > MAX_TEXT_LENGTH) {
+      content = content.substring(0, MAX_TEXT_LENGTH);
+      truncated = true;
+    }
+
+    res.json({ text: content, filename: name, truncated });
+  } catch (error: any) {
+    console.error('[chat/parse-document] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

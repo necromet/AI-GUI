@@ -4,9 +4,10 @@ export enum Role {
 }
 
 export interface Attachment {
-  data: string; // base64 data URL (data:image/png;base64,...)
+  data: string; // base64 data URL (images) or empty string (docs)
   mimeType: string;
   name: string;
+  textContent?: string; // extracted text for document attachments
 }
 
 export interface Message {

@@ -5,7 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
-import { generateResponseStream, generateChatTitle } from './services/apiService';
+import { generateResponseStream, generateChatTitle, parseDocument } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
 import Sidebar, { type SidebarPanel } from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
@@ -29,7 +29,13 @@ import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
 import { StitchControls } from './components/StitchEditor';
 import SettingsPage from './components/SettingsPage';
+import PythonExecutorPanel from './components/PythonExecutorPanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+const isDocumentFile = (file: File) => {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  return ['pdf', 'docx', 'xlsx', 'txt', 'csv', 'md', 'html', 'json', 'log', 'xml', 'yaml', 'yml'].includes(ext);
+};
 
 const fileToAttachment = (file: File): Promise<Attachment> => {
   return new Promise((resolve, reject) => {
@@ -178,15 +184,21 @@ const App: React.FC = () => {
   const isLibraryMode = location.pathname.startsWith('/library');
   const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : 'library';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' = (() => {
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
     if (location.pathname.includes('/stitch')) return 'stitch';
+    if (location.pathname.includes('/python')) return 'python';
     return 'rag';
   })();
 
   const stitchProjectId = (() => {
     const match = location.pathname.match(/^\/experiments\/stitch\/([^/]+)$/);
+    return match ? match[1] : undefined;
+  })();
+
+  const pythonProjectId = (() => {
+    const match = location.pathname.match(/^\/experiments\/python\/([^/]+)$/);
     return match ? match[1] : undefined;
   })();
 
@@ -580,7 +592,36 @@ const App: React.FC = () => {
 
     let attachments: Attachment[] | undefined;
     if (hasFiles) {
-      attachments = await Promise.all(options!.files!.map(fileToAttachment));
+      const imageFiles = options!.files!.filter(f => !isDocumentFile(f));
+      const docFiles = options!.files!.filter(isDocumentFile);
+
+      const imageAttachments = imageFiles.length > 0
+        ? await Promise.all(imageFiles.map(fileToAttachment))
+        : [];
+
+      const docAttachments: Attachment[] = docFiles.length > 0
+        ? await Promise.all(docFiles.map(async (file) => {
+            try {
+              const result = await parseDocument(file);
+              if (result.truncated) {
+                toast.warning(`Document "${file.name}" was truncated to 50k characters.`);
+              }
+              return {
+                data: '',
+                mimeType: file.type || 'application/octet-stream',
+                name: file.name,
+                textContent: result.text,
+              };
+            } catch (err: any) {
+              toast.error(`Failed to parse "${file.name}": ${err.message}`);
+              return null;
+            }
+          }))
+        : [];
+
+      const validDocAttachments = docAttachments.filter((a): a is Attachment => a !== null);
+      const allAttachments = [...imageAttachments, ...validDocAttachments];
+      attachments = allAttachments.length > 0 ? allAttachments : undefined;
     }
 
     const userMessage: Message = {
@@ -598,12 +639,12 @@ const App: React.FC = () => {
 
     if (messages.length === 0) {
       try {
-        const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
+        const titleText = userText || (attachments ? `File: ${attachments[0].name}` : 'New Chat');
         const title = await generateChatTitle(titleText, '', selectedModelConfig.apiModelId || selectedModelConfig.id, selectedModelConfig.provider);
         await db.updateConversationTitle(conversationId, title);
         await loadConversations();
       } catch (error) {
-        const titleText = userText || (attachments ? `Image: ${attachments[0].name}` : 'New Chat');
+        const titleText = userText || (attachments ? `File: ${attachments[0].name}` : 'New Chat');
         const title = titleText.substring(0, 50) + (titleText.length > 50 ? '...' : '');
         await db.updateConversationTitle(conversationId, title);
         await loadConversations();
@@ -1050,16 +1091,16 @@ const App: React.FC = () => {
           </RequireAuth>
         ) : (
         <>
-        {(!isLibraryMode || libraryControls) && (
+        {(!isLibraryMode || libraryControls) && activeView !== 'python' && (
         <div className="flex items-center px-2 py-1.5 md:px-3 md:py-1.5 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen(true)}
-              className="mr-2 text-[var(--text-500)] hover:text-[var(--text-100)]"
+              className="h-8 w-8 mr-2 flex-shrink-0 text-[var(--text-500)] hover:text-[var(--text-100)]"
             >
-              <PanelLeft size={20} />
+              <PanelLeft size={18} />
             </Button>
           )}
           {location.pathname.startsWith('/experiments/stitch') && stitchControls ? (
@@ -1420,6 +1461,33 @@ const App: React.FC = () => {
                           }
                         }}
                         onControlsChange={setStitchControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/experiments/python" element={
+                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                    <div className="h-full overflow-auto p-0">
+                      <PythonExecutorPanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        modelConfig={selectedModelConfig}
+                        isSidebarOpen={isSidebarOpen}
+                        onToggleSidebar={() => setIsSidebarOpen(true)}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/experiments/python/:projectId" element={
+                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                    <div className="h-full overflow-auto p-0">
+                      <PythonExecutorPanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        modelConfig={selectedModelConfig}
+                        initialProjectId={pythonProjectId}
+                        isSidebarOpen={isSidebarOpen}
+                        onToggleSidebar={() => setIsSidebarOpen(true)}
                       />
                     </div>
                   </RequireAuth>
