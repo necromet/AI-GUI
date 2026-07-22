@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { Role, Message } from '../types';
-import { Paperclip, Pencil, X, Check, UserRound, FlaskConical } from 'lucide-react';
+import { Paperclip, Pencil, X, Check, UserRound, FlaskConical, FileText, Table } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -161,41 +161,59 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               {message.attachments && message.attachments.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {message.attachments.map((att, idx) => (
-                    <div key={idx} className="relative group/att">
-                      <button
-                        onClick={() => setSelectedAttachment(att.data)}
-                        className="relative rounded-lg overflow-hidden transition-all duration-200 hover:scale-[1.02] block"
-                        style={{ border: '1px solid var(--border-300)' }}
-                      >
-                        <img
-                          src={att.data}
-                          alt={att.name}
-                          className="max-h-40 max-w-[280px] object-contain"
-                        />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 opacity-0 group-hover/att:opacity-100 transition-opacity">
-                          <span className="text-xs text-white truncate block">{att.name}</span>
-                        </div>
-                      </button>
-                      {onReattach && (
+                    att.data && att.mimeType?.startsWith('image/') ? (
+                      <div key={idx} className="relative group/att">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onReattach(att.data, att.name, att.mimeType);
-                          }}
-                          className="absolute top-1 right-1 z-10 rounded-full p-1.5 opacity-0 group-hover/att:opacity-100 transition-all duration-200 hover:scale-110"
-                          style={{ background: 'var(--bg-400)' }}
-                          title="Attach to new message"
+                          onClick={() => setSelectedAttachment(att.data)}
+                          className="relative rounded-lg overflow-hidden transition-all duration-200 hover:scale-[1.02] block"
+                          style={{ border: '1px solid var(--border-300)' }}
                         >
-                          <Paperclip size={12} className="text-white" />
+                          <img
+                            src={att.data}
+                            alt={att.name}
+                            className="max-h-40 max-w-[280px] object-contain"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 opacity-0 group-hover/att:opacity-100 transition-opacity">
+                            <span className="text-xs text-white truncate block">{att.name}</span>
+                          </div>
                         </button>
-                      )}
-                    </div>
+                        {onReattach && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReattach(att.data, att.name, att.mimeType);
+                            }}
+                            className="absolute top-1 right-1 z-10 rounded-full p-1.5 opacity-0 group-hover/att:opacity-100 transition-all duration-200 hover:scale-110"
+                            style={{ background: 'var(--bg-400)' }}
+                            title="Attach to new message"
+                          >
+                            <Paperclip size={12} className="text-white" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2.5 h-10 px-3 rounded-lg transition-all duration-200"
+                        style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
+                      >
+                        {(() => {
+                          const ext = att.name.split('.').pop()?.toLowerCase();
+                          if (ext === 'xlsx' || ext === 'csv') return <Table className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--neon-color)' }} />;
+                          return <FileText className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--neon-color)' }} />;
+                        })()}
+                        <span className="text-xs truncate max-w-[180px]" style={{ color: 'var(--text-300)' }}>{att.name}</span>
+                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-300)', color: 'var(--text-500)' }}>
+                          {att.name.split('.').pop()?.toLowerCase() || 'file'}
+                        </span>
+                      </div>
+                    )
                   ))}
                 </div>
               )}
 
               <Dialog open={!!selectedAttachment} onOpenChange={(open) => !open && closeAttachment()}>
-                <DialogContent className="max-w-[90vw] md:max-w-[800px] p-0 border-none bg-transparent shadow-none">
+                <DialogContent hideCloseButton className="max-w-[90vw] md:max-w-[800px] p-0 border-none bg-transparent shadow-none place-items-center">
                   <DialogTitle className="sr-only">Image Preview</DialogTitle>
                   <img src={selectedAttachment ?? undefined} alt="Full size preview" className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg" style={{ border: '1px solid var(--border-300)' }} />
                 </DialogContent>

@@ -58,6 +58,14 @@
   --animate-block-in: block-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   --animate-block-expand: block-expand 0.25s ease-out forwards;
   --animate-tool-shimmer: tool-shimmer 2s ease-in-out infinite;
+  --animate-modal-fs-in: modal-fs-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-modal-fs-out: modal-fs-out 0.2s ease-in;
+  --animate-slide-in-up: slide-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-out-down: slide-out-down 0.2s ease-in;
+  --animate-expand-in: expand-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-expand-out: expand-out 0.15s ease-in;
+  --animate-fade-slide-in: fade-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-panel-in: panel-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
@@ -123,6 +131,38 @@
   @keyframes tool-shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
+  }
+  @keyframes modal-fs-in {
+    0% { opacity: 0; transform: scale(0.97) translateY(8px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes modal-fs-out {
+    0% { opacity: 1; transform: scale(1) translateY(0); }
+    100% { opacity: 0; transform: scale(0.97) translateY(8px); }
+  }
+  @keyframes slide-in-up {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-out-down {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(12px); }
+  }
+  @keyframes expand-in {
+    0% { opacity: 0; max-height: 0; transform: translateY(-4px); }
+    100% { opacity: 1; max-height: 60px; transform: translateY(0); }
+  }
+  @keyframes expand-out {
+    0% { opacity: 1; max-height: 60px; transform: translateY(0); }
+    100% { opacity: 0; max-height: 0; transform: translateY(-4px); }
+  }
+  @keyframes fade-slide-in {
+    0% { opacity: 0; transform: translateX(12px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes panel-in {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
 }
 
@@ -219,6 +259,10 @@ body {
 html.dark body {
   background-color: var(--bg-100);
   color: var(--text-100);
+}
+
+button {
+  cursor: pointer;
 }
 
 * {
@@ -511,4 +555,96 @@ html.dark .library-card {
 }
 html.dark .library-card:hover {
   box-shadow: 0 8px 30px rgba(var(--neon-rgb), 0.1), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ===== Stitch Studio Design System ===== */
+
+html.dark .stitch-primary { color: #ddb7ff; }
+html.dark .stitch-primary-bg { background-color: #ddb7ff; }
+html.dark .stitch-primary-border { border-color: rgba(221, 183, 255, 0.3); }
+html.dark .stitch-secondary { color: #adc6ff; }
+html.dark .stitch-secondary-bg { background-color: #adc6ff; }
+html.dark .stitch-tertiary { color: #4ae176; }
+html.dark .stitch-tertiary-bg { background-color: #4ae176; }
+html.dark .stitch-on-surface { color: #e5e2e1; }
+html.dark .stitch-on-surface-variant { color: #cfc2d6; }
+html.dark .stitch-surface { background-color: #131313; }
+html.dark .stitch-surface-container { background-color: #201f1f; }
+html.dark .stitch-surface-container-low { background-color: #1c1b1b; }
+html.dark .stitch-surface-container-high { background-color: #2a2a2a; }
+html.dark .stitch-surface-container-highest { background-color: #353534; }
+html.dark .stitch-surface-variant { background-color: #353534; }
+html.dark .stitch-outline-variant { border-color: #4d4354; }
+
+.stitch-glass-panel {
+  background-color: rgba(23, 23, 23, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stitch-glass-card {
+  background-color: rgba(23, 23, 23, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.stitch-glow-primary {
+  box-shadow: 0 0 15px rgba(221, 183, 255, 0.3);
+}
+
+.stitch-glow-secondary {
+  box-shadow: 0 0 15px rgba(173, 198, 255, 0.3);
+}
+
+.stitch-text-glow {
+  text-shadow: 0 0 10px rgba(221, 183, 255, 0.5);
+}
+
+.stitch-pulse-border {
+  animation: stitch-pulse-glow 2s infinite;
+}
+
+@keyframes stitch-pulse-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(221, 183, 255, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(221, 183, 255, 0.6); }
+}
+
+.stitch-ai-line {
+  background: linear-gradient(90deg, transparent, #ddb7ff, #adc6ff, transparent);
+  background-size: 200% 100%;
+  animation: stitch-shimmer 2s infinite linear;
+}
+
+@keyframes stitch-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.stitch-dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.4) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.stitch-input-gradient {
+  position: relative;
+}
+.stitch-input-gradient::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(to right, rgba(173, 198, 255, 0.3), rgba(221, 183, 255, 0.3));
+  border-radius: inherit;
+  filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: -1;
+}
+.stitch-input-gradient:hover::before,
+.stitch-input-gradient:focus-within::before {
+  opacity: 1;
 }

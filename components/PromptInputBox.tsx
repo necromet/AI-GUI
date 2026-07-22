@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, Paperclip, Square, X, Mic, Globe, BrainCog, ImageOff } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, Mic, Globe, BrainCog, ImageOff, FileText, Table } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AIVoiceInput } from "./AIVoiceInput";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({ imageUrl, onClose }) 
   if (!imageUrl) return null;
   return (
     <Dialog open={!!imageUrl} onOpenChange={onClose}>
-      <DialogContent className="p-0 border-none bg-transparent shadow-none max-w-[90vw] md:max-w-[800px]">
+      <DialogContent hideCloseButton className="p-0 border-none bg-transparent shadow-none max-w-[90vw] md:max-w-[800px] place-items-center">
         <DialogTitle className="sr-only">Image Preview</DialogTitle>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -226,23 +226,34 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
 
   const isImageFile = (file: File) => file.type.startsWith("image/");
 
+  const isDocumentFile = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    return ['pdf', 'docx', 'xlsx', 'txt', 'csv', 'md', 'html', 'json', 'log', 'xml', 'yaml', 'yml'].includes(ext);
+  };
+
+  const isAllowedFile = (file: File) => isImageFile(file) || isDocumentFile(file);
+
   const processFile = (file: File) => {
-    if (!isImageFile(file)) return;
-    if (file.size > 10 * 1024 * 1024) return;
+    if (!isAllowedFile(file)) return;
+    if (file.size > 20 * 1024 * 1024) return;
     setFiles(prev => [...prev, file]);
-    const reader = new FileReader();
-    reader.onload = (e) => setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }));
-    reader.readAsDataURL(file);
+    if (isImageFile(file)) {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }));
+      reader.readAsDataURL(file);
+    }
   };
 
   const processFiles = (newFiles: File[]) => {
     for (const file of newFiles) {
-      if (!isImageFile(file)) continue;
-      if (file.size > 10 * 1024 * 1024) continue;
+      if (!isAllowedFile(file)) continue;
+      if (file.size > 20 * 1024 * 1024) continue;
       setFiles(prev => [...prev, file]);
-      const reader = new FileReader();
-      reader.onload = (e) => setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }));
-      reader.readAsDataURL(file);
+      if (isImageFile(file)) {
+        const reader = new FileReader();
+        reader.onload = (e) => setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }));
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -272,8 +283,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
     e.preventDefault();
     e.stopPropagation();
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const imageFiles = droppedFiles.filter((file) => isImageFile(file));
-    if (imageFiles.length > 0) processFiles(imageFiles);
+    const allowedFiles = droppedFiles.filter((file) => isAllowedFile(file));
+    if (allowedFiles.length > 0) processFiles(allowedFiles);
   }, []);
 
   const handleRemoveFile = (index: number) => {
@@ -291,13 +302,11 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf("image") !== -1) {
-        const file = items[i].getAsFile();
-        if (file) {
-          e.preventDefault();
-          processFile(file);
-          break;
-        }
+      const file = items[i].getAsFile();
+      if (file && isAllowedFile(file)) {
+        e.preventDefault();
+        processFile(file);
+        break;
       }
     }
   }, []);
@@ -376,7 +385,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
             <div className="flex flex-wrap gap-2 p-0 pb-1 transition-all duration-300">
               {files.map((file, index) => (
                 <div key={`${file.name}-${index}`} className="relative group">
-                  {file.type.startsWith("image/") && filePreviews[file.name] && (
+                  {file.type.startsWith("image/") && filePreviews[file.name] ? (
                     <div
                       className="w-16 h-16 rounded-xl overflow-hidden cursor-pointer transition-all duration-300"
                       onClick={() => openImageModal(filePreviews[file.name])}
@@ -392,7 +401,28 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         <X className="h-3 w-3 text-white" />
                       </button>
                     </div>
-                  )}
+                  ) : isDocumentFile(file) ? (
+                    <div
+                      className="flex items-center gap-2 h-10 px-3 rounded-xl transition-all duration-300 max-w-[200px]"
+                      style={{ background: 'var(--bg-300)', border: '1px solid var(--border-300)' }}
+                    >
+                      {(() => {
+                        const ext = file.name.split('.').pop()?.toLowerCase();
+                        if (ext === 'xlsx' || ext === 'csv') return <Table className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--neon-color)' }} />;
+                        return <FileText className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--neon-color)' }} />;
+                      })()}
+                      <span className="text-xs truncate" style={{ color: 'var(--text-300)' }}>{file.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFile(index);
+                        }}
+                        className="rounded-full p-0.5 hover:bg-[var(--bg-400)] transition-colors flex-shrink-0"
+                      >
+                        <X className="h-3 w-3" style={{ color: 'var(--text-500)' }} />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -433,7 +463,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                 </div>
               )}
               {supportsVision ? (
-              <PromptInputAction tooltip="Upload image">
+              <PromptInputAction tooltip="Upload image or document">
                   <button
                   onClick={() => uploadInputRef.current?.click()}
                   className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors"
@@ -452,18 +482,33 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                       if (e.target.files && e.target.files.length > 0) processFiles(Array.from(e.target.files));
                       if (e.target) e.target.value = "";
                     }}
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xlsx,.txt,.csv,.md,.html,.json,.log,.xml,.yaml,.yml"
                   />
                 </button>
               </PromptInputAction>
               ) : (
-              <PromptInputAction tooltip="Image input not supported by this model">
-                <div
-                  className="flex h-8 w-8 items-center justify-center rounded-full cursor-not-allowed"
-                  style={{ color: 'var(--text-500)', opacity: 0.4 }}
+              <PromptInputAction tooltip="Upload document">
+                  <button
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors"
+                  style={{ color: 'var(--text-500)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-300)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
+                  disabled={isRecording}
                 >
-                  <ImageOff className="h-4 w-4" />
-                </div>
+                  <Paperclip className="h-5 w-5 transition-colors" />
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) processFiles(Array.from(e.target.files));
+                      if (e.target) e.target.value = "";
+                    }}
+                    accept=".pdf,.doc,.docx,.xlsx,.txt,.csv,.md,.html,.json,.log,.xml,.yaml,.yml"
+                  />
+                </button>
               </PromptInputAction>
               )}
 

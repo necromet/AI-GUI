@@ -132,6 +132,7 @@ const StitchPanel: React.FC<StitchPanelProps> = ({ theme = 'dark', onNotificatio
         theme={theme}
         onNotification={onNotification}
         onSave={handleSaveProject}
+        onBack={() => { setActiveProject(null); onProjectChange?.(null); }}
         modelConfig={modelConfig}
         models={models}
         onControlsChange={onControlsChange}
