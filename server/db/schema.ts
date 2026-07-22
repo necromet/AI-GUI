@@ -152,6 +152,18 @@ CREATE TABLE IF NOT EXISTS library_agent_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_las_component ON library_agent_sessions(component_id);
 
+-- Stitch agent chat sessions (per-project)
+CREATE TABLE IF NOT EXISTS stitch_agent_sessions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES stitch_projects(id) ON DELETE CASCADE,
+  board_idx INTEGER NOT NULL DEFAULT 0,
+  title TEXT,
+  messages_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sas_project ON stitch_agent_sessions(project_id);
+
 -- Python executor projects
 CREATE TABLE IF NOT EXISTS python_projects (
   id TEXT PRIMARY KEY,

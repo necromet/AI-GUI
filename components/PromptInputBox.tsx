@@ -18,7 +18,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({ imageUrl, onClose }) 
   if (!imageUrl) return null;
   return (
     <Dialog open={!!imageUrl} onOpenChange={onClose}>
-      <DialogContent hideCloseButton className="p-0 border-none bg-transparent shadow-none max-w-[90vw] md:max-w-[800px]">
+      <DialogContent hideCloseButton className="p-0 border-none bg-transparent shadow-none max-w-[90vw] md:max-w-[800px] place-items-center">
         <DialogTitle className="sr-only">Image Preview</DialogTitle>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}

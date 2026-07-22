@@ -213,7 +213,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
               )}
 
               <Dialog open={!!selectedAttachment} onOpenChange={(open) => !open && closeAttachment()}>
-                <DialogContent hideCloseButton className="max-w-[90vw] md:max-w-[800px] p-0 border-none bg-transparent shadow-none">
+                <DialogContent hideCloseButton className="max-w-[90vw] md:max-w-[800px] p-0 border-none bg-transparent shadow-none place-items-center">
                   <DialogTitle className="sr-only">Image Preview</DialogTitle>
                   <img src={selectedAttachment ?? undefined} alt="Full size preview" className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg" style={{ border: '1px solid var(--border-300)' }} />
                 </DialogContent>

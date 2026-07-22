@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, X } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, X, Maximize2 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
@@ -63,7 +63,7 @@ export const FONT_FAMILY_MAP: Record<string, string> = {
   comfortaa: "'Comfortaa', sans-serif",
 };
 
-const CHAT_SUGGESTIONS = ['Create a cyberpunk story', 'Explain quantum entanglement', 'Debug my React hook', 'Neon color palette ideas'];
+
 
 interface ChatMessageListProps {
   messages: Message[];
@@ -1131,18 +1131,6 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-                {stitchControls.hasHtml && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={stitchControls.onViewModeToggle}
-                    className="h-7 gap-1.5 text-xs"
-                    style={{ color: 'var(--text-300)' }}
-                  >
-                    {stitchControls.viewMode === 'preview' ? <Code size={12} /> : <Eye size={12} />}
-                    {stitchControls.viewMode === 'preview' ? 'Source' : 'Preview'}
-                  </Button>
-                )}
                 {!stitchControls.isGenerating && stitchControls.hasLastPrompt && (
                   <Button
                     variant="ghost"
@@ -1164,47 +1152,6 @@ const App: React.FC = () => {
                   >
                     Stop
                   </Button>
-                )}
-                <Separator orientation="vertical" className="h-5 mx-0.5" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={stitchControls.onToggleLibrary}
-                  className="h-7 gap-1.5 text-xs"
-                  style={{
-                    color: stitchControls.isLibraryOpen ? 'var(--neon-color)' : 'var(--text-300)',
-                    backgroundColor: stitchControls.isLibraryOpen ? 'rgba(var(--neon-rgb), 0.1)' : undefined,
-                  }}
-                >
-                  <Package size={12} />
-                  Library
-                </Button>
-                {stitchControls.hasHtml && !stitchControls.isGenerating && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={stitchControls.onExport}
-                      className="h-7 gap-1.5 text-xs"
-                      style={{ color: 'var(--text-300)' }}
-                    >
-                      <Download size={12} />
-                      Export
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={stitchControls.onCopy}
-                      className="h-7 gap-1.5 text-xs"
-                      style={{
-                        backgroundColor: 'rgba(var(--neon-rgb), 0.15)',
-                        color: 'var(--neon-color)',
-                        borderColor: 'rgba(var(--neon-rgb), 0.3)',
-                      }}
-                    >
-                      {stitchControls.copied ? <Check size={12} /> : <Copy size={12} />}
-                      {stitchControls.copied ? 'Copied' : 'Copy'}
-                    </Button>
-                  </>
                 )}
               </div>
             </>
@@ -1342,14 +1289,6 @@ const App: React.FC = () => {
                         <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
                           How can I help you today?
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                          {CHAT_SUGGESTIONS.map((suggestion, i) => (
-                            <Card key={i} onClick={() => setInput(suggestion)}
-                              className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]">
-                              <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                            </Card>
-                          ))}
-                        </div>
                       </div>
                     ) : (
                       <ChatMessageList
@@ -1374,14 +1313,6 @@ const App: React.FC = () => {
                         <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
                           How can I help you today?
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-12">
-                          {CHAT_SUGGESTIONS.map((suggestion, i) => (
-                            <Card key={i} onClick={() => setInput(suggestion)}
-                              className="group cursor-pointer p-4 text-left transition-all duration-200 hover:bg-[var(--bg-300)] hover:border-[rgba(var(--neon-rgb),0.12)] bg-[var(--bg-200)] border-[var(--border-300)]">
-                              <span className="text-base" style={{ color: 'var(--text-500)' }}>{suggestion}</span>
-                            </Card>
-                          ))}
-                        </div>
                       </div>
                     ) : (
                       <ChatMessageList

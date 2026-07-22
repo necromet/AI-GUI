@@ -301,7 +301,7 @@ export async function executeTool(call: ToolCall, context?: Record<string, any>,
   return result;
 }
 
-async function toolWebBrowse(url: string): Promise<string> {
+export async function toolWebBrowse(url: string): Promise<string> {
   if (!url) return 'Error: No URL provided';
 
   try {
@@ -381,7 +381,7 @@ export async function toolExecuteCode(code: string): Promise<string> {
   }
 }
 
-async function toolSearchWeb(query: string): Promise<string> {
+export async function toolSearchWeb(query: string): Promise<string> {
   if (!query) return 'Error: No search query provided';
 
   try {
@@ -420,7 +420,7 @@ async function toolSearchWeb(query: string): Promise<string> {
   }
 }
 
-const LAYOUT_DIMS: Record<string, string> = {
+export const LAYOUT_DIMS: Record<string, string> = {
   '16:9': '1920x1080',
   '1:1': '1080x1080',
   '9:16': '1080x1920',
@@ -431,7 +431,7 @@ const LAYOUT_DIMS: Record<string, string> = {
   '32:9': '2560x1080',
 };
 
-async function toolEditHtml(edits: EditOperation[], html: string): Promise<string> {
+export async function toolEditHtml(edits: EditOperation[], html: string): Promise<string> {
   if (!html) return 'Error: No HTML provided to edit. Use generate_html instead.';
   if (!edits || !Array.isArray(edits) || edits.length === 0) return 'Error: No edits provided.';
 
@@ -540,7 +540,7 @@ async function toolEditHtml(edits: EditOperation[], html: string): Promise<strin
   return JSON.stringify({ html: result, summary: summary.join('\n') });
 }
 
-async function toolGenerateHtml(prompt: string, layout: string, boardDescription?: string, model?: string, provider?: string, projectType?: string, images?: any[], imageAnalysis?: string, onProgress?: (chunk: string) => void): Promise<string> {
+export async function toolGenerateHtml(prompt: string, layout: string, boardDescription?: string, model?: string, provider?: string, projectType?: string, images?: any[], imageAnalysis?: string, onProgress?: (chunk: string) => void): Promise<string> {
   const dims = LAYOUT_DIMS[layout] || '1920x1080';
 
   let imagePrompt = '';
@@ -609,7 +609,7 @@ Rules:
   return html;
 }
 
-async function toolGenerateSpec(
+export async function toolGenerateSpec(
   prompt: string,
   layout: string,
   projectType: string,
@@ -673,7 +673,7 @@ async function toolGenerateSpec(
   }
 }
 
-async function toolEditSpec(
+export async function toolEditSpec(
   currentSpec: any,
   edits: { path: string; value: any }[],
   layout: string,

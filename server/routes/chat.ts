@@ -217,9 +217,11 @@ router.post('/parse-document', docUpload.single('file'), async (req: Request, re
 
     if (ext === 'pdf') {
       try {
-        const pdfParse = (await import('pdf-parse')).default;
-        const data = await pdfParse(file.buffer);
-        content = data.text;
+        const { PDFParse } = await import('pdf-parse');
+        const parser = new PDFParse({ data: new Uint8Array(file.buffer) });
+        const textResult = await parser.getText();
+        content = textResult.text;
+        await parser.destroy();
       } catch (err: any) {
         res.status(500).json({ error: `Failed to parse PDF: ${err.message}` });
         return;

@@ -1,8 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Plus, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
+import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Plus, Sparkles, Maximize2, Minimize2, Download, Code, PanelRight, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { StitchProject, StitchBoard, StitchLayout, StitchProjectType, ModelConfig } from '../types';
 import type { StitchDesignSpec, StitchSlideSpec } from '../types/stitchSpec';
 import { getLayoutDimensions } from '../lib/layoutUtils';
@@ -12,11 +9,10 @@ import * as db from '../services/apiDatabaseAdapter';
 import { getEnabledTools as getStitchEnabledTools, getSystemPromptAppend as getStitchSystemPromptAppend } from '../lib/agentConfig';
 import StitchExportModal from './StitchExportModal';
 import StitchLibrary from './StitchLibrary';
+import StitchAgentSidebar from './stitch/StitchAgentSidebar';
 import { CodeEditor } from '@/components/ui/code-editor-sheet';
 import { MathCurveLoader } from '@/components/ui/math-curve-loader';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChatInput, ChatInputTextArea, ChatInputSubmit } from '@/components/ui/chat-input';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import type { StitchComponent } from '../types/stitchSpec';
 
 export interface StitchControls {
@@ -34,6 +30,8 @@ export interface StitchControls {
   hasLastPrompt: boolean;
   onToggleLibrary: () => void;
   isLibraryOpen: boolean;
+  isFullscreen: boolean;
+  onFullscreenToggle: () => void;
 }
 
 interface StitchEditorProps {
@@ -41,12 +39,13 @@ interface StitchEditorProps {
   theme?: 'dark' | 'light';
   onNotification?: (msg: string, type: 'success' | 'error') => void;
   onSave: (project: StitchProject) => void;
+  onBack?: () => void;
   modelConfig?: ModelConfig;
   models?: ModelConfig[];
   onControlsChange?: (controls: StitchControls | null) => void;
 }
 
-const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', onNotification, onSave, modelConfig, models, onControlsChange }) => {
+const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', onNotification, onSave, onBack, modelConfig, models, onControlsChange }) => {
   const [activeBoardIdx, setActiveBoardIdx] = useState(0);
   const board = project.boards[activeBoardIdx] || project.boards[0] || null;
   const layout = board?.layout || '16:9';
@@ -79,8 +78,9 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
-  const [activeStyleChips, setActiveStyleChips] = useState<string[]>([]);
+
   const [activeToolCalls, setActiveToolCalls] = useState<ToolResult[]>([]);
+  const [toolCallStartTimes, setToolCallStartTimes] = useState<Record<string, number>>({});
   const [editSummary, setEditSummary] = useState<string>('');
   const [editedHtml, setEditedHtml] = useState<string>('');
   const [sourceOriginalHtml, setSourceOriginalHtml] = useState<string>('');
@@ -92,8 +92,12 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
   const [toolProgressText, setToolProgressText] = useState('');
   const [expandedToolProgress, setExpandedToolProgress] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showAgentSidebar, setShowAgentSidebar] = useState(true);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
 
   const dims = getLayoutDimensions(layout);
+  const activeModel = models?.find(m => m.id === selectedModelId) || modelConfig;
 
   const prevBoardIdxRef = useRef(activeBoardIdx);
   useEffect(() => {
@@ -327,6 +331,7 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
           const pending: ToolResult = { name: chunk.toolCall.name, input: chunk.toolCall.arguments, output: '' };
           toolCalls.push(pending);
           setActiveToolCalls([...toolCalls]);
+          setToolCallStartTimes(prev => ({ ...prev, [`${chunk.toolCall!.name}_${toolCalls.length}`]: Date.now() }));
         }
         if (chunk.toolResult) {
           const idx = toolCalls.findIndex(r => r.name === chunk.toolResult!.name && !r.output);
@@ -615,6 +620,55 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
     setShowExportModal(true);
   }, []);
 
+  const handleAgentHtmlGenerated = useCallback((html: string) => {
+    const cleanHtml = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '').trim();
+    if (!cleanHtml || !/<!doctype/i.test(cleanHtml)) return;
+    setGeneratedHtml(cleanHtml);
+    setStreamingHtml(cleanHtml);
+    setViewMode('preview');
+    updateBoard({ generatedHtml: cleanHtml });
+    onNotification?.('HTML generated successfully', 'success');
+  }, [updateBoard, onNotification]);
+
+  const handleAgentSpecGenerated = useCallback((spec: StitchDesignSpec) => {
+    const validation = validateDesignSpec(spec);
+    if (!validation.valid) {
+      onNotification?.(`Spec validation: ${validation.errors.join(', ')}`, 'error');
+    }
+    setDesignSpec(spec);
+    if (isCarousel && spec.slides.length > 1) {
+      const allHtml = renderAllSlides(spec, layout);
+      const updatedBoards = [...project.boards];
+      for (let i = 0; i < Math.min(allHtml.length, updatedBoards.length); i++) {
+        updatedBoards[i] = {
+          ...updatedBoards[i],
+          generatedHtml: allHtml[i],
+          designSpec: spec.slides[i],
+          updatedAt: Date.now(),
+        };
+      }
+      const updatedProject = { ...project, boards: updatedBoards, theme: spec.theme, fullDesignSpec: spec, updatedAt: Date.now() };
+      onSave(updatedProject);
+      setGeneratedHtml(allHtml[activeBoardIdx] || allHtml[0]);
+    } else {
+      const slideSpec = spec.slides[activeBoardIdx] || spec.slides[0];
+      const renderedHtml = renderSlide(slideSpec, spec.theme, layout);
+      setGeneratedHtml(renderedHtml);
+      setStreamingHtml(renderedHtml);
+      const updatedBoards = [...project.boards];
+      updatedBoards[activeBoardIdx] = {
+        ...updatedBoards[activeBoardIdx],
+        generatedHtml: renderedHtml,
+        designSpec: slideSpec,
+        updatedAt: Date.now(),
+      };
+      const updatedProject = { ...project, boards: updatedBoards, theme: spec.theme, fullDesignSpec: spec, updatedAt: Date.now() };
+      onSave(updatedProject);
+    }
+    setViewMode('preview');
+    onNotification?.('Design spec generated successfully', 'success');
+  }, [isCarousel, layout, project, activeBoardIdx, onSave, onNotification]);
+
   React.useEffect(() => {
     if (!onControlsChange) return;
     onControlsChange({
@@ -632,680 +686,350 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
       hasLastPrompt: !!lastPrompt,
       onToggleLibrary: () => setShowLibrary(prev => !prev),
       isLibraryOpen: showLibrary,
+      isFullscreen,
+      onFullscreenToggle: () => setIsFullscreen(prev => !prev),
     });
-  }, [generatedHtml, isGenerating, project.title, onControlsChange, handleExport, viewMode, copied, lastPrompt, layout, showLibrary]);
+  }, [generatedHtml, isGenerating, project.title, onControlsChange, handleExport, viewMode, copied, lastPrompt, layout, showLibrary, isFullscreen]);
 
   React.useEffect(() => {
     return () => { onControlsChange?.(null); };
   }, [onControlsChange]);
 
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isFullscreen]);
+
+  const [fullscreenZoom, setFullscreenZoom] = useState(1);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isFullscreen || !fullscreenContainerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      const padX = 80;
+      const padY = 120;
+      const scaleX = (width - padX) / dims.width;
+      const scaleY = (height - padY) / dims.height;
+      setFullscreenZoom(Math.min(1, scaleX, scaleY));
+    });
+    ro.observe(fullscreenContainerRef.current);
+    return () => ro.disconnect();
+  }, [isFullscreen, dims.width, dims.height]);
+
   const displayHtml = generatedHtml || '';
-  const showSidebar = !!displayHtml || chatMessages.length > 0 || isGenerating;
 
   return (
-    <div className="flex h-full w-full">
-      {showSidebar && (
-      <div
-        className="flex flex-col flex-shrink-0 w-[340px] h-full overflow-hidden"
-        style={{
-          borderRight: '1px solid var(--border-300)',
-          backgroundColor: 'var(--bg-100)',
-        }}
-      >
-        {/* Slide selector — carousel only */}
-        {isCarousel && project.boards.length > 1 && (
-          <div className="flex-shrink-0 px-3 py-3 flex items-center gap-2 overflow-x-auto scrollbar-hidden" style={{ borderBottom: '1px solid var(--border-300)' }}>
-            {project.boards.map((b, idx) => {
-              const isActive = activeBoardIdx === idx;
-              const hasContent = !!b.generatedHtml;
-              const dims = getLayoutDimensions(b.layout);
-              return (
-                <div key={b.id} className="relative flex-shrink-0 group/slide">
-                  <button
-                    onClick={() => setActiveBoardIdx(idx)}
-                    className="relative w-12 h-14 rounded-xl overflow-hidden transition-all duration-300 ease-out"
-                    style={{
-                      background: isActive
-                        ? `linear-gradient(135deg, rgba(var(--neon-rgb), 0.25), rgba(var(--neon-secondary-rgb), 0.15))`
-                        : 'var(--bg-200)',
-                      border: isActive ? 'none' : hasContent ? '1px solid var(--border-300)' : '1px dashed var(--border-300)',
-                      boxShadow: isActive ? '0 0 16px rgba(var(--neon-rgb), 0.2), inset 0 0 0 1.5px rgba(var(--neon-rgb), 0.5)' : 'none',
-                      transform: isActive ? 'scale(1.08)' : 'scale(1)',
-                    }}
-                  >
-                    {hasContent ? (
-                      <div className="absolute inset-0 overflow-hidden">
-                        <iframe
-                          srcDoc={b.generatedHtml}
-                          sandbox=""
-                          style={{
-                            width: `${dims.width}px`,
-                            height: `${dims.height}px`,
-                            border: '0',
-                            pointerEvents: 'none',
-                            transform: `translate(-50%, -50%) scale(${Math.max(48 / dims.width, 56 / dims.height) * 1.5})`,
-                            transformOrigin: 'center center',
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                          }}
-                          title={`Slide ${idx + 1}`}
-                        />
-                      </div>
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-5 h-4 rounded-sm" style={{ border: `1px dashed ${isActive ? 'rgba(var(--neon-rgb), 0.3)' : 'var(--border-300)'}` }} />
-                      </div>
-                    )}
-                    {!hasContent && (
-                      <span className="absolute inset-0 flex items-center justify-center z-10 text-xs font-bold" style={{
-                        color: isActive ? 'var(--neon-color)' : 'var(--text-300)',
-                      }}>
-                        {idx + 1}
-                      </span>
-                    )}
-                  </button>
-                  {project.boards.length > 1 && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRemoveSlide(idx); }}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover/slide:opacity-100 transition-all duration-200 z-20"
-                      style={{ backgroundColor: '#ef4444', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
-                    >
-                      <X size={8} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {project.boards.length < 10 && (
-              <button
-                onClick={handleAddSlide}
-                className="flex-shrink-0 w-12 h-14 rounded-xl flex flex-col items-center justify-center transition-all duration-200 hover:border-[var(--neon-color)]"
-                style={{ border: '1px dashed var(--border-300)', color: 'var(--text-500)' }}
-              >
-                <Plus size={14} style={{ color: 'var(--neon-color)', opacity: 0.6 }} />
-                <span className="text-[9px] mt-0.5 font-medium" style={{ color: 'var(--text-500)' }}>Add</span>
-              </button>
-            )}
-          </div>
+    <div className="flex flex-col h-full w-full">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Left Toolbar */}
+        <aside
+          className="flex-shrink-0 h-full flex flex-col items-center py-2 gap-1 z-40 transition-[width] duration-200"
+          style={{ width: showLeftSidebar ? 52 : 0, overflow: 'hidden', backgroundColor: 'var(--bg-100)', borderRight: showLeftSidebar ? '1px solid var(--border-300)' : 'none' }}
+        >
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+              style={{ color: 'var(--text-500)' }}
+              title="Back to projects"
+            >
+              <ArrowLeft size={16} />
+            </button>
+          )}
+          <div className="w-6 my-1" style={{ borderTop: '1px solid var(--border-300)' }} />
+          {displayHtml && (
+            <button
+              onClick={() => setViewMode(v => v === 'preview' ? 'source' : 'preview')}
+              className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+              style={{ color: viewMode === 'source' ? 'var(--neon-color)' : 'var(--text-500)', backgroundColor: viewMode === 'source' ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent' }}
+              title={viewMode === 'preview' ? 'Source' : 'Preview'}
+            >
+              {viewMode === 'preview' ? <Code size={16} /> : <Eye size={16} />}
+            </button>
+          )}
+          <button
+            onClick={handleExport}
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-500)' }}
+            title="Present"
+          >
+            <Download size={16} />
+          </button>
+          <button
+            onClick={handleCopy}
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ color: copied ? '#4ae176' : 'var(--text-500)' }}
+            title={copied ? 'Copied!' : 'Share'}
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+          </button>
+          <div className="w-6 my-1" style={{ borderTop: '1px solid var(--border-300)' }} />
+          <button
+            onClick={() => setShowAgentSidebar(prev => !prev)}
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ color: showAgentSidebar ? 'var(--neon-color)' : 'var(--text-500)', backgroundColor: showAgentSidebar ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent' }}
+            title="Toggle AI Agent"
+          >
+            <PanelRight size={16} />
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={() => setShowLeftSidebar(false)}
+            className="w-9 h-9 rounded-lg flex-items justify-center transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-500)' }}
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        </aside>
+
+        {/* Collapsed expand button */}
+        {!showLeftSidebar && (
+          <button
+            onClick={() => setShowLeftSidebar(true)}
+            className="absolute top-2 left-2 z-40 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)', color: 'var(--text-500)' }}
+            title="Expand sidebar"
+          >
+            <PanelLeft size={14} />
+          </button>
         )}
 
-        {/* Chat messages */}
-        <ScrollArea className="flex-1">
-          <div className="px-3 py-3 space-y-2">
-            {/* Context chips */}
-            {(selectedLibraryComponents.length > 0 || selectedPalette) && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {selectedPalette && (
-                  <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer"
-                    style={{
-                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                      color: 'var(--neon-color)',
-                      border: '1px solid rgba(var(--neon-rgb), 0.2)',
-                    }}
-                    onClick={() => setSelectedPalette(null)}
-                  >
-                    <span className="flex gap-px">
-                      {selectedPalette.colors.slice(0, 3).map((c, i) => (
-                        <span key={i} className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: c }} />
-                      ))}
-                    </span>
-                    {selectedPalette.name}
-                    <X size={7} />
-                  </span>
-                )}
-                {selectedLibraryComponents.map(c => (
-                  <span
-                    key={c.id}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium"
-                    style={{
-                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                      color: 'var(--neon-color)',
-                      border: '1px solid rgba(var(--neon-rgb), 0.2)',
-                    }}
-                  >
-                    {c.name}
-                  </span>
-                ))}
-              </div>
-            )}
+        {/* Central Canvas */}
+        <main className="flex-1 relative overflow-hidden" style={{ backgroundColor: '#0A0A0A' }}>
+          {/* Dot Grid Pattern */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none stitch-dot-grid" />
 
-            {/* Empty state */}
-            {chatMessages.length === 0 && !isGenerating && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div
-                  className="w-12 h-12 rounded-2xl mb-4 flex items-center justify-center"
-                  style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}
-                >
-                  <Sparkles size={20} style={{ color: 'var(--neon-color)' }} />
-                </div>
-                <p className="text-base font-semibold mb-1.5" style={{ color: 'var(--text-100)' }}>
-                  {isCarousel ? `Design slide ${activeBoardIdx + 1}` : 'Start a design'}
-                </p>
-                <p className="text-sm leading-relaxed mb-5" style={{ color: 'var(--text-500)' }}>
-                  Describe what you want to build and the AI will generate it
-                </p>
-                <div className="flex flex-col gap-1.5 w-full">
-                  {(isCarousel
-                    ? ['Bold product showcase with gradient background', 'Clean tips list with numbered steps', 'Eye-catching before and after comparison']
-                    : isIgStory
-                      ? ['Story with poll sticker and bold text', 'Countdown announcement with gradient', 'Minimal quote on dark background']
-                      : ['Modern SaaS landing page with hero section', 'Pricing table with 3 tiers', 'Portfolio grid with hover effects']
-                  ).map((suggestion, i) => (
+          {/* Carousel Slide Selector */}
+          {isCarousel && project.boards.length > 1 && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-2 rounded-xl stitch-glass-card">
+              {project.boards.map((b, idx) => {
+                const isActive = activeBoardIdx === idx;
+                const hasContent = !!b.generatedHtml;
+                const bDims = getLayoutDimensions(b.layout);
+                return (
+                  <div key={b.id} className="relative flex-shrink-0 group/slide">
                     <button
-                      key={i}
-                      onClick={() => { setSidebarInput(suggestion); }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                      onClick={() => setActiveBoardIdx(idx)}
+                      className="relative w-10 h-12 rounded-lg overflow-hidden transition-all duration-300 ease-out"
                       style={{
-                        backgroundColor: 'var(--bg-100)',
-                        color: 'var(--text-300)',
-                        border: '1px solid var(--border-300)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
-                        e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.05)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border-300)';
-                        e.currentTarget.style.backgroundColor = 'var(--bg-100)';
+                        background: isActive ? 'rgba(221,183,255,0.15)' : '#1c1b1b',
+                        border: isActive ? '1.5px solid rgba(221,183,255,0.5)' : hasContent ? '1px solid #4d4354' : '1px dashed #4d4354',
+                        boxShadow: isActive ? '0 0 12px rgba(221,183,255,0.2)' : 'none',
+                        transform: isActive ? 'scale(1.08)' : 'scale(1)',
                       }}
                     >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Chat messages */}
-            {chatMessages.map((msg, idx) => (
-              <div key={idx} className="animate-message-in">
-                {msg.role === 'user' ? (
-                  <div className="flex justify-end">
-                    <div
-                      className="max-w-[85%] rounded-2xl rounded-br-md px-3 py-2 text-sm leading-relaxed prose prose-invert max-w-none [&>p]:mb-0.5 [&>p]:last:mb-0 [&>ul]:my-0.5 [&>ol]:my-0.5 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-1 [&>pre]:text-xs [&>code]:text-xs"
-                      style={{
-                        backgroundColor: 'rgba(var(--neon-rgb), 0.12)',
-                        color: 'var(--text-100)',
-                      }}
-                    >
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.content}</ReactMarkdown>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="group/msg">
-                    <div className="flex items-start gap-2">
-                      <div
-                        className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center mt-0.5"
-                        style={{ background: 'rgba(var(--neon-rgb), 0.12)' }}
-                      >
-                        <Sparkles size={10} style={{ color: 'var(--neon-color)' }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {msg.thinking && (
-                          <div className="mb-1.5">
-                            <button
-                              onClick={() => {
-                                setExpandedThinking(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(idx)) next.delete(idx); else next.add(idx);
-                                  return next;
-                                });
-                              }}
-                              className="flex items-center gap-1.5 text-xs font-medium transition-colors"
-                              style={{ color: 'var(--text-500)' }}
-                            >
-                              <Brain size={10} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
-                              <span>Reasoning</span>
-                              {expandedThinking.has(idx) ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-                            </button>
-                            <div
-                              className="overflow-hidden transition-all duration-300"
-                              style={{
-                                maxHeight: expandedThinking.has(idx) ? '200px' : '0',
-                                opacity: expandedThinking.has(idx) ? 1 : 0,
-                              }}
-                            >
-                              <div
-                                className="mt-1 pl-2.5 text-sm leading-relaxed italic"
-                                style={{
-                                  color: 'var(--text-500)',
-                                  whiteSpace: 'pre-wrap',
-                                  wordBreak: 'break-word',
-                                  borderLeft: '2px solid rgba(var(--neon-rgb), 0.2)',
-                                }}
-                              >
-                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.thinking}</ReactMarkdown>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {msg.responseText && msg.responseText.trim() && (
-                          <div className="text-sm leading-relaxed prose prose-invert max-w-none [&>p]:mb-0.5 [&>p]:last:mb-0 [&>ul]:my-0.5 [&>ol]:my-0.5 [&>ul>li]:mb-0.5 [&>ol>li]:mb-0.5 [&>pre]:my-1 [&>pre]:text-xs [&>code]:text-xs" style={{ color: 'var(--text-100)' }}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}>{msg.responseText}</ReactMarkdown>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
-                          <button
-                            onClick={() => handleCopyMessage(msg.responseText || msg.content, idx)}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: copiedMsgIdx === idx ? 'var(--neon-color)' : 'var(--text-500)' }}
-                          >
-                            {copiedMsgIdx === idx ? <Check size={10} /> : <Copy size={10} />}
-                          </button>
-                          <button
-                            onClick={() => { if (!isGenerating && lastPrompt) handleGenerate(lastPrompt); }}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: 'var(--text-500)' }}
-                          >
-                            <RefreshCw size={10} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {isGenerating && (
-              <div className="animate-message-in">
-                <div className="flex items-start gap-2">
-                  <div
-                    className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center"
-                    style={{ background: 'rgba(var(--neon-rgb), 0.12)' }}
-                  >
-                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--neon-color)' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {!activeToolCalls.length && !streamingHtml && !thinkingText && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium" style={{ color: 'var(--text-500)' }}>Thinking</span>
-                        <span className="flex gap-0.5">
-                          {[0, 1, 2].map(i => (
-                            <span
-                              key={i}
-                              className="w-1 h-1 rounded-full inline-block"
-                              style={{
-                                backgroundColor: 'var(--text-500)',
-                                animation: `pulse-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                              }}
-                            />
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                    {activeToolCalls.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-1">
-                        {activeToolCalls.map((tc, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
+                      {hasContent ? (
+                        <div className="absolute inset-0 overflow-hidden">
+                          <iframe
+                            srcDoc={b.generatedHtml}
+                            sandbox=""
                             style={{
-                              backgroundColor: tc.output ? 'rgba(74, 222, 128, 0.1)' : 'rgba(var(--neon-rgb), 0.08)',
-                              color: tc.output ? '#4ade80' : 'var(--text-300)',
-                              border: `1px solid ${tc.output ? 'rgba(74, 222, 128, 0.2)' : 'var(--border-300)'}`,
+                              width: `${bDims.width}px`,
+                              height: `${bDims.height}px`,
+                              border: '0',
+                              pointerEvents: 'none',
+                              transform: `translate(-50%, -50%) scale(${Math.max(40 / bDims.width, 48 / bDims.height) * 1.5})`,
+                              transformOrigin: 'center center',
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
                             }}
-                          >
-                            {tc.output ? <Check size={8} /> : <Loader2 size={8} className="animate-spin" />}
-                            {tc.name.replace(/_/g, ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {editSummary && (
-                      <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-500)', whiteSpace: 'pre-wrap' }}>
-                        {editSummary}
-                      </p>
-                    )}
-                    {thinkingText && !activeToolCalls.some(tc => !tc.output) && (
-                      <div className="mb-1">
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <Brain size={10} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>Reasoning</span>
-                        </div>
-                        <div
-                          className="max-h-16 overflow-y-auto text-xs leading-relaxed italic pl-2"
-                          style={{
-                            color: 'var(--text-500)',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            borderLeft: '2px solid rgba(var(--neon-rgb), 0.15)',
-                          }}
-                        >
-                          {thinkingText}
-                        </div>
-                      </div>
-                    )}
-                    {streamingHtml && (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Eye size={9} style={{ color: 'var(--neon-color)', opacity: 0.7 }} />
-                        <span className="text-xs" style={{ color: 'var(--text-500)' }}>
-                          {streamingHtml.length.toLocaleString()} chars
-                        </span>
-                        <div className="flex-1 h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-300)' }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              backgroundColor: 'var(--neon-color)',
-                              width: `${Math.min(100, (streamingHtml.length / 5000) * 100)}%`,
-                              transition: 'width 0.3s ease',
-                            }}
+                            title={`Slide ${idx + 1}`}
                           />
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-        </ScrollArea>
-
-        {/* Bottom toolbar + Input */}
-        <div className="flex-shrink-0" style={{ borderTop: '1px solid var(--border-300)' }}>
-          {/* Toolbar */}
-          <div className="px-3 pt-1.5 pb-0.5 flex items-center gap-0.5">
-            <div className="flex-1" />
-            {chatModels.length > 1 && (
-              <Select value={selectedModelId} onValueChange={setSelectedModelId}>
-                <SelectTrigger
-                  className="h-7 w-auto min-w-0 border-0 text-xs font-medium px-1.5 gap-0.5"
-                  style={{ backgroundColor: 'transparent', color: 'var(--text-500)' }}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {chatModels.map(model => (
-                    <SelectItem key={model.id} value={model.id} className="text-xs">
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="px-3 pb-3 pt-1">
-            <ChatInput
-              value={sidebarInput}
-              onChange={(e) => setSidebarInput(e.target.value)}
-              onSubmit={() => {
-                if (sidebarInput.trim() && !isGenerating) {
-                  handleGenerate(sidebarInput.trim());
-                  setSidebarInput('');
-                }
-              }}
-              loading={isGenerating}
-              onStop={handleStopGeneration}
-              rows={1}
-            >
-              <ChatInputTextArea
-                placeholder={
-                  chatMessages.length === 0
-                    ? (isCarousel ? `Describe slide ${activeBoardIdx + 1}...` : 'Describe your design...')
-                    : 'Describe changes...'
-                }
-                disabled={isGenerating}
-              />
-              <ChatInputSubmit />
-            </ChatInput>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Preview area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div ref={containerRef} className="flex-1 overflow-auto flex justify-center items-center p-4" style={{ backgroundColor: 'var(--bg-100)' }}>
-          {displayHtml ? (
-            viewMode === 'preview' || !generatedHtml ? (
-              <div style={{
-                width: `${dims.width}px`,
-                transform: `scale(${zoom})`,
-                transformOrigin: 'center center',
-              }}>
-                <iframe
-                  style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.2)', borderRadius: '12px' }}
-                  sandbox="allow-scripts"
-                  srcDoc={displayHtml}
-                  title="HTML Preview"
-                />
-              </div>
-            ) : (
-              <div className="w-full h-full relative">
-                <div className="flex items-center justify-between px-4 py-2 rounded-t-xl" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)', borderBottom: 'none' }}>
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>HTML Source</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => editorRef.current?.undo()}
-                      className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-300)]"
-                      style={{ color: 'var(--text-500)' }}
-                      title="Undo (Ctrl+Z)"
-                    >
-                      <Undo2 size={12} />
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold" style={{ color: isActive ? '#ddb7ff' : '#cfc2d6' }}>
+                          {idx + 1}
+                        </span>
+                      )}
                     </button>
-                    <button
-                      onClick={() => editorRef.current?.redo()}
-                      className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-300)]"
-                      style={{ color: 'var(--text-500)' }}
-                      title="Redo (Ctrl+Shift+Z)"
-                    >
-                      <Redo2 size={12} />
-                    </button>
-                    {editedHtml !== sourceOriginalHtml && (
+                    {project.boards.length > 1 && (
                       <button
-                        onClick={handleCancelEdits}
-                        className="flex items-center gap-1 px-2 py-1 ml-1 rounded-lg text-xs font-medium transition-all"
-                        style={{
-                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                          color: '#ef4444',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                        }}
+                        onClick={(e) => { e.stopPropagation(); handleRemoveSlide(idx); }}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center opacity-0 group-hover/slide:opacity-100 transition-all duration-200 z-20"
+                        style={{ backgroundColor: '#ef4444', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
                       >
-                        <X size={10} />
-                        Cancel
+                        <X size={7} />
                       </button>
                     )}
                   </div>
-                </div>
-                <div
-                  className="relative w-full rounded-b-xl overflow-hidden"
-                  style={{
-                    height: 'calc(100% - 36px)',
-                    border: '1px solid var(--border-300)',
-                  }}
+                );
+              })}
+              {project.boards.length < 10 && (
+                <button
+                  onClick={handleAddSlide}
+                  className="flex-shrink-0 w-10 h-12 rounded-lg flex flex-col items-center justify-center transition-all hover:opacity-80"
+                  style={{ border: '1px dashed #4d4354', color: '#cfc2d6' }}
                 >
-                  <CodeEditor
-                    language="html"
-                    value={editedHtml || generatedHtml}
-                    onChange={(val) => setEditedHtml(val)}
-                    onLoad={(editor) => { editorRef.current = editor; }}
-                    className="absolute inset-0"
-                  />
-                </div>
-              </div>
-            )
-          ) : isGenerating ? (
-            <div className="text-center py-20">
-              <div className="mx-auto mb-4 flex items-center justify-center">
-                <MathCurveLoader size={56} />
-              </div>
-              <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>{isIgContent ? 'Composing design...' : 'Generating HTML...'}</p>
-              <p className="text-xs" style={{ color: 'var(--text-500)' }}>{isIgContent ? 'The AI is building your design spec' : 'The AI is building your design'}</p>
-            </div>
-          ) : (
-            <div className="w-full max-w-2xl mx-auto py-8 px-4">
-              {/* Ambient glow */}
-              <div className="relative flex flex-col items-center text-center mb-8">
-                <div
-                  className="absolute -top-16 w-48 h-48 rounded-full opacity-15 blur-3xl pointer-events-none"
-                  style={{ background: `radial-gradient(circle, var(--neon-color), transparent 70%)` }}
-                />
-
-                {/* Project type badge */}
-                <span
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide mb-5 animate-fade-in"
-                  style={{
-                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                    color: 'var(--neon-color)',
-                    border: '1px solid rgba(var(--neon-rgb), 0.2)',
-                    animationDelay: '0ms',
-                    opacity: 0,
-                    animationFillMode: 'forwards',
-                  }}
-                >
-                  {isCarousel ? (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
-                      {project.boards[0]?.layout || '4:5'} · Carousel · {project.boards.length} slides
-                    </>
-                  ) : isIgStory ? (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
-                      9:16 · Story / Reel
-                    </>
-                  ) : (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--neon-color)' }} />
-                      {project.boards[0]?.layout || '16:9'} · Website
-                    </>
-                  )}
-                </span>
-
-                {/* Headline */}
-                <h2
-                  className="text-xl font-bold mb-2 animate-fade-in"
-                  style={{ color: 'var(--text-100)', animationDelay: '60ms', opacity: 0, animationFillMode: 'forwards' }}
-                >
-                  {isCarousel ? `Design slide ${activeBoardIdx + 1}` : 'Create your design'}
-                </h2>
-                <p
-                  className="text-sm leading-relaxed animate-fade-in"
-                  style={{ color: 'var(--text-500)', animationDelay: '120ms', opacity: 0, animationFillMode: 'forwards' }}
-                >
-                  Describe what you want to build and the AI will generate it
-                </p>
-              </div>
-
-              {/* Slide stepper — carousel only */}
-              {isCarousel && project.boards.length > 1 && (
-                <div className="flex items-center justify-center gap-0 mb-6 animate-fade-in" style={{ animationDelay: '180ms', opacity: 0, animationFillMode: 'forwards' }}>
-                  {project.boards.map((b, idx) => {
-                    const isActive = activeBoardIdx === idx;
-                    const hasContent = !!b.generatedHtml;
-                    return (
-                      <React.Fragment key={b.id}>
-                        <button
-                          onClick={() => setActiveBoardIdx(idx)}
-                          className="relative flex items-center justify-center transition-all duration-300 ease-out"
-                          style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '10px',
-                            background: isActive
-                              ? `linear-gradient(135deg, rgba(var(--neon-rgb), 0.3), rgba(var(--neon-secondary-rgb), 0.2))`
-                              : 'var(--bg-200)',
-                            border: 'none',
-                            boxShadow: isActive ? '0 0 12px rgba(var(--neon-rgb), 0.2), inset 0 0 0 1.5px rgba(var(--neon-rgb), 0.5)' : 'inset 0 0 0 1px var(--border-300)',
-                            transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                          }}
-                        >
-                          <span className="text-xs font-bold" style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-500)' }}>
-                            {idx + 1}
-                          </span>
-                        </button>
-                        {idx < project.boards.length - 1 && (
-                          <div className="w-4 h-px flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
+                  <Plus size={12} style={{ color: '#ddb7ff', opacity: 0.6 }} />
+                  <span className="text-[8px] mt-0.5 font-medium" style={{ color: '#cfc2d6' }}>Add</span>
+                </button>
               )}
-
-              {/* Prompt bar */}
-              <div className="animate-fade-in" style={{ animationDelay: '240ms', opacity: 0, animationFillMode: 'forwards' }}>
-                <StitchPromptBar
-                  onGenerate={(prompt) => { handleGenerate(prompt); }}
-                  isGenerating={isGenerating}
-                  theme={theme}
-                  models={models}
-                  selectedModelId={selectedModelId}
-                  onModelChange={setSelectedModelId}
-                  initialActiveChips={activeStyleChips}
-                  onActiveChipsChange={setActiveStyleChips}
-                  projectType={project.projectType}
-                />
-              </div>
-
-              {/* Quick-start suggestions */}
-              <div className="mt-6 animate-fade-in" style={{ animationDelay: '360ms', opacity: 0, animationFillMode: 'forwards' }}>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5 text-center" style={{ color: 'var(--text-500)' }}>
-                  Quick start
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {(isCarousel
-                    ? ['Bold product showcase with gradient background', 'Clean tips list with numbered steps', 'Eye-catching before and after comparison']
-                    : isIgStory
-                      ? ['Story with poll sticker and bold text', 'Countdown announcement with gradient', 'Minimal quote on dark background']
-                      : ['Modern SaaS landing page with hero section', 'Pricing table with 3 tiers', 'Portfolio grid with hover effects']
-                  ).map((suggestion, i) => (
-                    <button
-                      key={i}
-                      onClick={() => { setSidebarInput(suggestion); }}
-                      className="group/suggestion text-left px-3.5 py-3 rounded-xl text-xs leading-relaxed transition-all duration-300"
-                      style={{
-                        backgroundColor: 'var(--bg-200)',
-                        color: 'var(--text-300)',
-                        border: '1px solid var(--border-300)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
-                        e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.04)';
-                        e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--neon-rgb), 0.06)';
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border-300)';
-                        e.currentTarget.style.backgroundColor = 'var(--bg-200)';
-                        e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Right sidebar — Library */}
-      {showLibrary && (
-        <div
-          className="flex flex-col flex-shrink-0 w-[320px] h-full overflow-hidden animate-fade-in"
-          style={{
-            borderLeft: '1px solid var(--border-300)',
-            backgroundColor: 'var(--bg-100)',
-          }}
-        >
-          <StitchLibrary
-            projectType={project.projectType}
-            theme={theme}
-            onComponentsSelected={setSelectedLibraryComponents}
-            onNotification={onNotification}
-            onPaletteSelect={handlePaletteSelect}
-            onLayoutSelect={handleLayoutSelect}
-          />
-        </div>
-      )}
+          {/* Canvas Content */}
+          <div ref={containerRef} className="relative w-full h-full flex items-center justify-center p-10 z-10">
+            {displayHtml ? (
+              viewMode === 'preview' || !generatedHtml ? (
+                <div style={{
+                  width: `${dims.width}px`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'center center',
+                }}>
+                  <iframe
+                    style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.4)', borderRadius: '12px' }}
+                    sandbox="allow-scripts"
+                    srcDoc={displayHtml}
+                    title="HTML Preview"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full relative">
+                  <div className="flex items-center justify-between px-4 py-2 rounded-t-xl" style={{ backgroundColor: '#1c1b1b', border: '1px solid #4d4354', borderBottom: 'none' }}>
+                    <span className="text-xs font-medium" style={{ color: '#cfc2d6' }}>HTML Source</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => editorRef.current?.undo()} className="p-1.5 rounded-lg transition-colors hover:opacity-80" style={{ color: '#cfc2d6' }} title="Undo">
+                        <Undo2 size={12} />
+                      </button>
+                      <button onClick={() => editorRef.current?.redo()} className="p-1.5 rounded-lg transition-colors hover:opacity-80" style={{ color: '#cfc2d6' }} title="Redo">
+                        <Redo2 size={12} />
+                      </button>
+                      {editedHtml !== sourceOriginalHtml && (
+                        <button onClick={handleCancelEdits} className="flex items-center gap-1 px-2 py-1 ml-1 rounded-lg text-xs font-medium transition-all" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                          <X size={10} /> Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative w-full rounded-b-xl overflow-hidden" style={{ height: 'calc(100% - 36px)', border: '1px solid #4d4354' }}>
+                    <CodeEditor language="html" value={editedHtml || generatedHtml} onChange={(val) => setEditedHtml(val)} onLoad={(editor) => { editorRef.current = editor; }} className="absolute inset-0" />
+                  </div>
+                </div>
+              )
+            ) : isGenerating ? (
+              streamingHtml ? (
+                <div style={{ width: `${dims.width}px`, transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                  <iframe
+                    style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.4)', borderRadius: '12px' }}
+                    sandbox="allow-scripts"
+                    srcDoc={streamingHtml}
+                    title="Streaming Preview"
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <div className="mx-auto mb-4 flex items-center justify-center">
+                    <MathCurveLoader size={56} />
+                  </div>
+                  <p className="text-sm mb-1" style={{ color: '#cfc2d6' }}>{isIgContent ? 'Composing design...' : 'Generating HTML...'}</p>
+                  <p className="text-xs" style={{ color: '#7a7a7a' }}>{isIgContent ? 'The AI is building your design spec' : 'The AI is building your design'}</p>
+                </div>
+              )
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center py-20">
+                <div className="absolute w-64 h-64 rounded-full opacity-10 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(circle, #ddb7ff, transparent 70%)' }} />
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide mb-4"
+                  style={{ backgroundColor: 'rgba(221,183,255,0.1)', color: '#ddb7ff', border: '1px solid rgba(221,183,255,0.2)' }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#ddb7ff' }} />
+                  {isCarousel
+                    ? `${project.boards[0]?.layout || '4:5'} · Carousel · ${project.boards.length} slides`
+                    : isIgStory
+                      ? '9:16 · Story / Reel'
+                      : `${project.boards[0]?.layout || '16:9'} · Website`}
+                </span>
+                <h2 className="text-lg font-semibold mb-1" style={{ color: '#e5e2e1' }}>
+                  {isCarousel ? `Design slide ${activeBoardIdx + 1}` : 'Create your design'}
+                </h2>
+                <p className="text-sm" style={{ color: '#7a7a7a' }}>
+                  Describe what you want in the AI Copilot and it will generate it
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Floating Canvas Toolbar */}
+          {displayHtml && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 stitch-glass-card rounded-full px-5 py-2.5 flex gap-3 items-center">
+              <button
+                onClick={() => setIsFullscreen(true)}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+                style={{ color: '#ddb7ff', backgroundColor: 'rgba(221,183,255,0.1)' }}
+                title="Fullscreen"
+              >
+                <Maximize2 size={16} />
+              </button>
+              <div className="w-px h-5" style={{ backgroundColor: '#4d4354' }} />
+              <button
+                onClick={handleCopy}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+                style={{ color: copied ? '#4ae176' : '#cfc2d6' }}
+                title="Copy HTML"
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+              </button>
+              <button
+                onClick={handleExport}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+                style={{ color: '#cfc2d6' }}
+                title="Export"
+              >
+                <Download size={16} />
+              </button>
+              <div className="w-px h-5" style={{ backgroundColor: '#4d4354' }} />
+              <button
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+                style={{ color: '#adc6ff', backgroundColor: 'rgba(173,198,255,0.1)' }}
+                title="AI Magic"
+              >
+                <Sparkles size={16} />
+              </button>
+            </div>
+          )}
+        </main>
+
+        {/* Right SideNavBar */}
+        <StitchAgentSidebar
+          isOpen={showAgentSidebar}
+          onToggle={() => setShowAgentSidebar(prev => !prev)}
+          project={project}
+          activeBoardIdx={activeBoardIdx}
+          currentHtml={generatedHtml}
+          currentSpec={isIgContent ? designSpec : undefined}
+          modelConfig={activeModel}
+          onNotification={onNotification}
+          onHtmlGenerated={handleAgentHtmlGenerated}
+          onSpecGenerated={isIgContent ? handleAgentSpecGenerated : undefined}
+          models={chatModels.map(m => ({ id: m.id, name: m.name }))}
+          selectedModelId={selectedModelId}
+          onModelChange={setSelectedModelId}
+        />
+
+        {/* Library Panel */}
+        {showLibrary && (
+          <div
+            className="flex flex-col flex-shrink-0 w-[320px] h-full overflow-hidden animate-fade-in stitch-glass-panel z-40"
+            style={{ borderLeft: '1px solid #4d4354' }}
+          >
+            <StitchLibrary
+              projectType={project.projectType}
+              theme={theme}
+              onComponentsSelected={setSelectedLibraryComponents}
+              onNotification={onNotification}
+              onPaletteSelect={handlePaletteSelect}
+              onLayoutSelect={handleLayoutSelect}
+            />
+          </div>
+        )}
+      </div>
 
       <StitchExportModal
         project={project}
@@ -1313,6 +1037,54 @@ const StitchEditor: React.FC<StitchEditorProps> = ({ project, theme = 'dark', on
         onClose={() => setShowExportModal(false)}
         onNotification={onNotification}
       />
+
+      {/* Fullscreen modal */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent fullscreen hideCloseButton className="border-0 p-0 flex flex-col" style={{ backgroundColor: theme === 'dark' ? '#0a0a0a' : '#f5f5f5' }}>
+          <div ref={fullscreenContainerRef} className="flex-1 flex items-center justify-center overflow-auto p-4 w-full h-full">
+            <iframe
+              style={{
+                width: `${dims.width}px`,
+                height: `${dims.height}px`,
+                border: '0',
+                backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff',
+                boxShadow: '0 4px 30px rgba(0,0,0,0.4)',
+                borderRadius: '12px',
+                transform: `scale(${fullscreenZoom})`,
+                transformOrigin: 'center center',
+              }}
+              sandbox="allow-scripts"
+              srcDoc={streamingHtml || displayHtml}
+              title="HTML Preview"
+            />
+          </div>
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="absolute top-4 right-4 p-2.5 rounded-xl transition-all duration-200 hover:scale-105 stitch-glass-card z-10"
+            style={{ color: '#cfc2d6' }}
+            title="Exit fullscreen (Esc)"
+          >
+            <Minimize2 size={16} />
+          </button>
+          {isGenerating && activeToolCalls.length > 0 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 px-3 py-2 rounded-xl stitch-glass-card z-10">
+              {activeToolCalls.map((tc, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
+                  style={{
+                    backgroundColor: tc.output ? 'rgba(74,222,128,0.1)' : 'rgba(221,183,255,0.08)',
+                    color: tc.output ? '#4ae176' : '#cfc2d6',
+                  }}
+                >
+                  {tc.output ? <Check size={8} /> : <Loader2 size={8} className="animate-spin" />}
+                  {tc.name.replace(/_/g, ' ')}
+                </span>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

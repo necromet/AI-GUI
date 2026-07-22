@@ -37,6 +37,7 @@ Frontend is a single-page React app. Backend is Express 5 with SQLite (`better-s
 | Server DB schema | `server/db/schema.ts` | `SCHEMA_SQL` + `SEED_SQL` constants, run on every startup |
 | Chat routes | `server/routes/chat.ts` | `/api/chat/*` — completions, title, TTS, ASR |
 | Stitch routes | `server/routes/stitch.ts` | `/api/stitch/*` — image gen (OpenAI), HTML gen (MiMo) |
+| Stitch agent routes | `server/routes/stitchAgent.ts` | `/api/stitch-agent/*` — stitch agent via Vercel AI SDK + session CRUD |
 | RAG routes | `server/routes/rag.ts` | `/api/rag/*` — document upload, retrieval, RAG chat |
 | Agent routes | `server/routes/agent.ts` | `/api/agent/*` — agent chat with tool execution loop |
 | OpenCode agent routes | `server/routes/opencodeAgent.ts` | `/api/agent/opencode/*` — OpenCode sidecar proxy |
@@ -126,16 +127,45 @@ The Express server auto-detects the user's language from the last message and pr
 
 The Stitch feature is a Google Stitch-inspired visual design editor accessible from Experiments mode. Key architecture:
 
-- **Canvas**: Uses Fabric.js (`fabric@6`) for interactive drag/drop/resize/rotate canvas
+- **Canvas**: Uses iframe `srcDoc` for HTML preview (not Fabric.js)
 - **Layouts**: Supports `16:9`, `1:1`, `9:16`, `4:5`, `1.91:1`, `4:3`, `3:4`, `32:9`
 - **AI Generation**: Two modes — HTML generation (via MiMo) and image generation (via OpenAI `gpt-image-2`)
 - **Persistence**: SQLite `stitch_projects` table, boards serialized as JSON
-- **Export**: HTML file download, PNG export (via Fabric.js `toDataURL`), copy to clipboard
-- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace + prompt bar), `StitchExportModal`, `StitchLibrary`
+- **Export**: HTML file download, PNG/JPEG export (via `html-to-image`), copy to clipboard
+- **Components**: `StitchPanel` (project grid), `StitchEditor` (workspace), `StitchAgentSidebar` (agent chat), `StitchExportModal`, `StitchLibrary`
+
+#### Stitch Agent Frontend
+
+The Stitch Agent uses the same Vercel AI SDK architecture as the Library Agent. The frontend agent lives in `components/stitch/`:
+
+| File | Purpose |
+|------|---------|
+| `components/stitch/StitchAgentSidebar.tsx` | Main sidebar container — resizable, composes hooks + message list + input |
+| `components/stitch/agent/types.ts` | `MessageBlock`, `AgentMessage`, `StitchAgentSidebarProps` |
+| `components/stitch/agent/useStitchAgentStream.ts` | SSE streaming hook — multi-round loop (max 10 rounds), tool call handling, `html_generated`/`spec_generated` event processing |
+| `components/stitch/agent/useStitchAgentSessions.ts` | Session CRUD — per-project, per-board-idx, max 3 sessions, auto-save after streaming |
+
+The sidebar reuses `MessageBubble`, `EmptyState`, `AgentMarkdown`, and `ModelPicker` from `components/library/agent/` (shared rendering components).
+
+#### Stitch Agent Backend
+
+`server/routes/stitchAgent.ts` exposes:
+- `POST /api/stitch-agent/chat` — SSE streaming agent endpoint (Vercel AI SDK `streamText` with 8 tools, `maxSteps: 6`)
+- `GET /api/stitch-agent/session/:id` — get single session
+- `GET /api/stitch-agent/sessions/:projectId?boardIdx=N` — list sessions for project/board
+- `POST /api/stitch-agent/sessions` — create session (max 20/project, FIFO eviction)
+- `PUT /api/stitch-agent/sessions/:id` — update messages/title
+- `DELETE /api/stitch-agent/sessions/:id` — delete session
+
+Tools: `generate_html`, `edit_html`, `generate_spec`, `edit_spec`, `search_library`, `web_browse`, `execute_code`, `search_web`.
+
+Session data stored in SQLite `stitch_agent_sessions` table (references `stitch_projects(id)`).
 
 ### Library agent (Vercel AI SDK)
 
 The Library feature uses Vercel AI SDK (`ai` package) for its agent chat. Tool definitions are in `lib/agent/tools/library.ts`, provider adapter in `lib/agent/provider.ts`. The entry point `lib/agent/agent.ts` uses `ToolLoopAgent`. Do not confuse with the MiMo-based agent in `server/services/agentService.ts`.
+
+Frontend agent components live in `components/library/agent/` — `useAgentStream.ts` (SSE multi-round loop), `useAgentSessions.ts` (session CRUD), `MessageBlocks.tsx` (rendering), `AgentMarkdown.tsx`, `ModelPicker.tsx`. The main sidebar is `components/library/AgentSidebar.tsx`. These are reused by the Stitch Agent. See `docs/LIBRARY_AGENT.md` for full architecture documentation.
 
 ## Build Artifacts (all gitignored)
 

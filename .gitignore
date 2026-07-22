@@ -34,3 +34,4 @@ output/
 tmp/
 docker-compose.override.yml
 data/
+math-curve-loaders/
