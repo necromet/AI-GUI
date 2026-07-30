@@ -1,34 +1,31 @@
-import { getDatabase } from './index';
+import { getAll, getOne, run, runReturning } from './pg';
 
 export interface DBModel {
   id: number;
   name: string;
   description: string | null;
   context_window_size: number | null;
-  active: number;
+  active: boolean;
   api_key: string | null;
   provider: string | null;
   system_instruction: string | null;
-  is_custom: number;
+  is_custom: boolean;
   created_at: string;
 }
 
-export function getModels(): DBModel[] {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM models WHERE active = 1').all() as DBModel[];
+export async function getModels(): Promise<DBModel[]> {
+  return getAll<DBModel>('SELECT * FROM models WHERE active = TRUE');
 }
 
-export function getAllModels(): DBModel[] {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM models').all() as DBModel[];
+export async function getAllModels(): Promise<DBModel[]> {
+  return getAll<DBModel>('SELECT * FROM models');
 }
 
-export function getModelById(id: number): DBModel | undefined {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM models WHERE id = ?').get(id) as DBModel | undefined;
+export async function getModelById(id: number): Promise<DBModel | undefined> {
+  return getOne<DBModel>('SELECT * FROM models WHERE id = $1', [id]);
 }
 
-export function addModel(
+export async function addModel(
   name: string,
   description: string | null,
   contextWindowSize: number | null,
@@ -36,25 +33,25 @@ export function addModel(
   provider?: string | null,
   systemInstruction?: string | null,
   isCustom?: boolean
-): number {
-  const db = getDatabase();
-  const stmt = db.prepare(
+): Promise<number> {
+  const row = await runReturning<{ id: number }>(
     `INSERT INTO models (name, description, context_window_size, api_key, provider, system_instruction, is_custom)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id`,
+    [
+      name,
+      description,
+      contextWindowSize,
+      apiKey || null,
+      provider || null,
+      systemInstruction || null,
+      isCustom ? true : false,
+    ]
   );
-  const result = stmt.run(
-    name,
-    description,
-    contextWindowSize,
-    apiKey || null,
-    provider || null,
-    systemInstruction || null,
-    isCustom ? 1 : 0
-  );
-  return Number(result.lastInsertRowid);
+  return row!.id;
 }
 
-export function updateModel(
+export async function updateModel(
   id: number,
   name: string,
   description: string | null,
@@ -63,15 +60,14 @@ export function updateModel(
   provider?: string | null,
   systemInstruction?: string | null,
   isCustom?: boolean
-): void {
-  const db = getDatabase();
-  db.prepare(
-    `UPDATE models SET name = ?, description = ?, context_window_size = ?, api_key = ?, provider = ?, system_instruction = ?, is_custom = ?
-     WHERE id = ?`
-  ).run(name, description, contextWindowSize, apiKey || null, provider || null, systemInstruction || null, isCustom ? 1 : 0, id);
+): Promise<void> {
+  await run(
+    `UPDATE models SET name = $1, description = $2, context_window_size = $3, api_key = $4, provider = $5, system_instruction = $6, is_custom = $7
+     WHERE id = $8`,
+    [name, description, contextWindowSize, apiKey || null, provider || null, systemInstruction || null, isCustom ? true : false, id]
+  );
 }
 
-export function deactivateModel(id: number): void {
-  const db = getDatabase();
-  db.prepare('UPDATE models SET active = 0 WHERE id = ?').run(id);
+export async function deactivateModel(id: number): Promise<void> {
+  await run('UPDATE models SET active = FALSE WHERE id = $1', [id]);
 }

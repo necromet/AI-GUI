@@ -55,9 +55,9 @@ router.post('/documents', upload.single('file'), async (req: Request, res: Respo
   }
 });
 
-router.get('/documents', (_req: Request, res: Response) => {
+router.get('/documents', async (_req: Request, res: Response) => {
   try {
-    const docs = listDocuments();
+    const docs = await listDocuments();
     res.json({ documents: docs });
   } catch (error: any) {
     console.error('[rag/documents] Error:', error.message);
@@ -65,9 +65,9 @@ router.get('/documents', (_req: Request, res: Response) => {
   }
 });
 
-router.delete('/documents/:id', (req: Request, res: Response) => {
+router.delete('/documents/:id', async (req: Request, res: Response) => {
   try {
-    const deleted = deleteDocument(req.params.id);
+    const deleted = await deleteDocument(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'Document not found' });
       return;

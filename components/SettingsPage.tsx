@@ -55,6 +55,7 @@ const FONTS = [
   { id: 'open-sans', name: 'Open Sans', sample: 'Neutral and highly legible' },
   { id: 'fredoka', name: 'Fredoka', sample: 'Rounded and playful' },
   { id: 'comfortaa', name: 'Comfortaa', sample: 'Geometric and modern' },
+  { id: 'space-grotesk', name: 'Space Grotesk', sample: 'Technical and geometric' },
 ];
 
 const FONT_CSS: Record<string, string> = {
@@ -64,6 +65,7 @@ const FONT_CSS: Record<string, string> = {
   'open-sans': "'Open Sans', sans-serif",
   fredoka: "'Fredoka', sans-serif",
   comfortaa: "'Comfortaa', sans-serif",
+  'space-grotesk': "'Space Grotesk', sans-serif",
 };
 
 const FONT_SIZES = [
@@ -422,7 +424,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   const [agentConfigs, setAgentConfigs] = useState<Record<AgentType, AgentConfig>>({
     plugin: getAgentConfig('plugin'),
     library: getAgentConfig('library'),
-    stitch: getAgentConfig('stitch'),
+    skema: getAgentConfig('skema'),
     rag: getAgentConfig('rag'),
   });
   const currentAgentConfig = agentConfigs[selectedAgent];
@@ -456,7 +458,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   const agentLabels: Record<AgentType, string> = {
     plugin: 'Plugin Agent',
     library: 'Librarian',
-    stitch: 'Stitch Agent',
+    skema: 'Skema Agent',
     rag: 'RAG Agent',
   };
 
@@ -467,7 +469,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-1.5 p-1 rounded-xl" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
-          {(['plugin', 'library', 'stitch', 'rag'] as AgentType[]).map(agent => (
+          {(['plugin', 'library', 'skema', 'rag'] as AgentType[]).map(agent => (
             <button
               key={agent}
               onClick={() => setSelectedAgent(agent)}

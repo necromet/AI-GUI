@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LayoutCraft — Grid Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --s0: #0c0c0f;
+            --s1: #111114;
+            --s2: #18181c;
+            --s3: #222228;
+            --border: #2a2a30;
+            --border-s: #1c1c22;
+            --text: #e4e4e8;
+            --text2: #9a9aa4;
+            --text3: #52525e;
+            --accent: #e4a853;
+            --accent-dim: rgba(228,168,83,0.10);
+            --green: #34d399;
+            --red: #f87171;
+            --blue: #818cf8;
+            --purple: #c084fc;
+            --cell-w: 80px;
+            --cell-h: 80px;
+            --grid-cols: 12;
+            --canvas-w: calc(var(--grid-cols) * var(--cell-w));
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ═══ APP SHELL ═══ */
+        .app { display: flex; flex-direction: column; height: 100vh; }
+
+        .topbar {
+            height: 50px; background: var(--s1);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; flex-shrink: 0; z-index: 10;
+        }
+        .topbar-l { display: flex; align-items: center; gap: 12px; }
+        .logo { font-weight: 700; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+        .logo-i { width: 20px; height: 20px; background: var(--accent); border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #09090b; font-weight: 700; }
+        .div-v { width: 1px; height: 20px; background: var(--border); }
+        .page-inp { font-family: inherit; font-size: 13px; background: none; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; color: var(--text2); outline: none; width: 200px; transition: .2s; }
+        .page-inp:hover { border-color: var(--border); }
+        .page-inp:focus { border-color: var(--accent); background: var(--s2); color: var(--text); }
+        .topbar-r { display: flex; gap: 6px; }
+
+        .btn {
+            font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+            padding: 6px 14px; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--s2); color: var(--text2);
+            cursor: pointer; transition: .15s; display: flex; align-items: center; gap: 5px;
+        }
+        .btn:hover { background: var(--s3); color: var(--text); border-color: #3a3a42; }
+        .btn:active { transform: scale(.97); }
+        .btn-a { background: var(--accent); color: #09090b; border-color: var(--accent); font-weight: 600; }
+        .btn-a:hover { background: #d4993e; color: #09090b; border-color: #d4993e; }
+        .btn-s { font-size: 11px; padding: 5px 10px; }
+
+        /* ═══ WORKSPACE ═══ */
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+
+        .sidebar {
+            width: 244px; background: var(--s1);
+            border-right: 1px solid var(--border);
+            flex-shrink: 0; overflow-y: auto;
+        }
+        .sb-sec { padding: 14px; }
+        .sb-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 10px; }
+        .ai-ta {
+            width: 100%; background: var(--s2); border: 1px solid var(--border);
+            border-radius: 7px; color: var(--text); font-family: inherit; font-size: 12px;
+            padding: 8px 10px; resize: none; height: 64px; outline: none; line-height: 1.5; transition: .2s;
+        }
+        .ai-ta::placeholder { color: var(--text3); }
+        .ai-ta:focus { border-color: var(--accent); }
+        .ai-btn { width: 100%; margin-top: 6px; justify-content: center; padding: 8px; }
+        .sec-types { display: flex; flex-direction: column; gap: 2px; }
+        .sec-btn {
+            display: flex; align-items: center; gap: 9px;
+            padding: 7px 10px; background: transparent;
+            border: 1px solid transparent; border-radius: 6px;
+            cursor: pointer; transition: .15s; width: 100%; text-align: left; font-family: inherit;
+        }
+        .sec-btn:hover { background: var(--s2); border-color: var(--border); }
+        .sec-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .sec-btn-n { font-size: 12.5px; font-weight: 500; color: var(--text); }
+        .sec-btn-r { font-size: 10px; color: var(--text3); margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+
+        /* ═══ CANVAS AREA ═══ */
+        .canvas-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+        .canvas-toolbar {
+            height: 36px; background: var(--s0);
+            border-bottom: 1px solid var(--border-s);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 14px; flex-shrink: 0;
+        }
+        .ct-left { display: flex; align-items: center; gap: 14px; }
+        .ct-info { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; display: flex; gap: 14px; }
+        .ct-info span { display: flex; align-items: center; gap: 4px; }
+        .ct-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .ct-right { display: flex; align-items: center; gap: 8px; }
+        .ct-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
+        .grid-sel {
+            background: var(--s2); border: 1px solid var(--border); border-radius: 5px;
+            color: var(--text); font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; padding: 4px 8px; outline: none; cursor: pointer;
+        }
+        .grid-sel:focus { border-color: var(--accent); }
+
+        .canvas-scroll {
+            flex: 1; overflow: auto;
+            padding: 24px; display: flex; justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* ═══ CANVAS ═══ */
+        .canvas {
+            position: relative;
+            width: var(--canvas-w);
+            min-height: 1600px;
+            background: var(--s0);
+            border: 1px solid var(--border-s);
+            border-radius: 10px;
+            cursor: crosshair;
+            user-select: none;
+            box-shadow: 0 0 80px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        /* Column ruler — sticky at top of scroll */
+        .col-ruler {
+            position: sticky; top: 0;
+            height: 26px;
+            z-index: 20;
+            background: rgba(12,12,15,0.92);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+        }
+        .col-r {
+            position: absolute; top: 0; height: 26px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 600;
+            color: var(--text3);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .col-r.even { background: rgba(255,255,255,.025); }
+
+        /* Grid lines */
+        .grid-lines { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 0; }
+        .g-col {
+            position: absolute; top: 26px; bottom: 0;
+        }
+        .g-col.even { background: rgba(255,255,255,.012); }
+        .g-row {
+            position: absolute; left: 0; right: 0;
+        }
+
+        /* Hover cell */
+        .hover-cell {
+            position: absolute; z-index: 2;
+            pointer-events: none; display: none;
+        }
+        .hover-inner {
+            width: 100%; height: 100%;
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 3px;
+        }
+
+        /* Selection rect */
+        .sel-rect {
+            position: absolute; z-index: 8;
+            pointer-events: none; display: none;
+        }
+        .sel-inner {
+            width: 100%; height: 100%;
+            background: var(--accent-dim);
+            border: 2px dashed var(--accent);
+            border-radius: 6px;
+        }
+        .sel-label {
+            position: absolute; left: 0;
+            white-space: nowrap;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; font-weight: 600;
+            background: var(--accent); color: #09090b;
+            padding: 2px 8px; border-radius: 4px;
+            z-index: 10; pointer-events: none;
+        }
+        .sel-label-top { top: -26px; }
+        .sel-label-bot { bottom: -26px; }
+
+        /* Prompt bar */
+        .prompt-bar {
+            position: absolute; z-index: 14;
+            display: none; align-items: center; gap: 6px;
+            background: var(--s1); border: 1px solid var(--border);
+            border-radius: 9px; padding: 6px 8px;
+            box-shadow: 0 12px 40px rgba(0,0,0,.5);
+            min-width: 440px;
+            animation: slideUp .2s ease;
+        }
+        .pb-info {
+            font-size: 10px; color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+            padding: 0 8px; white-space: nowrap; font-weight: 600;
+            display: flex; flex-direction: column; line-height: 1.4;
+        }
+        .prompt-bar input {
+            flex: 1; background: var(--s2); border: 1px solid var(--border);
+            border-radius: 6px; color: var(--text); font-family: inherit;
+            font-size: 12px; padding: 7px 10px; outline: none;
+            min-width: 160px; transition: .2s;
+        }
+        .prompt-bar input:focus { border-color: var(--accent); }
+        .prompt-bar input::placeholder { color: var(--text3); }
+        .pb-gen { padding: 7px 14px; font-size: 11px; font-weight: 600; }
+        .pb-cancel {
+            width: 28px; height: 28px; border-radius: 6px;
+            border: none; background: transparent; color: var(--text3);
+            cursor: pointer; font-size: 15px;
+            display: flex; align-items: center; justify-content: center; transition: .15s;
+        }
+        .pb-cancel:hover { background: var(--s2); color: var(--text); }
+
+        /* ═══ PLACED COMPONENTS ═══ */
+        .comp {
+            position: absolute; z-index: 3;
+            border-radius: 8px; overflow: hidden;
+            cursor: pointer; transition: box-shadow .2s;
+            border: 1px solid var(--border-s);
+        }
+        .comp:hover { box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
+        .comp.selected { box-shadow: 0 0 0 2px var(--accent), 0 4px 20px rgba(228,168,83,.1); z-index: 4; }
+        .comp.generating::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent 0%, var(--accent-dim) 40%, transparent 80%);
+            animation: shimmer 1.2s ease-in-out;
+            z-index: 5; pointer-events: none;
+        }
+        .comp-head {
+            position: absolute; top: 0; left: 0; right: 0; height: 26px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 8px; z-index: 6; opacity: 0; transition: .15s;
+            background: linear-gradient(to bottom, rgba(0,0,0,.65), transparent);
+        }
+        .comp:hover .comp-head, .comp.selected .comp-head { opacity: 1; }
+        .comp-badge {
+            font-size: 9px; font-weight: 600; padding: 2px 7px;
+            border-radius: 4px; background: rgba(0,0,0,.5);
+            color: var(--text2); backdrop-filter: blur(4px);
+        }
+        .comp-actions { display: flex; gap: 3px; }
+        .comp-ab {
+            width: 24px; height: 24px; border-radius: 5px;
+            border: 1px solid rgba(255,255,255,.1); background: rgba(0,0,0,.5);
+            color: var(--text2); cursor: pointer; font-size: 12px;
+            display: flex; align-items: center; justify-content: center;
+            transition: .15s; backdrop-filter: blur(4px);
+        }
+        .comp-ab:hover { background: var(--s3); color: var(--text); border-color: var(--border); }
+        .comp-ab.del:hover { background: rgba(248,113,113,.15); border-color: rgba(248,113,113,.3); color: var(--red); }
+        .comp-body { height: 100%; padding: 8px; position: relative; z-index: 2; display: flex; flex-direction: column; }
+        .comp-gen { display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; color: var(--text3); font-size: 11px; }
+        .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+
+        /* ═══ MOCK CONTENT ═══ */
+        .mc { opacity: 0; animation: fadeIn .4s ease forwards; flex: 1; display: flex; flex-direction: column; }
+
+        .mc-nav { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--s2); border-radius: 6px; gap: 10px; height: 100%; }
+        .mc-logo { font-size: 11px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 4px; }
+        .mc-logo-box { width: 14px; height: 14px; background: var(--accent); border-radius: 3px; }
+        .mc-nav-items { display: flex; gap: 12px; font-size: 9px; color: var(--text2); }
+        .mc-nav-btn { font-size: 9px; padding: 4px 10px; background: var(--accent); color: #09090b; border-radius: 4px; font-weight: 600; }
+
+        .mc-hero { display: flex; align-items: center; gap: 12px; height: 100%; padding: 8px; }
+        .mc-hero-t { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+        .mc-h1 { font-size: clamp(12px,1.6vw,18px); font-weight: 700; line-height: 1.15; color: var(--text); letter-spacing: -.02em; }
+        .mc-p { font-size: clamp(8px,1vw,11px); color: var(--text2); line-height: 1.45; }
+        .mc-btns { display: flex; gap: 5px; margin-top: 3px; }
+        .mc-b { font-size: 9px; padding: 4px 10px; border-radius: 5px; font-weight: 600; white-space: nowrap; }
+        .mc-b.pri { background: var(--accent); color: #09090b; }
+        .mc-b.sec { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+        .mc-hero-img { flex: 1; background: var(--s2); border-radius: 7px; height: 100%; min-height: 50px; border: 1px solid var(--border-s); display: flex; flex-direction: column; overflow: hidden; }
+        .mc-bar { display: flex; gap: 3px; padding: 5px 7px; background: var(--s3); border-bottom: 1px solid var(--border-s); }
+        .mc-bar-d { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
+        .mc-bar-c { flex: 1; padding: 5px; display: grid; grid-template-columns: 1fr 2fr; gap: 4px; }
+        .mc-sb { background: var(--s3); border-radius: 2px; padding: 3px; }
+        .mc-sb-l { height: 2px; background: var(--border); border-radius: 1px; margin-bottom: 2px; }
+        .mc-mn { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+        .mc-crd { background: var(--s3); border-radius: 2px; }
+
+        .mc-feats { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 4px; }
+        .mc-feats-t { text-align: center; font-size: clamp(9px,1.2vw,13px); font-weight: 600; color: var(--text); margin-top: 2px; }
+        .mc-feats-g { display: grid; grid-template-columns: repeat(auto-fit,minmax(70px,1fr)); gap: 6px; flex: 1; }
+        .mc-fc { background: var(--s2); border-radius: 6px; padding: 8px; border: 1px solid var(--border-s); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+        .mc-fi { width: 24px; height: 24px; border-radius: 6px; background: rgba(228,168,83,.1); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+        .mc-ft { font-size: clamp(7px,1vw,10px); font-weight: 600; color: var(--text); }
+        .mc-fd { font-size: clamp(6px,.8vw,8px); color: var(--text3); line-height: 1.35; }
+
+        .mc-price { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 4px; }
+        .mc-price-t { text-align: center; font-size: clamp(9px,1.2vw,13px); font-weight: 600; color: var(--text); margin-top: 2px; }
+        .mc-price-g { display: grid; grid-template-columns: repeat(auto-fit,minmax(80px,1fr)); gap: 6px; flex: 1; }
+        .mc-pc { background: var(--s2); border-radius: 6px; padding: 8px; border: 1px solid var(--border-s); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+        .mc-pc.pop { border-color: var(--accent); }
+        .mc-pop { font-size: 7px; text-transform: uppercase; letter-spacing: .1em; background: var(--accent); color: #09090b; padding: 1px 5px; border-radius: 2px; font-weight: 700; }
+        .mc-pn { font-size: clamp(7px,1vw,10px); font-weight: 600; color: var(--text); }
+        .mc-pa { font-size: clamp(12px,1.6vw,18px); font-weight: 700; color: var(--text); }
+        .mc-pp { font-size: 7px; color: var(--text3); }
+        .mc-pf { font-size: clamp(6px,.7vw,8px); color: var(--text2); line-height: 1.6; }
+
+        .mc-test { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 4px; }
+        .mc-test-t { text-align: center; font-size: clamp(9px,1.2vw,13px); font-weight: 600; color: var(--text); margin-top: 2px; }
+        .mc-test-g { display: grid; grid-template-columns: repeat(auto-fit,minmax(100px,1fr)); gap: 6px; flex: 1; }
+        .mc-qc { background: var(--s2); border-radius: 6px; padding: 8px 10px; border: 1px solid var(--border-s); display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+        .mc-qt { font-size: clamp(7px,.9vw,10px); color: var(--text2); line-height: 1.45; font-style: italic; }
+        .mc-qa { display: flex; align-items: center; gap: 6px; }
+        .mc-qav { width: 18px; height: 18px; border-radius: 50%; background: var(--s3); }
+        .mc-qnm { font-size: 8px; font-weight: 600; color: var(--text); }
+        .mc-qrl { font-size: 7px; color: var(--text3); }
+
+        .mc-cta { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; padding: 10px; gap: 5px; }
+        .mc-cta-t { font-size: clamp(11px,1.5vw,16px); font-weight: 700; color: var(--text); }
+        .mc-cta-d { font-size: clamp(8px,1vw,10px); color: var(--text2); }
+
+        .mc-form { display: flex; flex-direction: column; gap: 5px; height: 100%; padding: 8px; justify-content: center; }
+        .mc-form-t { font-size: clamp(10px,1.3vw,14px); font-weight: 600; color: var(--text); text-align: center; }
+        .mc-form-in { height: 24px; background: var(--s2); border: 1px solid var(--border-s); border-radius: 5px; }
+        .mc-form-bt { height: 28px; background: var(--accent); border-radius: 5px; }
+
+        .mc-text { padding: 8px; height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .mc-text h3 { font-size: clamp(10px,1.3vw,14px); font-weight: 600; color: var(--text); }
+        .mc-text-line { height: 3px; background: var(--s2); border-radius: 1px; }
+
+        .mc-img { height: 100%; display: flex; align-items: center; justify-content: center; background: var(--s2); border-radius: 6px; border: 1px dashed var(--border); }
+        .mc-img-inner { text-align: center; color: var(--text3); font-size: 11px; }
+        .mc-img-inner span { font-size: 22px; display: block; margin-bottom: 4px; }
+
+        .mc-footer { display: grid; grid-template-columns: 1.5fr repeat(auto-fit,1fr); gap: 10px; height: 100%; padding: 10px; align-content: center; }
+        .mc-f-brand { font-size: clamp(8px,1vw,11px); font-weight: 700; color: var(--text); margin-bottom: 3px; }
+        .mc-f-desc { font-size: clamp(6px,.7vw,8px); color: var(--text3); line-height: 1.4; }
+        .mc-f-col-t { font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); margin-bottom: 4px; }
+        .mc-f-link { font-size: clamp(6px,.7vw,8px); color: var(--text3); margin-bottom: 2px; }
+
+        .mc-generic { display: flex; flex-direction: column; gap: 5px; height: 100%; padding: 10px; justify-content: center; }
+        .mc-gen-card { background: var(--s2); border: 1px solid var(--border-s); border-radius: 6px; flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 10px; }
+
+        /* ═══ PANEL ═══ */
+        .panel { width: 270px; background: var(--s1); border-left: 1px solid var(--border); flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; }
+        .pn-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--border-s); font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
+        .pn-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 20px; text-align: center; }
+        .pn-empty-i { width: 36px; height: 36px; border: 1.5px dashed var(--border); border-radius: 9px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; font-size: 15px; color: var(--text3); }
+        .pn-empty-t { font-size: 11.5px; color: var(--text3); line-height: 1.5; }
+        .pn-content { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+        .pn-field { display: flex; flex-direction: column; gap: 4px; }
+        .pn-label { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+        .pn-val { font-size: 12.5px; color: var(--text); font-weight: 500; }
+        .pn-val.mono { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+        .pn-ta { width: 100%; background: var(--s2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 11px; padding: 7px 8px; resize: none; height: 48px; outline: none; line-height: 1.5; }
+        .pn-ta:focus { border-color: var(--accent); }
+        .pn-div { height: 1px; background: var(--border-s); }
+        .pn-btns { display: flex; flex-direction: column; gap: 5px; }
+        .pn-btns .btn { justify-content: center; padding: 7px; }
+        .pn-row { display: flex; gap: 5px; }
+        .pn-row .btn { flex: 1; justify-content: center; padding: 6px 4px; font-size: 11px; }
+
+        /* ═══ MODAL ═══ */
+        .modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .modal-ov.on { display: flex; }
+        .modal { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; width: 700px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,.5); animation: mAppear .25s ease; }
+        .modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-s); }
+        .modal-t { font-size: 14px; font-weight: 600; }
+        .modal-x { width: 28px; height: 28px; border: none; background: transparent; color: var(--text2); font-size: 17px; cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: .15s; }
+        .modal-x:hover { background: var(--s2); color: var(--text); }
+        .modal-tabs { display: flex; padding: 0 18px; border-bottom: 1px solid var(--border-s); }
+        .modal-tab { padding: 9px 14px; font-family: inherit; font-size: 11.5px; font-weight: 500; color: var(--text3); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: .15s; }
+        .modal-tab:hover { color: var(--text2); }
+        .modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .modal-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+        .code { background: var(--s0); border: 1px solid var(--border-s); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; color: var(--text2); white-space: pre; overflow-x: auto; }
+        .code .t { color: #f87171 } .code .a { color: #a78bfa } .code .v { color: #34d399 } .code .c { color: var(--text3); font-style: italic; }
+        .modal-f { padding: 10px 18px; border-top: 1px solid var(--border-s); display: flex; justify-content: flex-end; gap: 6px; }
+
+        /* ═══ TOAST ═══ */
+        .toast-c { position: fixed; bottom: 16px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 6px; }
+        .toast { background: var(--s2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 14px; font-size: 12px; color: var(--text); display: flex; align-items: center; gap: 7px; box-shadow: 0 8px 30px rgba(0,0,0,.3); animation: tIn .3s ease; }
+        .toast.out { animation: tOut .3s ease forwards; }
+
+        /* ═══ ANIMATIONS ═══ */
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes mAppear { from { opacity: 0; transform: scale(.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes tIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes tOut { from { opacity: 1; } to { opacity: 0; transform: translateY(10px); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a42; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header class="topbar">
+        <div class="topbar-l">
+            <div class="logo"><div class="logo-i">L</div>LayoutCraft</div>
+            <div class="div-v"></div>
+            <input type="text" class="page-inp" value="Landing Page — FlowBoard" spellcheck="false">
+        </div>
+        <div class="topbar-r">
+            <button class="btn" onclick="openExport()">‹/› Export</button>
+            <button class="btn btn-a">Publish</button>
+        </div>
+    </header>
+    <main class="workspace">
+        <aside class="sidebar">
+            <div class="sb-sec">
+                <div class="sb-title">AI Describe</div>
+                <textarea class="ai-ta" id="aiPrompt" placeholder="Describe the full page...&#10;e.g. SaaS landing with hero, features, pricing"></textarea>
+                <button class="btn btn-a ai-btn" onclick="aiFullPage()">✨ Generate Full Page</button>
+            </div>
+            <div style="height:1px;background:var(--border-s);margin:0 14px"></div>
+            <div class="sb-sec">
+                <div class="sb-title">Quick Add (Full Width)</div>
+                <div class="sec-types" id="secTypes"></div>
+            </div>
+        </aside>
+        <section class="canvas-area">
+            <div class="canvas-toolbar">
+                <div class="ct-left">
+                    <div class="ct-info">
+                        <span><span class="ct-dot" style="background:var(--accent)"></span><span id="ctMode">Draw to place component</span></span>
+                        <span id="ctCursor" style="color:var(--accent)">—</span>
+                    </div>
+                </div>
+                <div class="ct-right">
+                    <span class="ct-label">Grid</span>
+                    <select class="grid-sel" id="gridSel" onchange="changeGrid(+this.value)">
+                        <option value="12" selected>12 columns</option>
+                        <option value="16">16 columns</option>
+                        <option value="24">24 columns</option>
+                    </select>
+                </div>
+            </div>
+            <div class="canvas-scroll" id="canvasScroll">
+                <div class="canvas" id="canvas">
+                    <div class="col-ruler" id="colRuler"></div>
+                    <div class="grid-lines" id="gridLines"></div>
+                    <div class="hover-cell" id="hoverCell"><div class="hover-inner"></div></div>
+                    <div class="sel-rect" id="selRect"><div class="sel-inner"></div><span class="sel-label sel-label-top" id="selLabel"></span></div>
+                    <div id="compLayer"></div>
+                    <div class="prompt-bar" id="promptBar">
+                        <span class="pb-info" id="pbInfo"></span>
+                        <input type="text" id="pbInput" placeholder="Describe this component... e.g. hero with headline and image">
+                        <button class="btn btn-a pb-gen" onclick="confirmGenerate()">✨ Generate</button>
+                        <button class="pb-cancel" onclick="cancelSelection()">×</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <aside class="panel">
+            <div class="pn-head">Properties</div>
+            <div id="panelContent"></div>
+        </aside>
+    </main>
+</div>
+
+<div class="modal-ov" id="exportModal" onclick="if(event.target===this)this.classList.remove('on')">
+    <div class="modal">
+        <div class="modal-h"><span class="modal-t">Export Code</span><button class="modal-x" onclick="$id('exportModal').classList.remove('on')">×</button></div>
+        <div class="modal-tabs">
+            <button class="modal-tab active" onclick="switchTab(this,'html')">HTML + CSS Grid</button>
+            <button class="modal-tab" onclick="switchTab(this,'react')">React JSX</button>
+            <button class="modal-tab" onclick="switchTab(this,'tailwind')">Tailwind</button>
+        </div>
+        <div class="modal-body"><div class="code" id="codeOut"></div></div>
+        <div class="modal-f">
+            <button class="btn" onclick="navigator.clipboard.writeText($id('codeOut').textContent);toast('Copied to clipboard')">📋 Copy</button>
+            <button class="btn btn-a" onclick="$id('exportModal').classList.remove('on')">Done</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-c" id="toastC"></div>
+
+<script>
+// ═══ CONSTANTS & STATE ═══
+const $id = id => document.getElementById(id);
+let COLS = 12, ROWS = 20, CELL_W = 80, CELL_H = 80;
+const COLORS = {
+    navbar: '#818cf8', hero: '#fbbf24', features: '#34d399',
+    testimonials: '#c084fc', pricing: '#f87171', cta: '#fb923c',
+    footer: '#94a3b8', form: '#60a5fa', text: '#a78bfa',
+    image: '#2dd4bf', card: '#94a3b8', generic: '#6b7280'
+};
+const SEC_TYPES = {
+    navbar:       { label: 'Navbar',       rows: 1, color: COLORS.navbar },
+    hero:         { label: 'Hero',         rows: 2, color: COLORS.hero },
+    features:     { label: 'Features',     rows: 2, color: COLORS.features },
+    testimonials: { label: 'Testimonials', rows: 2, color: COLORS.testimonials },
+    pricing:      { label: 'Pricing',      rows: 2, color: COLORS.pricing },
+    cta:          { label: 'CTA Banner',   rows: 1, color: COLORS.cta },
+    footer:       { label: 'Footer',       rows: 1, color: COLORS.footer }
+};
+
+let comps = [], selId = null, idCtr = 0;
+let drawing = false, dStart = null, dEnd = null, pending = null;
+
+// ═══ INIT ═══
+function init() {
+    buildGrid();
+    buildSidebar();
+    renderPanel();
+    const cv = $id('canvas');
+    cv.addEventListener('mousedown', onDown);
+    cv.addEventListener('mousemove', onMove);
+    cv.addEventListener('mouseup', onUp);
+    cv.addEventListener('mouseleave', () => $id('hoverCell').style.display = 'none');
+    $id('pbInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmGenerate(); } });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { cancelSelection(); deselAll(); }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selId && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { removeComp(selId); }
+    });
+}
+
+// ═══ GRID BUILDER — SINGLE SOURCE OF TRUTH ═══
+function gx(col) { return (col - 1) * CELL_W; }  // x pixel for column
+function gy(row)  { return (row - 1) * CELL_H; }  // y pixel for row
+
+function buildGrid() {
+    const cw = COLS * CELL_W;
+    const canvas = $id('canvas');
+    canvas.style.width = cw + 'px';
+    canvas.style.setProperty('--canvas-w', cw + 'px');
+
+    // — Column ruler (sticky at top) —
+    const ruler = $id('colRuler');
+    ruler.innerHTML = '';
+    for (let i = 1; i <= COLS; i++) {
+        const d = document.createElement('div');
+        d.className = 'col-r' + (i % 2 === 0 ? ' even' : '');
+        d.textContent = i;
+        d.style.left = gx(i) + 'px';
+        d.style.width = CELL_W + 'px';
+        if (i < COLS) d.style.borderRight = '1px solid rgba(255,255,255,.1)';
+        ruler.appendChild(d);
+    }
+
+    // — Grid lines (columns + rows) —
+    const gl = $id('gridLines');
+    gl.innerHTML = '';
+    // Columns
+    for (let i = 1; i <= COLS; i++) {
+        const v = document.createElement('div');
+        v.className = 'g-col' + (i % 2 === 0 ? ' even' : '');
+        v.style.left = gx(i) + 'px';
+        v.style.width = CELL_W + 'px';
+        if (i < COLS) v.style.borderRight = '1px solid rgba(255,255,255,.07)';
+        gl.appendChild(v);
+    }
+    // Rows
+    for (let j = 1; j <= ROWS; j++) {
+        const h = document.createElement('div');
+        h.className = 'g-row';
+        h.style.top = gy(j) + 'px';
+        h.style.height = CELL_H + 'px';
+        h.style.borderBottom = '1px solid rgba(255,255,255,.04)';
+        gl.appendChild(h);
+    }
+}
+
+// ═══ SIDEBAR ═══
+function buildSidebar() {
+    const c = $id('secTypes');
+    let h = '';
+    for (const [k, v] of Object.entries(SEC_TYPES)) {
+        h += `<button class="sec-btn" onclick="quickAdd('${k}')"><span class="sec-dot" style="background:${v.color}"></span><span class="sec-btn-n">${v.label}</span><span class="sec-btn-r">${v.rows}r</span></button>`;
+    }
+    c.innerHTML = h;
+}
+
+// ═══ GRID SWITCHER ═══
+function changeGrid(val) {
+    COLS = val;
+    CELL_W = val === 24 ? 50 : 80;
+    document.documentElement.style.setProperty('--cell-w', CELL_W + 'px');
+    document.documentElement.style.setProperty('--grid-cols', COLS);
+    // Remove out-of-bounds components
+    const removed = comps.filter(c => c.ce > COLS).length;
+    comps = comps.filter(c => c.ce <= COLS);
+    if (removed) { selId = null; toast(`${removed} component(s) removed (out of bounds)`); }
+    buildGrid();
+    renderComps();
+    renderPanel();
+    toast(`Switched to ${COLS}-column grid`);
+}
+
+// ═══ MOUSE HANDLERS ═══
+function gridPos(e) {
+    const r = $id('canvas').getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top + $id('canvasScroll').scrollTop;
+    return {
+        col: Math.max(1, Math.min(COLS, Math.floor(x / CELL_W) + 1)),
+        row: Math.max(1, Math.min(ROWS, Math.floor(y / CELL_H) + 1))
+    };
+}
+
+function onDown(e) {
+    if (e.target.closest('.comp') || e.target.closest('.prompt-bar')) return;
+    const p = gridPos(e);
+    drawing = true; dStart = p; dEnd = p;
+    hidePrompt();
+    drawSel();
+}
+
+function onMove(e) {
+    const p = gridPos(e);
+    $id('ctCursor').textContent = `col ${p.col} / row ${p.row}`;
+    const hc = $id('hoverCell');
+    if (!drawing) {
+        hc.style.cssText = `display:block;left:${gx(p.col)}px;top:${gy(p.row)}px;width:${CELL_W}px;height:${CELL_H}px`;
+    } else {
+        hc.style.display = 'none';
+        dEnd = p;
+        drawSel();
+    }
+}
+
+function onUp(e) {
+    if (!drawing) return;
+    drawing = false;
+    dEnd = gridPos(e);
+    const b = bounds(dStart, dEnd);
+    if (b.c1 === b.c2 && b.r1 === b.r2) { hideSel(); return; }
+    if (overlap(b.c1, b.r1, b.c2, b.r2)) { hideSel(); toast('Overlaps existing component'); return; }
+    pending = b;
+    showPrompt(b);
+}
+
+function bounds(s, e) {
+    return { c1: Math.min(s.col, e.col), c2: Math.max(s.col, e.col), r1: Math.min(s.row, e.row), r2: Math.max(s.row, e.row) };
+}
+
+function drawSel() {
+    if (!dStart || !dEnd) return;
+    const b = bounds(dStart, dEnd);
+    const el = $id('selRect');
+    const w = (b.c2 - b.c1 + 1) * CELL_W;
+    const h = (b.r2 - b.r1 + 1) * CELL_H;
+    el.style.cssText = `display:block;left:${gx(b.c1)}px;top:${gy(b.r1)}px;width:${w}px;height:${h}px`;
+    const cs = b.c2 - b.c1 + 1, rs = b.r2 - b.r1 + 1;
+    const lb = $id('selLabel');
+    lb.textContent = `${cs}×${rs}  ·  cols ${b.c1}–${b.c2}  ·  rows ${b.r1}–${b.r2}`;
+    lb.className = 'sel-label ' + (b.r1 <= 2 ? 'sel-label-bot' : 'sel-label-top');
+}
+
+function hideSel() { $id('selRect').style.display = 'none'; }
+
+function showPrompt(b) {
+    const pb = $id('promptBar');
+    const cs = b.c2 - b.c1 + 1, rs = b.r2 - b.r1 + 1;
+    $id('pbInfo').innerHTML = `<span>${cs}×${rs}</span><span style="opacity:.5;font-size:9px">cols ${b.c1}–${b.c2}</span>`;
+    const canvasW = COLS * CELL_W;
+    const barW = 460;
+    const top = b.r2 * CELL_H + 10;
+    const left = Math.max(0, Math.min(gx(b.c1), canvasW - barW));
+    const tooLow = top + 56 > ROWS * CELL_H;
+    pb.style.cssText = `display:flex;left:${left}px;top:${tooLow ? gy(b.r1) - 60 : top}px`;
+    $id('pbInput').value = '';
+    setTimeout(() => $id('pbInput').focus(), 50);
+}
+
+function hidePrompt() { $id('promptBar').style.display = 'none'; pending = null; hideSel(); }
+function cancelSelection() { hidePrompt(); hideSel(); drawing = false; }
+
+function overlap(c1, r1, c2, r2, exId) {
+    return comps.some(c => { if (c.id === exId) return false; return !(c2 < c.cs || c1 > c.ce || r2 < c.rs || r1 > c.re); });
+}
+
+// ═══ GENERATION ═══
+function confirmGenerate() {
+    if (!pending) return;
+    const prompt = $id('pbInput').value.trim() || 'Component';
+    const b = pending;
+    const type = detectType(prompt);
+    idCtr++;
+    const comp = { id: 'c' + idCtr, cs: b.c1, rs: b.r1, ce: b.c2, re: b.r2, type, prompt, generating: true, generated: false, color: COLORS[type] || COLORS.generic };
+    comps.push(comp);
+    hidePrompt();
+    renderComps();
+    selComp(comp.id);
+    setTimeout(() => { comp.generating = false; comp.generated = true; renderComps(); selComp(comp.id); toast(`${type} generated`); }, 1200);
+}
+
+function detectType(p) {
+    p = p.toLowerCase();
+    if (/nav|header|menu/.test(p)) return 'navbar';
+    if (/hero|headline|landing|above.?fold/.test(p)) return 'hero';
+    if (/feature|benefit|why/.test(p)) return 'features';
+    if (/price|pricing|plan|tier/.test(p)) return 'pricing';
+    if (/testimonial|review|quote|feedback/.test(p)) return 'testimonials';
+    if (/cta|action|ready|start|sign.?up|get.?started/.test(p)) return 'cta';
+    if (/footer|link|sitemap/.test(p)) return 'footer';
+    if (/form|input|contact|email|subscribe/.test(p)) return 'form';
+    if (/image|photo|visual|illustration|picture/.test(p)) return 'image';
+    if (/text|paragraph|content|body|copy/.test(p)) return 'text';
+    return 'generic';
+}
+
+function quickAdd(type) {
+    const rows = SEC_TYPES[type].rows;
+    const r = findEmpty(rows);
+    if (r < 0) { toast('No space'); return; }
+    idCtr++;
+    const comp = { id: 'c' + idCtr, cs: 1, rs: r, ce: COLS, re: r + rows - 1, type, generating: true, generated: false, prompt: type, color: COLORS[type] };
+    comps.push(comp);
+    renderComps(); selComp(comp.id);
+    setTimeout(() => { comp.generating = false; comp.generated = true; renderComps(); selComp(comp.id); toast(`${type} generated`); }, 900);
+}
+
+function findEmpty(need) {
+    for (let r = 1; r <= ROWS - need + 1; r++) {
+        if (!overlap(1, r, COLS, r + need - 1)) return r;
+    }
+    return -1;
+}
+
+function aiFullPage() {
+    const types = ['navbar', 'hero', 'features', 'testimonials', 'pricing', 'cta', 'footer'];
+    comps = []; selId = null; idCtr = 0;
+    let delay = 0, r = 1;
+    types.forEach(type => {
+        const rows = SEC_TYPES[type].rows;
+        setTimeout(() => {
+            idCtr++;
+            const comp = { id: 'c' + idCtr, cs: 1, rs: r, ce: COLS, re: r + rows - 1, type, generating: true, generated: false, prompt: type, color: COLORS[type] };
+            comps.push(comp); renderComps();
+            setTimeout(() => { comp.generating = false; comp.generated = true; renderComps(); }, 800);
+        }, delay);
+        r += rows; delay += 250;
+    });
+    toast('Generating full page...');
+}
+
+// ═══ COMPONENT MANAGEMENT ═══
+function selComp(id) {
+    selId = id;
+    document.querySelectorAll('.comp').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+    renderPanel();
+}
+function deselAll() { selId = null; document.querySelectorAll('.comp').forEach(el => el.classList.remove('selected')); renderPanel(); }
+function removeComp(id) { comps = comps.filter(c => c.id !== id); if (selId === id) selId = null; renderComps(); renderPanel(); toast('Removed'); }
+function regenComp(id) {
+    const c = comps.find(x => x.id === id); if (!c) return;
+    c.generating = true; c.generated = false; renderComps();
+    setTimeout(() => { c.generating = false; c.generated = true; renderComps(); toast('Regenerated'); }, 1200);
+}
+function moveComp(id, dc, dr) {
+    const c = comps.find(x => x.id === id); if (!c) return;
+    const nc = c.cs + dc, ne = c.ce + dc, nr = c.rs + dr, nre = c.re + dr;
+    if (nc < 1 || ne > COLS || nr < 1 || nre > ROWS) return;
+    if (overlap(nc, nr, ne, nre, id)) return;
+    c.cs = nc; c.ce = ne; c.rs = nr; c.re = nre;
+    renderComps(); selComp(id); renderPanel();
+}
+
+// ═══ RENDER COMPONENTS ═══
+function renderComps() {
+    const layer = $id('compLayer');
+    layer.innerHTML = '';
+    comps.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'comp' + (c.id === selId ? ' selected' : '') + (c.generating ? ' generating' : '');
+        el.dataset.id = c.id;
+        const w = (c.ce - c.cs + 1) * CELL_W, h = (c.re - c.rs + 1) * CELL_H;
+        el.style.cssText = `left:${gx(c.cs)}px;top:${gy(c.rs)}px;width:${w}px;height:${h}px;border-left:3px solid ${c.color}`;
+        el.onclick = e => { if (!e.target.closest('.comp-ab')) selComp(c.id); };
+        const sp = c.ce - c.cs + 1, rp = c.re - c.rs + 1;
+        el.innerHTML = `
+            <div class="comp-head">
+                <span class="comp-badge" style="background:${c.color}22;color:${c.color}">${c.type} · ${sp}×${rp} · cols ${c.cs}–${c.ce}</span>
+                <div class="comp-actions">
+                    <button class="comp-ab" onclick="event.stopPropagation();moveComp('${c.id}',0,-1)" title="Up">↑</button>
+                    <button class="comp-ab" onclick="event.stopPropagation();moveComp('${c.id}',0,1)" title="Down">↓</button>
+                    <button class="comp-ab" onclick="event.stopPropagation();moveComp('${c.id}',-1,0)" title="Left">←</button>
+                    <button class="comp-ab" onclick="event.stopPropagation();moveComp('${c.id}',1,0)" title="Right">→</button>
+                    <button class="comp-ab" onclick="event.stopPropagation();regenComp('${c.id}')" title="Regenerate">↻</button>
+                    <button class="comp-ab del" onclick="event.stopPropagation();removeComp('${c.id}')" title="Delete">×</button>
+                </div>
+            </div>
+            <div class="comp-body">${c.generating ? '<div class="comp-gen"><div class="spinner"></div>Generating...</div>' : genMock(c)}</div>`;
+        layer.appendChild(el);
+    });
+}
+
+// ═══ MOCK CONTENT ═══
+function genMock(c) {
+    const sp = c.ce - c.cs + 1;
+    switch (c.type) {
+        case 'navbar':
+            return `<div class="mc"><div class="mc-nav"><div class="mc-logo"><div class="mc-logo-box"></div>FlowBoard</div>${sp > 4 ? '<div class="mc-nav-items"><span>Features</span><span>Pricing</span><span>Docs</span></div>' : ''}<div class="mc-nav-btn">Get Started</div></div></div>`;
+        case 'hero':
+            return `<div class="mc"><div class="mc-hero">${sp >= 6
+                ? '<div class="mc-hero-t"><div class="mc-h1">Ship projects faster with FlowBoard</div><div class="mc-p">The modern PM tool for teams that hate busywork. Plan, track, and deliver — all in one place.</div><div class="mc-btns"><div class="mc-b pri">Start Free Trial</div><div class="mc-b sec">Watch Demo →</div></div></div><div class="mc-hero-img"><div class="mc-bar"><div class="mc-bar-d"></div><div class="mc-bar-d"></div><div class="mc-bar-d"></div></div><div class="mc-bar-c"><div class="mc-sb"><div class="mc-sb-l"></div><div class="mc-sb-l"></div><div class="mc-sb-l"></div></div><div class="mc-mn"><div class="mc-crd"></div><div class="mc-crd"></div><div class="mc-crd"></div><div class="mc-crd"></div></div></div></div>'
+                : '<div class="mc-hero-t"><div class="mc-h1">Ship faster with FlowBoard</div><div class="mc-p">The modern PM tool for teams that ship.</div><div class="mc-btns"><div class="mc-b pri">Get Started</div></div></div>'}</div></div>`;
+        case 'features': {
+            const cols = Math.max(1, Math.min(Math.floor(sp / 2), 4));
+            const ico = ['📋','📊','📈','🎯'], tit = ['Kanban Boards','Timeline Views','Smart Reports','Goal Tracking'], desc = ['Drag and drop tasks across columns.','Plan sprints with Gantt charts.','Auto dashboards track velocity.','Set and track team OKRs.'];
+            let cards = ''; for (let i = 0; i < cols; i++) cards += `<div class="mc-fc"><div class="mc-fi">${ico[i]}</div><div class="mc-ft">${tit[i]}</div><div class="mc-fd">${desc[i]}</div></div>`;
+            return `<div class="mc"><div class="mc-feats"><div class="mc-feats-t">Why teams choose FlowBoard</div><div class="mc-feats-g">${cards}</div></div></div>`;
+        }
+        case 'pricing': {
+            const cols = Math.max(1, Math.min(Math.floor(sp / 3), 3));
+            const pn = ['Free','Pro','Team'], pr = ['$0','$12','$29'];
+            let cards = ''; for (let i = 0; i < cols; i++) cards += `<div class="mc-pc${i===1?' pop':''}">${i===1?'<div class="mc-pop">Popular</div>':''}<div class="mc-pn">${pn[i]}</div><div class="mc-pa">${pr[i]}<span class="mc-pp">/mo</span></div><div class="mc-pf">Core features<br>Team collab<br>Analytics</div><div class="mc-b pri" style="width:100%;text-align:center;margin-top:4px;font-size:8px;padding:3px 6px">Choose</div></div>`;
+            return `<div class="mc"><div class="mc-price"><div class="mc-price-t">Simple pricing</div><div class="mc-price-g">${cards}</div></div></div>`;
+        }
+        case 'testimonials': {
+            const cols = Math.max(1, Math.min(Math.floor(sp / 4), 3));
+            const nm = ['Sarah Chen','Mike Torres','Lisa Park'], rl = ['CTO at Meridian','VP Eng at Ripple','PM at Nova'];
+            let cards = ''; for (let i = 0; i < cols; i++) cards += `<div class="mc-qc"><div class="mc-qt">"FlowBoard transformed how our team ships."</div><div class="mc-qa"><div class="mc-qav"></div><div><div class="mc-qnm">${nm[i]}</div><div class="mc-qrl">${rl[i]}</div></div></div></div>`;
+            return `<div class="mc"><div class="mc-test"><div class="mc-test-t">Trusted by teams</div><div class="mc-test-g">${cards}</div></div></div>`;
+        }
+        case 'cta':
+            return `<div class="mc"><div class="mc-cta"><div class="mc-cta-t">Ready to ship faster?</div><div class="mc-cta-d">Join 10,000+ teams. Start free.</div><div class="mc-btns" style="justify-content:center"><div class="mc-b pri">Get Started — Free</div></div></div></div>`;
+        case 'footer':
+            return `<div class="mc"><div class="mc-footer"><div><div class="mc-f-brand">◼ FlowBoard</div><div class="mc-f-desc">Modern PM tool for teams.</div></div><div><div class="mc-f-col-t">Product</div><div class="mc-f-link">Features</div><div class="mc-f-link">Pricing</div></div><div><div class="mc-f-col-t">Company</div><div class="mc-f-link">About</div><div class="mc-f-link">Blog</div></div><div><div class="mc-f-col-t">Legal</div><div class="mc-f-link">Privacy</div><div class="mc-f-link">Terms</div></div></div></div>`;
+        case 'form':
+            return `<div class="mc"><div class="mc-form"><div class="mc-form-t">Get in touch</div><div class="mc-form-in"></div><div class="mc-form-in"></div><div class="mc-form-in" style="flex:1"></div><div class="mc-form-bt"></div></div></div>`;
+        case 'image':
+            return `<div class="mc"><div class="mc-img"><div class="mc-img-inner"><span>🖼</span>${c.prompt || 'Image placeholder'}</div></div></div>`;
+        case 'text':
+            return `<div class="mc"><div class="mc-text"><h3>Section heading</h3><div class="mc-text-line" style="width:100%"></div><div class="mc-text-line" style="width:95%"></div><div class="mc-text-line" style="width:88%"></div><div class="mc-text-line" style="width:70%"></div></div></div>`;
+        default:
+            return `<div class="mc"><div class="mc-generic"><div class="mc-gen-card">${c.prompt || c.type}</div></div></div>`;
+    }
+}
+
+// ═══ PANEL ═══
+function renderPanel() {
+    const el = $id('panelContent');
+    if (!selId) { el.innerHTML = '<div class="pn-empty"><div class="pn-empty-i">⊹</div><div class="pn-empty-t">Draw on the grid to create components, or click one to edit</div></div>'; return; }
+    const c = comps.find(x => x.id === selId); if (!c) return;
+    const cs = c.ce - c.cs + 1, rs = c.re - c.rs + 1;
+    el.innerHTML = `<div class="pn-content">
+        <div class="pn-field"><span class="pn-label">Type</span><span class="pn-val" style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${c.color};display:inline-block"></span>${c.type}</span></div>
+        <div class="pn-field"><span class="pn-label">Grid Position</span><span class="pn-val mono">cols ${c.cs}–${c.ce} · rows ${c.rs}–${c.re}</span></div>
+        <div class="pn-field"><span class="pn-label">Size</span><span class="pn-val mono">${cs} cols × ${rs} rows (${cs * CELL_W}px × ${rs * CELL_H}px)</span></div>
+        <div class="pn-field"><span class="pn-label">Grid System</span><span class="pn-val mono">${COLS}-col · ${CELL_W}px cells</span></div>
+        <div class="pn-field"><span class="pn-label">Prompt</span><textarea class="pn-ta" id="pnPrompt">${c.prompt || ''}</textarea></div>
+        <div class="pn-field"><span class="pn-label">Status</span><span class="pn-val" style="color:${c.generated ? 'var(--green)' : c.generating ? 'var(--accent)' : 'var(--text3)'}">${c.generated ? '✓ Generated' : c.generating ? '⟳ Generating...' : '○ Pending'}</span></div>
+        <div class="pn-div"></div>
+        <span class="pn-label">Nudge</span>
+        <div class="pn-row"><button class="btn btn-s" onclick="moveComp('${c.id}',0,-1)">↑</button><button class="btn btn-s" onclick="moveComp('${c.id}',0,1)">↓</button><button class="btn btn-s" onclick="moveComp('${c.id}',-1,0)">←</button><button class="btn btn-s" onclick="moveComp('${c.id}',1,0)">→</button></div>
+        <div class="pn-div"></div>
+        <div class="pn-btns"><button class="btn btn-a" onclick="regenComp('${c.id}')">✨ Regenerate</button><button class="btn" style="color:var(--red)" onclick="removeComp('${c.id}')">Delete</button></div>
+    </div>`;
+}
+
+// ═══ EXPORT ═══
+let curTab = 'html';
+function openExport() { curTab = 'html'; document.querySelectorAll('.modal-tab').forEach((t, i) => t.classList.toggle('active', i === 0)); renderCode(); $id('exportModal').classList.add('on'); }
+function switchTab(btn, t) { curTab = t; document.querySelectorAll('.modal-tab').forEach(x => x.classList.remove('active')); btn.classList.add('active'); renderCode(); }
+function renderCode() {
+    const el = $id('codeOut');
+    if (!comps.length) { el.textContent = '<!-- Draw on the grid to add components -->'; return; }
+    const s = [...comps].sort((a, b) => a.rs - b.rs || a.cs - b.cs);
+    if (curTab === 'html') {
+        let o = `<span class="c">&lt;!-- LayoutCraft — ${COLS}-col grid, ${CELL_W}px cells --&gt;</span>\n\n`;
+        o += `<span class="t">&lt;style&gt;</span>\n  <span class="a">.page</span> { <span class="a">display</span>:<span class="v">grid</span>; <span class="a">grid-template-columns</span>:<span class="v">repeat(${COLS},${CELL_W}px)</span>; <span class="a">max-width</span>:<span class="v">${COLS*CELL_W}px</span>; <span class="a">margin</span>:<span class="v">0 auto</span>; }\n`;
+        s.forEach(c => { o += `  <span class="a">.${c.type}</span> { <span class="a">grid-column</span>:<span class="v">${c.cs}/${c.ce+1}</span>; <span class="a">grid-row</span>:<span class="v">${c.rs}/${c.re+1}</span>; }\n`; });
+        o += `<span class="t">&lt;/style&gt;</span>\n\n<span class="t">&lt;div</span> <span class="a">class</span>=<span class="v">"page"</span><span class="t">&gt;</span>\n`;
+        s.forEach(c => { const tg = c.type==='navbar'?'nav':c.type==='footer'?'footer':'section'; o += `  <span class="t">&lt;${tg}</span> <span class="a">class</span>=<span class="v">"${c.type}"</span><span class="t">&gt;</span><span class="c">&lt;!-- cols ${c.cs}–${c.ce} --&gt;</span><span class="t">&lt;/${tg}&gt;</span>\n`; });
+        o += `<span class="t">&lt;/div&gt;</span>`;
+        el.innerHTML = o;
+    } else if (curTab === 'react') {
+        let o = `<span class="c">// LayoutCraft — ${COLS}-col grid</span>\n\n`;
+        o += `<span class="t">const</span> <span class="a">grid</span> = { <span class="a">display</span>:<span class="v">'grid'</span>, <span class="a">gridTemplateColumns</span>:<span class="v">'repeat(${COLS},${CELL_W}px)'</span>, <span class="a">maxWidth</span>:<span class="v">'${COLS*CELL_W}px'</span>, <span class="a">margin</span>:<span class="v">'0 auto'</span> };\n\n`;
+        s.forEach(c => { const n = c.type[0].toUpperCase()+c.type.slice(1); o += `<span class="t">function</span> <span class="a">${n}</span>() {\n  <span class="t">return</span> <span class="t">&lt;div</span> <span class="a">style</span>={{<span class="v">gridColumn:'${c.cs}/${c.ce+1}',gridRow:'${c.rs}/${c.re+1}'</span>}}<span class="t">&gt;</span><span class="c">{/* ${c.type} */}</span><span class="t">&lt;/div&gt;</span>;\n}\n\n`; });
+        o += `<span class="t">export default function</span> <span class="a">Page</span>() {\n  <span class="t">return</span> <span class="t">&lt;div</span> <span class="a">style</span>={grid}<span class="t">&gt;</span>\n`;
+        s.forEach(c => { const n = c.type[0].toUpperCase()+c.type.slice(1); o += `    <span class="t">&lt;</span><span class="a">${n}</span> <span class="t">/&gt;</span>\n`; });
+        o += `  <span class="t">&lt;/div&gt;</span>;\n}`;
+        el.innerHTML = o;
+    } else {
+        let o = `<span class="c">&lt;!-- Tailwind — ${COLS}-col grid --&gt;</span>\n\n<span class="t">&lt;div</span> <span class="a">class</span>=<span class="v">"grid grid-cols-${COLS} max-w-[${COLS*CELL_W}px] mx-auto"</span><span class="t">&gt;</span>\n`;
+        s.forEach(c => { o += `  <span class="t">&lt;section</span> <span class="a">class</span>=<span class="v">"[grid-column:${c.cs}/${c.ce+1}] [grid-row:${c.rs}/${c.re+1}]"</span><span class="t">&gt;</span><span class="c">&lt;!-- ${c.type} --&gt;</span><span class="t">&lt;/section&gt;</span>\n`; });
+        o += `<span class="t">&lt;/div&gt;</span>`;
+        el.innerHTML = o;
+    }
+}
+
+function toast(m) { const c = $id('toastC'), t = document.createElement('div'); t.className = 'toast'; t.textContent = '✦ ' + m; c.appendChild(t); setTimeout(() => t.classList.add('out'), 2200); setTimeout(() => t.remove(), 2500); }
+
+init();
+</script>
+</body>
+</html>

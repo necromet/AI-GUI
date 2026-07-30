@@ -59,14 +59,29 @@ const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeSettingsTab = searchParams.get('tab') as SettingsTab | null;
+  const [gmt7Time, setGmt7Time] = useState(() => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short', month: 'short', day: 'numeric' });
+    const time = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return `${date}  ${time}`;
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = new Date();
+      const date = now.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short', month: 'short', day: 'numeric' });
+      const time = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      setGmt7Time(`${date}  ${time}`);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
   const isChatMode = location.pathname.startsWith('/chat');
   const isLibraryMode = location.pathname.startsWith('/library');
   const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : 'experiments';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'python' = (() => {
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
-    if (location.pathname.includes('/stitch')) return 'stitch';
+    if (location.pathname.includes('/skema')) return 'skema';
     if (location.pathname.includes('/python')) return 'python';
     return 'rag';
   })();
@@ -170,7 +185,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Header: Logo + Mode Badge + Close */}
         <div className="relative flex w-full items-center p-2 pt-2">
           <div className="flex items-center gap-2 pl-2 h-8">
-            <span className="font-semibold text-sm text-[var(--text-100)]">edward:labs</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-semibold text-sm text-[var(--text-100)]">edward:labs</span>
+              <span className="text-xs tabular-nums text-[var(--text-500)]">{gmt7Time}</span>
+            </div>
             {modeBadge}
           </div>
           <div className="absolute flex items-center gap-1 right-3 top-2">
@@ -266,11 +284,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <li>
                   <Button
                     variant="ghost"
-                    className={itemClassName(activeView === 'stitch')}
-                    onClick={() => navigate('/experiments/stitch')}
+                    className={itemClassName(activeView === 'skema')}
+                    onClick={() => navigate('/experiments/skema')}
                   >
-                    <Layers size={16} className={activeView === 'stitch' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
-                    <span className="truncate">Stitch</span>
+                    <Layers size={16} className={activeView === 'skema' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
+                    <span className="truncate">Skema</span>
                   </Button>
                 </li>
                 <li>
@@ -287,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Experiment conversation history */}
-            {activeView !== 'stitch' && activeView !== 'python' && (
+            {activeView !== 'skema' && activeView !== 'python' && (
               <>
                 <div className="px-2 pt-1">
                   <Button

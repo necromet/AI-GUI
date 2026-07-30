@@ -1,4 +1,4 @@
-import { getDatabase } from './index';
+import { getAll, getOne, run, runReturning } from './pg';
 
 export interface DBMessage {
   id: number;
@@ -15,14 +15,14 @@ export interface DBMessage {
   attachments: string | null;
 }
 
-export function getMessagesByConversation(conversationId: number): DBMessage[] {
-  const db = getDatabase();
-  return db.prepare(
-    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY message_order ASC'
-  ).all(conversationId) as DBMessage[];
+export async function getMessagesByConversation(conversationId: number): Promise<DBMessage[]> {
+  return getAll<DBMessage>(
+    'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY message_order ASC',
+    [conversationId]
+  );
 }
 
-export function addMessage(
+export async function addMessage(
   conversationId: number,
   role: string,
   content: string,
@@ -33,43 +33,42 @@ export function addMessage(
   candidatesTokens?: number | null,
   searchAnnotations?: string | null,
   attachments?: string | null
-): number {
-  const db = getDatabase();
-  const result = db.prepare(
+): Promise<number> {
+  const row = await runReturning<{ id: number }>(
     `INSERT INTO messages (conversation_id, role, content, message_order, token_count, generated_images, prompt_tokens, candidates_tokens, search_annotations, attachments)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    conversationId,
-    role,
-    content,
-    messageOrder,
-    tokenCount || null,
-    generatedImages || null,
-    promptTokens || null,
-    candidatesTokens || null,
-    searchAnnotations || null,
-    attachments || null
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING id`,
+    [
+      conversationId,
+      role,
+      content,
+      messageOrder,
+      tokenCount || null,
+      generatedImages || null,
+      promptTokens || null,
+      candidatesTokens || null,
+      searchAnnotations || null,
+      attachments || null,
+    ]
   );
 
-  db.prepare("UPDATE conversations SET updated_at = datetime('now') WHERE id = ?").run(conversationId);
+  await run('UPDATE conversations SET updated_at = NOW() WHERE id = $1', [conversationId]);
 
-  return Number(result.lastInsertRowid);
+  return row!.id;
 }
 
-export function updateMessage(id: number, content: string, tokenCount?: number | null): void {
-  const db = getDatabase();
-  db.prepare('UPDATE messages SET content = ?, token_count = ? WHERE id = ?').run(content, tokenCount || null, id);
+export async function updateMessage(id: number, content: string, tokenCount?: number | null): Promise<void> {
+  await run('UPDATE messages SET content = $1, token_count = $2 WHERE id = $3', [content, tokenCount || null, id]);
 }
 
-export function deleteMessage(id: number): void {
-  const db = getDatabase();
-  db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+export async function deleteMessage(id: number): Promise<void> {
+  await run('DELETE FROM messages WHERE id = $1', [id]);
 }
 
-export function getNextMessageOrder(conversationId: number): number {
-  const db = getDatabase();
-  const row = db.prepare(
-    'SELECT MAX(message_order) as max_order FROM messages WHERE conversation_id = ?'
-  ).get(conversationId) as { max_order: number | null } | undefined;
+export async function getNextMessageOrder(conversationId: number): Promise<number> {
+  const row = await getOne<{ max_order: number | null }>(
+    'SELECT MAX(message_order) as max_order FROM messages WHERE conversation_id = $1',
+    [conversationId]
+  );
   return (row?.max_order || 0) + 1;
 }

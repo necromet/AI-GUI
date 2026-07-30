@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { executePython, autoDetectImports } from '../services/pythonExecutor';
-import { getDatabase } from '../db';
+import { getAll, getOne, run, runReturning } from '../db/pg';
 import { randomBytes } from 'crypto';
 import multer from 'multer';
 import { join, resolve } from 'path';
 import { mkdirSync, existsSync, readdirSync, unlinkSync, statSync, rmdirSync, readFileSync } from 'fs';
+import { safeJsonParse } from '../lib/safeJsonParse';
 
 const router = Router();
 
@@ -114,16 +115,15 @@ router.get('/detect-imports', (req: Request, res: Response) => {
 
 // ===== Project CRUD =====
 
-router.get('/projects', (_req: Request, res: Response) => {
+router.get('/projects', async (_req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const rows = db.prepare('SELECT * FROM python_projects ORDER BY updated_at DESC').all() as any[];
-    const projects = rows.map(r => ({
+    const rows = await getAll('SELECT * FROM python_projects ORDER BY updated_at DESC');
+    const projects = rows.map((r: any) => ({
       id: r.id,
       title: r.title,
       description: r.description || '',
-      files: JSON.parse(r.files_json || '[]'),
-      settings: r.settings_json ? JSON.parse(r.settings_json) : null,
+      files: safeJsonParse(r.files_json, []),
+      settings: safeJsonParse(r.settings_json, null),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -134,10 +134,9 @@ router.get('/projects', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/projects/:id', (req: Request, res: Response) => {
+router.get('/projects/:id', async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const row = db.prepare('SELECT * FROM python_projects WHERE id = ?').get(req.params.id) as any;
+    const row = await getOne('SELECT * FROM python_projects WHERE id = $1', [req.params.id]) as any;
     if (!row) {
       res.status(404).json({ error: 'Project not found' });
       return;
@@ -147,8 +146,8 @@ router.get('/projects/:id', (req: Request, res: Response) => {
         id: row.id,
         title: row.title,
         description: row.description || '',
-        files: JSON.parse(row.files_json || '[]'),
-        settings: row.settings_json ? JSON.parse(row.settings_json) : null,
+        files: safeJsonParse(row.files_json, []),
+        settings: safeJsonParse(row.settings_json, null),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -159,27 +158,27 @@ router.get('/projects/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/projects', (req: Request, res: Response) => {
+router.post('/projects', async (req: Request, res: Response) => {
   try {
     const { title, description, files, settings } = req.body;
     if (!title) {
       res.status(400).json({ error: 'Missing required field: title' });
       return;
     }
-    const db = getDatabase();
     const id = randomBytes(8).toString('hex');
     const filesJson = JSON.stringify(files || [{ filename: 'main.py', content: '', isEntry: true }]);
     const settingsJson = settings ? JSON.stringify(settings) : null;
-    db.prepare('INSERT INTO python_projects (id, title, description, files_json, settings_json) VALUES (?, ?, ?, ?, ?)')
-      .run(id, title, description || '', filesJson, settingsJson);
-    const row = db.prepare('SELECT * FROM python_projects WHERE id = ?').get(id) as any;
+    const row = await runReturning(
+      'INSERT INTO python_projects (id, title, description, files_json, settings_json) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, title, description || '', filesJson, settingsJson]
+    ) as any;
     res.json({
       project: {
         id: row.id,
         title: row.title,
         description: row.description || '',
-        files: JSON.parse(row.files_json || '[]'),
-        settings: row.settings_json ? JSON.parse(row.settings_json) : null,
+        files: safeJsonParse(row.files_json, []),
+        settings: safeJsonParse(row.settings_json, null),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -190,10 +189,9 @@ router.post('/projects', (req: Request, res: Response) => {
   }
 });
 
-router.put('/projects/:id', (req: Request, res: Response) => {
+router.put('/projects/:id', async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const existing = db.prepare('SELECT * FROM python_projects WHERE id = ?').get(req.params.id) as any;
+    const existing = await getOne('SELECT * FROM python_projects WHERE id = $1', [req.params.id]) as any;
     if (!existing) {
       res.status(404).json({ error: 'Project not found' });
       return;
@@ -203,16 +201,18 @@ router.put('/projects/:id', (req: Request, res: Response) => {
     const newDesc = description !== undefined ? description : existing.description;
     const newFilesJson = files !== undefined ? JSON.stringify(files) : existing.files_json;
     const newSettingsJson = settings !== undefined ? JSON.stringify(settings) : existing.settings_json;
-    db.prepare('UPDATE python_projects SET title = ?, description = ?, files_json = ?, settings_json = ?, updated_at = datetime(\'now\') WHERE id = ?')
-      .run(newTitle, newDesc, newFilesJson, newSettingsJson, req.params.id);
-    const row = db.prepare('SELECT * FROM python_projects WHERE id = ?').get(req.params.id) as any;
+    await run(
+      'UPDATE python_projects SET title = $1, description = $2, files_json = $3, settings_json = $4, updated_at = NOW() WHERE id = $5',
+      [newTitle, newDesc, newFilesJson, newSettingsJson, req.params.id]
+    );
+    const row = await getOne('SELECT * FROM python_projects WHERE id = $1', [req.params.id]) as any;
     res.json({
       project: {
         id: row.id,
         title: row.title,
         description: row.description || '',
-        files: JSON.parse(row.files_json || '[]'),
-        settings: row.settings_json ? JSON.parse(row.settings_json) : null,
+        files: safeJsonParse(row.files_json, []),
+        settings: safeJsonParse(row.settings_json, null),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -223,11 +223,10 @@ router.put('/projects/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/projects/:id', (req: Request, res: Response) => {
+router.delete('/projects/:id', async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const result = db.prepare('DELETE FROM python_projects WHERE id = ?').run(req.params.id);
-    if (result.changes === 0) {
+    const result = await run('DELETE FROM python_projects WHERE id = $1', [req.params.id]);
+    if (result.rowCount === 0) {
       res.status(404).json({ error: 'Project not found' });
       return;
     }

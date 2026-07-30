@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, Download, Code, Eye, RotateCcw, Copy, Check, Package, X, Maximize2 } from 'lucide-react';
+import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
-import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, StitchProject, ConversationType } from './types';
+import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, SkemaProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle, parseDocument } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
 import Sidebar, { type SidebarPanel } from './components/Sidebar';
@@ -15,8 +15,6 @@ import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Card } from '@/components/ui/card';
 import { Splitter } from '@ark-ui/react/splitter';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
@@ -24,10 +22,11 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
-import StitchPanel from './components/StitchPanel';
+import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
-import { StitchControls } from './components/StitchEditor';
+import { SkemaControls } from './components/SkemaEditor';
+import type { CanvasControls } from './components/canvas';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -61,6 +60,7 @@ export const FONT_FAMILY_MAP: Record<string, string> = {
   'open-sans': "'Open Sans', sans-serif",
   fredoka: "'Fredoka', sans-serif",
   comfortaa: "'Comfortaa', sans-serif",
+  'space-grotesk': "'Space Grotesk', sans-serif",
 };
 
 
@@ -184,16 +184,16 @@ const App: React.FC = () => {
   const isLibraryMode = location.pathname.startsWith('/library');
   const isSettingsPage = location.pathname === '/settings';
   const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : 'library';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'python' = (() => {
+  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
-    if (location.pathname.includes('/stitch')) return 'stitch';
+    if (location.pathname.includes('/skema')) return 'skema';
     if (location.pathname.includes('/python')) return 'python';
     return 'rag';
   })();
 
-  const stitchProjectId = (() => {
-    const match = location.pathname.match(/^\/experiments\/stitch\/([^/]+)$/);
+  const skemaProjectId = (() => {
+    const match = location.pathname.match(/^\/experiments\/skema\/([^/]+)$/);
     return match ? match[1] : undefined;
   })();
 
@@ -252,8 +252,8 @@ const App: React.FC = () => {
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [stitchActiveProject, setStitchActiveProject] = useState<StitchProject | null>(null);
-  const [stitchControls, setStitchControls] = useState<StitchControls | null>(null);
+  const [skemaActiveProject, setSkemaActiveProject] = useState<SkemaProject | null>(null);
+  const [skemaControls, setSkemaControls] = useState<SkemaControls | null>(null);
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
     try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
@@ -268,7 +268,7 @@ const App: React.FC = () => {
   const handleNotification = useCallback((msg: string, type: 'success' | 'error') => {
     type === 'success' ? toast.success(msg) : toast.error(msg);
   }, []);
-  const [stitchResetKey, setStitchResetKey] = useState(0);
+  const [skemaResetKey, setSkemaResetKey] = useState(0);
   const [experimentConversationId, setExperimentConversationId] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1058,8 +1058,8 @@ const App: React.FC = () => {
         {isLibraryMode && !libraryControls && !isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="fixed top-3 left-3 z-50 p-2 rounded-lg transition-all duration-200 cursor-pointer hover:bg-[var(--bg-100)] hover:text-[var(--text-100)] hover:border-[var(--text-500)]"
-            style={{ color: 'var(--text-500)', backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
+            className="fixed top-3 left-3 z-50 p-2 rounded-lg transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)] hover:text-[var(--text-100)]"
+            style={{ color: 'var(--text-500)' }}
             title="Open sidebar"
           >
             <PanelLeft size={18} />
@@ -1103,20 +1103,20 @@ const App: React.FC = () => {
               <PanelLeft size={18} />
             </Button>
           )}
-          {location.pathname.startsWith('/experiments/stitch') && stitchControls ? (
+          {location.pathname.startsWith('/experiments/skema') && skemaControls ? (
             <>
               <div className="flex items-center gap-2 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => { setStitchActiveProject(null); navigate('/experiments/stitch'); }}
+                  onClick={() => { setSkemaActiveProject(null); navigate('/experiments/skema'); }}
                   className="text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
                 >
                   <ArrowLeft size={18} />
                 </Button>
                 <div className="flex items-center gap-2 min-w-0">
                   <Layers size={16} className="flex-shrink-0" style={{ color: 'var(--neon-color)' }} />
-                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{stitchControls.projectTitle}</span>
+                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{skemaControls.projectTitle}</span>
                   <Badge
                     variant="outline"
                     className="text-[10px] flex-shrink-0"
@@ -1126,16 +1126,27 @@ const App: React.FC = () => {
                       borderColor: 'rgba(var(--neon-rgb), 0.2)',
                     }}
                   >
-                    {stitchControls.layout || '16:9'}
+                    {skemaControls.layout || '16:9'}
                   </Badge>
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-                {!stitchControls.isGenerating && stitchControls.hasLastPrompt && (
+                {'onToggleProperties' in skemaControls && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(skemaControls as CanvasControls).onToggleProperties}
+                    className="h-8 w-8 text-[var(--text-500)] hover:text-[var(--text-100)]"
+                    title="Toggle properties panel"
+                  >
+                    <PanelRight size={16} style={{ opacity: (skemaControls as CanvasControls).showProperties ? 1 : 0.5 }} />
+                  </Button>
+                )}
+                {!skemaControls.isGenerating && skemaControls.hasLastPrompt && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={stitchControls.onRegenerate}
+                    onClick={skemaControls.onRegenerate}
                     className="h-7 gap-1.5 text-xs"
                     style={{ color: 'var(--text-300)' }}
                   >
@@ -1143,11 +1154,11 @@ const App: React.FC = () => {
                     Regenerate
                   </Button>
                 )}
-                {stitchControls.isGenerating && (
+                {skemaControls.isGenerating && (
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={stitchControls.onStopGeneration}
+                    onClick={skemaControls.onStopGeneration}
                     className="h-7 gap-1.5 text-xs"
                   >
                     Stop
@@ -1348,50 +1359,50 @@ const App: React.FC = () => {
                     <AgentRouteContent />
                   </RequireAuth>
                 } />
-                <Route path="/experiments/stitch" element={
+                <Route path="/experiments/skema" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <div className={`h-full overflow-auto ${stitchActiveProject ? 'p-0' : 'p-6'}`}>
-                      <StitchPanel
-                        key={stitchResetKey}
+                    <div className={`h-full overflow-auto ${skemaActiveProject ? 'p-0' : 'p-6'}`}>
+                      <SkemaPanel
+                        key={skemaResetKey}
                         theme={theme}
                         onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                         modelConfig={selectedModelConfig}
                         models={models}
                         onProjectChange={(project) => {
-                          setStitchActiveProject(project);
+                          setSkemaActiveProject(project);
                           if (project) {
-                            navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                            navigate(`/experiments/skema/${project.id}`, { replace: true });
                             setIsSidebarOpen(false);
                           } else {
-                            navigate('/experiments/stitch', { replace: true });
+                            navigate('/experiments/skema', { replace: true });
                           }
                         }}
-                        onControlsChange={setStitchControls}
+                        onControlsChange={setSkemaControls}
                       />
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="/experiments/stitch/:projectId" element={
+                <Route path="/experiments/skema/:projectId" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
                     <div className="h-full overflow-auto p-0">
-                      <StitchPanel
-                        key={stitchResetKey}
+                      <SkemaPanel
+                        key={skemaResetKey}
                         theme={theme}
                         onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                         modelConfig={selectedModelConfig}
                         models={models}
-                        initialProjectId={stitchProjectId}
+                        initialProjectId={skemaProjectId}
                         onProjectChange={(project) => {
-                          setStitchActiveProject(project);
+                          setSkemaActiveProject(project);
                           if (project) {
-                            navigate(`/experiments/stitch/${project.id}`, { replace: true });
+                            navigate(`/experiments/skema/${project.id}`, { replace: true });
                             setIsSidebarOpen(false);
                           } else {
-                            navigate('/experiments/stitch', { replace: true });
-                            setStitchControls(null);
+                            navigate('/experiments/skema', { replace: true });
+                            setSkemaControls(null);
                           }
                         }}
-                        onControlsChange={setStitchControls}
+                        onControlsChange={setSkemaControls}
                       />
                     </div>
                   </RequireAuth>

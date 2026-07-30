@@ -21,9 +21,9 @@ if (existsSync(envPath)) {
 const { default: express } = await import('express');
 const { default: cors } = await import('cors');
 const { default: chatRoutes } = await import('./routes/chat');
-const { default: stitchRoutes } = await import('./routes/stitch');
+const { default: skemaRoutes } = await import('./routes/skema');
 const { default: ragRoutes } = await import('./routes/rag');
-const { default: stitchAgentRoutes } = await import('./routes/stitchAgent');
+const { default: skemaAgentRoutes } = await import('./routes/skemaAgent');
 const { default: opencodeAgentRoutes } = await import('./routes/opencodeAgent');
 const { default: libraryAgentRoutes } = await import('./routes/libraryAgent');
 const { default: libraryRoutes } = await import('./routes/library');
@@ -32,9 +32,9 @@ const { default: conversationRoutes } = await import('./routes/conversations');
 const { default: messageRoutes } = await import('./routes/messages');
 const { default: statsRoutes } = await import('./routes/stats');
 const { default: pythonRoutes } = await import('./routes/python');
-const { getDatabase } = await import('./db');
+const { initializeDatabase } = await import('./db');
 
-getDatabase();
+await initializeDatabase();
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -80,11 +80,11 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/chat', chatRoutes);
-app.use('/api/stitch', stitchRoutes);
+app.use('/api/skema', skemaRoutes);
 app.use('/api/rag', ragRoutes);
 app.use('/api/agent/opencode', opencodeAgentRoutes);
 app.use('/api/library-agent', libraryAgentRoutes);
-app.use('/api/stitch-agent', stitchAgentRoutes);
+app.use('/api/skema-agent', skemaAgentRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/models', modelRoutes);
 app.use('/api/conversations', conversationRoutes);

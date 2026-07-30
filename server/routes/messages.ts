@@ -3,9 +3,9 @@ import * as msgDb from '../db/messages';
 
 const router = Router();
 
-router.get('/conversations/:conversationId/messages', (req: Request, res: Response) => {
+router.get('/conversations/:conversationId/messages', async (req: Request, res: Response) => {
   try {
-    const messages = msgDb.getMessagesByConversation(Number(req.params.conversationId));
+    const messages = await msgDb.getMessagesByConversation(Number(req.params.conversationId));
     res.json({ messages });
   } catch (error: any) {
     console.error('[messages GET] Error:', error.message);
@@ -13,7 +13,7 @@ router.get('/conversations/:conversationId/messages', (req: Request, res: Respon
   }
 });
 
-router.post('/conversations/:conversationId/messages', (req: Request, res: Response) => {
+router.post('/conversations/:conversationId/messages', async (req: Request, res: Response) => {
   try {
     const conversationId = Number(req.params.conversationId);
     const { role, content, message_order, token_count, generated_images, prompt_tokens, candidates_tokens, search_annotations, attachments } = req.body;
@@ -23,8 +23,8 @@ router.post('/conversations/:conversationId/messages', (req: Request, res: Respo
       return;
     }
 
-    const order = message_order ?? msgDb.getNextMessageOrder(conversationId);
-    const id = msgDb.addMessage(
+    const order = message_order ?? await msgDb.getNextMessageOrder(conversationId);
+    const id = await msgDb.addMessage(
       conversationId,
       role,
       content,
@@ -43,14 +43,14 @@ router.post('/conversations/:conversationId/messages', (req: Request, res: Respo
   }
 });
 
-router.put('/messages/:id', (req: Request, res: Response) => {
+router.put('/messages/:id', async (req: Request, res: Response) => {
   try {
     const { content, token_count } = req.body;
     if (content === undefined) {
       res.status(400).json({ error: 'Missing required field: content' });
       return;
     }
-    msgDb.updateMessage(Number(req.params.id), content, token_count || null);
+    await msgDb.updateMessage(Number(req.params.id), content, token_count || null);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[messages PUT] Error:', error.message);
@@ -58,9 +58,9 @@ router.put('/messages/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/messages/:id', (req: Request, res: Response) => {
+router.delete('/messages/:id', async (req: Request, res: Response) => {
   try {
-    msgDb.deleteMessage(Number(req.params.id));
+    await msgDb.deleteMessage(Number(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     console.error('[messages DELETE] Error:', error.message);
@@ -68,9 +68,9 @@ router.delete('/messages/:id', (req: Request, res: Response) => {
   }
 });
 
-router.get('/conversations/:conversationId/next-order', (req: Request, res: Response) => {
+router.get('/conversations/:conversationId/next-order', async (req: Request, res: Response) => {
   try {
-    const order = msgDb.getNextMessageOrder(Number(req.params.conversationId));
+    const order = await msgDb.getNextMessageOrder(Number(req.params.conversationId));
     res.json({ nextOrder: order });
   } catch (error: any) {
     console.error('[next-order] Error:', error.message);

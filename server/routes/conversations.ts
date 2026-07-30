@@ -3,10 +3,10 @@ import * as convDb from '../db/conversations';
 
 const router = Router();
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const type = req.query.type as string | undefined;
-    const conversations = type ? convDb.getConversationsByType(type) : convDb.getConversations();
+    const conversations = type ? await convDb.getConversationsByType(type) : await convDb.getConversations();
     res.json({ conversations });
   } catch (error: any) {
     console.error('[conversations GET] Error:', error.message);
@@ -14,9 +14,9 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const conversation = convDb.getConversationById(Number(req.params.id));
+    const conversation = await convDb.getConversationById(Number(req.params.id));
     if (!conversation) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
@@ -28,14 +28,14 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { model_id, title, type } = req.body;
     if (!model_id) {
       res.status(400).json({ error: 'Missing required field: model_id' });
       return;
     }
-    const id = convDb.createConversation(model_id, title || null, type || 'chat');
+    const id = await convDb.createConversation(model_id, title || null, type || 'chat');
     res.json({ id });
   } catch (error: any) {
     console.error('[conversations POST] Error:', error.message);
@@ -43,7 +43,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { title } = req.body;
@@ -51,7 +51,7 @@ router.put('/:id', (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required field: title' });
       return;
     }
-    convDb.updateConversationTitle(id, title);
+    await convDb.updateConversationTitle(id, title);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[conversations PUT] Error:', error.message);
@@ -59,9 +59,9 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    convDb.deleteConversation(Number(req.params.id));
+    await convDb.deleteConversation(Number(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     console.error('[conversations DELETE] Error:', error.message);
