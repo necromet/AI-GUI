@@ -1,0 +1,316 @@
+import { SkemaBoard, SkemaLayout, SkemaProject, SkemaProjectType, SkemaImageRef } from '../types';
+import type { SkemaDesignSpec, SkemaTheme } from '../types/skemaSpec';
+import { renderSlide, validateDesignSpec, renderAllSlides } from '../lib/skemaRenderer';
+import { getLayoutDimensions } from '../lib/layoutUtils';
+
+export { getLayoutDimensions } from '../lib/layoutUtils';
+
+const API_BASE = '/api';
+
+export interface SkemaStreamChunk {
+  thinkingText?: string;
+  htmlChunk?: string;
+  done: boolean;
+}
+
+export async function generateHTML(
+  boardDescription: string,
+  layout: SkemaLayout,
+  prompt?: string,
+  model?: string,
+  provider?: string,
+  currentHtml?: string,
+  history?: Array<{ role: string; content: string }>,
+): Promise<string> {
+  const response = await fetch(`${API_BASE}/skema/generate-html`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ boardDescription, layout, prompt, model, provider, currentHtml, history }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTML generation error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.html;
+}
+
+export async function* generateHTMLStream(
+  boardDescription: string,
+  layout: SkemaLayout,
+  prompt?: string,
+  model?: string,
+  provider?: string,
+  isReasoning?: boolean,
+  signal?: AbortSignal,
+  currentHtml?: string,
+  history?: Array<{ role: string; content: string }>,
+): AsyncGenerator<SkemaStreamChunk> {
+  const response = await fetch(`${API_BASE}/skema/generate-html`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ boardDescription, layout, prompt, model, provider, stream: true, isReasoning, currentHtml, history }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTML generation error ${response.status}: ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  if (signal?.aborted) {
+    reader.cancel();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const abortPromise = new Promise<never>((_, reject) => {
+    signal?.addEventListener('abort', () => {
+      reader.cancel();
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
+
+  while (true) {
+    const { done, value } = await Promise.race([reader.read(), abortPromise]);
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') {
+        yield { done: true };
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(data);
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+
+        if (!delta) continue;
+
+        const content = delta.content;
+        const reasoning = delta.reasoning_content;
+
+        if (content || reasoning) {
+          yield {
+            thinkingText: reasoning || undefined,
+            htmlChunk: content || undefined,
+            done: false,
+          };
+        }
+      } catch {
+        // skip malformed lines
+      }
+    }
+  }
+
+  yield { done: true };
+}
+
+
+export async function generateSpec(
+  prompt: string,
+  layout: SkemaLayout,
+  projectType: SkemaProjectType,
+  slideCount: number,
+  images?: SkemaImageRef[],
+  model?: string,
+  provider?: string,
+  currentSpec?: SkemaDesignSpec,
+  referenceSpec?: SkemaDesignSpec,
+): Promise<SkemaDesignSpec> {
+  const response = await fetch(`${API_BASE}/skema/generate-spec`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, layout, projectType, slideCount, images, model, provider, currentSpec, referenceSpec }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Spec generation error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.spec;
+}
+
+export interface SpecStreamChunk {
+  thinkingText?: string;
+  specChunk?: string;
+  done: boolean;
+}
+
+export async function* generateSpecStream(
+  prompt: string,
+  layout: SkemaLayout,
+  projectType: SkemaProjectType,
+  slideCount: number,
+  images?: SkemaImageRef[],
+  model?: string,
+  provider?: string,
+  currentSpec?: SkemaDesignSpec,
+  referenceSpec?: SkemaDesignSpec,
+  signal?: AbortSignal,
+): AsyncGenerator<SpecStreamChunk> {
+  const response = await fetch(`${API_BASE}/skema/generate-spec`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, layout, projectType, slideCount, images, model, provider, stream: true, currentSpec, referenceSpec }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Spec generation error ${response.status}: ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  if (signal?.aborted) {
+    reader.cancel();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const abortPromise = new Promise<never>((_, reject) => {
+    signal?.addEventListener('abort', () => {
+      reader.cancel();
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
+
+  while (true) {
+    const { done, value } = await Promise.race([reader.read(), abortPromise]);
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') {
+        yield { done: true };
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(data);
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+
+        if (!delta) continue;
+
+        const content = delta.content;
+        const reasoning = delta.reasoning_content;
+
+        if (content || reasoning) {
+          yield {
+            thinkingText: reasoning || undefined,
+            specChunk: content || undefined,
+            done: false,
+          };
+        }
+      } catch {
+        // skip malformed lines
+      }
+    }
+  }
+
+  yield { done: true };
+}
+
+export { renderSlide, renderAllSlides, validateDesignSpec } from '../lib/skemaRenderer';
+
+export function createNewProject(title: string, projectType: SkemaProjectType = 'canvas'): SkemaProject {
+  const now = Date.now();
+  return {
+    id: Math.random().toString(36).substring(2, 15),
+    title,
+    projectType,
+    boards: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function createNewBoard(projectId: string, layout: SkemaLayout = '16:9'): SkemaBoard {
+  const now = Date.now();
+  return {
+    id: Math.random().toString(36).substring(2, 15),
+    projectId,
+    title: `Board ${now.toString(36).slice(-4)}`,
+    layout,
+    bgColor: '#ffffff',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function skemaProjectToDB(project: SkemaProject) {
+  return {
+    id: project.id,
+    title: project.title,
+    description: project.description,
+    projectType: project.projectType,
+    boards: project.boards,
+    theme: project.theme,
+    fullDesignSpec: project.fullDesignSpec,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
+export function skemaDBToProject(dbProject: { id: string; title: string; description?: string; project_type?: string; boards_json: string; images_json?: string | null; theme_json?: string | null; full_design_spec_json?: string | null; created_at: string; updated_at: string }): SkemaProject {
+  let boards: SkemaBoard[] = [];
+  try {
+    boards = JSON.parse(dbProject.boards_json);
+  } catch {}
+
+  let theme: SkemaTheme | undefined;
+  if (dbProject.theme_json) {
+    try {
+      theme = JSON.parse(dbProject.theme_json);
+    } catch {}
+  }
+
+  let fullDesignSpec: SkemaDesignSpec | undefined;
+  if (dbProject.full_design_spec_json) {
+    try {
+      fullDesignSpec = JSON.parse(dbProject.full_design_spec_json);
+    } catch {}
+  }
+
+  return {
+    id: dbProject.id,
+    title: dbProject.title,
+    description: dbProject.description,
+    projectType: (dbProject.project_type as SkemaProjectType) || 'canvas',
+    boards,
+    theme,
+    fullDesignSpec,
+    createdAt: new Date(dbProject.created_at).getTime(),
+    updatedAt: new Date(dbProject.updated_at).getTime(),
+  };
+}

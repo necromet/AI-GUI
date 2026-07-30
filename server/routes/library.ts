@@ -6,12 +6,12 @@ import { setVerifyResult } from '../services/verifyService';
 
 const router = Router();
 
-router.get('/components', (req: Request, res: Response) => {
+router.get('/components', async (req: Request, res: Response) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const folderId = typeof req.query.folderId === 'string' ? req.query.folderId : undefined;
     const unfoldered = req.query.unfoldered === 'true';
-    const components = library.listComponents({
+    const components = await library.listComponents({
       category,
       folderId: unfoldered ? null : folderId,
     });
@@ -22,9 +22,9 @@ router.get('/components', (req: Request, res: Response) => {
   }
 });
 
-router.get('/components/categories', (_req: Request, res: Response) => {
+router.get('/components/categories', async (_req: Request, res: Response) => {
   try {
-    const categories = library.getCategories();
+    const categories = await library.getCategories();
     res.json({ categories });
   } catch (error: any) {
     console.error('[library/components/categories GET] Error:', error.message);
@@ -32,9 +32,9 @@ router.get('/components/categories', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/components/stats', (_req: Request, res: Response) => {
+router.get('/components/stats', async (_req: Request, res: Response) => {
   try {
-    const stats = library.getStats();
+    const stats = await library.getStats();
     res.json(stats);
   } catch (error: any) {
     console.error('[library/components/stats GET] Error:', error.message);
@@ -42,9 +42,9 @@ router.get('/components/stats', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/components/:id', (req: Request, res: Response) => {
+router.get('/components/:id', async (req: Request, res: Response) => {
   try {
-    const component = library.getComponent(req.params.id);
+    const component = await library.getComponent(req.params.id);
     if (!component) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -96,7 +96,7 @@ router.post('/components', async (req: Request, res: Response) => {
 
 router.post('/components/:id/duplicate', async (req: Request, res: Response) => {
   try {
-    const original = library.getComponent(req.params.id);
+    const original = await library.getComponent(req.params.id);
     if (!original) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -130,9 +130,9 @@ router.post('/components/:id/duplicate', async (req: Request, res: Response) => 
   }
 });
 
-router.put('/components/:id', (req: Request, res: Response) => {
+router.put('/components/:id', async (req: Request, res: Response) => {
   try {
-    const updated = library.updateComponent(req.params.id, req.body);
+    const updated = await library.updateComponent(req.params.id, req.body);
     if (!updated) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -144,9 +144,9 @@ router.put('/components/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/components/:id', (req: Request, res: Response) => {
+router.delete('/components/:id', async (req: Request, res: Response) => {
   try {
-    const deleted = library.deleteComponent(req.params.id);
+    const deleted = await library.deleteComponent(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -160,13 +160,13 @@ router.delete('/components/:id', (req: Request, res: Response) => {
 
 router.get('/components/:id/compiled', async (req: Request, res: Response) => {
   try {
-    const comp = library.getComponent(req.params.id);
+    const comp = await library.getComponent(req.params.id);
     if (!comp) {
       res.status(404).json({ error: 'Component not found' });
       return;
     }
 
-    const files = library.getComponentFiles(req.params.id);
+    const files = await library.getComponentFiles(req.params.id);
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'Component has no files' });
       return;
@@ -211,7 +211,7 @@ router.post('/components/reindex', async (req: Request, res: Response) => {
 
 router.post('/components/seed', async (req: Request, res: Response) => {
   try {
-    const existing = library.listComponents();
+    const existing = await library.listComponents();
     if (existing.length > 0) {
       res.json({ success: true, message: `Library already has ${existing.length} components. Skipped seeding.`, count: 0 });
       return;
@@ -236,9 +236,9 @@ router.post('/components/seed', async (req: Request, res: Response) => {
 
 // ===== Folder Routes =====
 
-router.get('/folders', (_req: Request, res: Response) => {
+router.get('/folders', async (_req: Request, res: Response) => {
   try {
-    const folders = library.listFolders();
+    const folders = await library.listFolders();
     res.json({ folders });
   } catch (error: any) {
     console.error('[library/folders GET] Error:', error.message);
@@ -246,9 +246,9 @@ router.get('/folders', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/folders/:id', (req: Request, res: Response) => {
+router.get('/folders/:id', async (req: Request, res: Response) => {
   try {
-    const folder = library.getFolder(req.params.id);
+    const folder = await library.getFolder(req.params.id);
     if (!folder) {
       res.status(404).json({ error: 'Folder not found' });
       return;
@@ -260,9 +260,9 @@ router.get('/folders/:id', (req: Request, res: Response) => {
   }
 });
 
-router.get('/folders/:id/components', (req: Request, res: Response) => {
+router.get('/folders/:id/components', async (req: Request, res: Response) => {
   try {
-    const components = library.getComponentsInFolder(req.params.id);
+    const components = await library.getComponentsInFolder(req.params.id);
     res.json({ components });
   } catch (error: any) {
     console.error('[library/folders/:id/components GET] Error:', error.message);
@@ -270,14 +270,14 @@ router.get('/folders/:id/components', (req: Request, res: Response) => {
   }
 });
 
-router.post('/folders', (req: Request, res: Response) => {
+router.post('/folders', async (req: Request, res: Response) => {
   try {
     const { name, description, color, icon, agentAccessible } = req.body;
     if (!name) {
       res.status(400).json({ error: 'Missing required field: name' });
       return;
     }
-    const folder = library.addFolder({
+    const folder = await library.addFolder({
       name,
       description: description || '',
       color: color || '#6366f1',
@@ -292,9 +292,9 @@ router.post('/folders', (req: Request, res: Response) => {
   }
 });
 
-router.put('/folders/:id', (req: Request, res: Response) => {
+router.put('/folders/:id', async (req: Request, res: Response) => {
   try {
-    const updated = library.updateFolder(req.params.id, req.body);
+    const updated = await library.updateFolder(req.params.id, req.body);
     if (!updated) {
       res.status(404).json({ error: 'Folder not found' });
       return;
@@ -306,9 +306,9 @@ router.put('/folders/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/folders/:id', (req: Request, res: Response) => {
+router.delete('/folders/:id', async (req: Request, res: Response) => {
   try {
-    const deleted = library.deleteFolder(req.params.id);
+    const deleted = await library.deleteFolder(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'Folder not found' });
       return;
@@ -320,10 +320,10 @@ router.delete('/folders/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/components/:id/move', (req: Request, res: Response) => {
+router.post('/components/:id/move', async (req: Request, res: Response) => {
   try {
     const { folderId } = req.body;
-    const moved = library.moveComponentToFolder(req.params.id, folderId ?? null);
+    const moved = await library.moveComponentToFolder(req.params.id, folderId ?? null);
     if (!moved) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -335,10 +335,10 @@ router.post('/components/:id/move', (req: Request, res: Response) => {
   }
 });
 
-router.get('/agent/session/:id', (req: Request, res: Response) => {
+router.get('/agent/session/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const session = library.getSession(id);
+    const session = await library.getSession(id);
     if (!session) {
       res.status(404).json({ error: 'Session not found' });
       return;
@@ -350,10 +350,10 @@ router.get('/agent/session/:id', (req: Request, res: Response) => {
   }
 });
 
-router.get('/agent/sessions/:componentId', (req: Request, res: Response) => {
+router.get('/agent/sessions/:componentId', async (req: Request, res: Response) => {
   try {
     const componentId = req.params.componentId as string;
-    const sessions = library.getSessionsByComponent(componentId);
+    const sessions = await library.getSessionsByComponent(componentId);
     res.json({ sessions });
   } catch (error: any) {
     console.error('[library/agent/sessions GET] Error:', error.message);
@@ -361,14 +361,14 @@ router.get('/agent/sessions/:componentId', (req: Request, res: Response) => {
   }
 });
 
-router.post('/agent/sessions', (req: Request, res: Response) => {
+router.post('/agent/sessions', async (req: Request, res: Response) => {
   try {
     const { componentId } = req.body;
     if (!componentId) {
       res.status(400).json({ error: 'Missing componentId' });
       return;
     }
-    const session = library.createSession(componentId);
+    const session = await library.createSession(componentId);
     res.json({ session });
   } catch (error: any) {
     console.error('[library/agent/sessions POST] Error:', error.message);
@@ -376,22 +376,22 @@ router.post('/agent/sessions', (req: Request, res: Response) => {
   }
 });
 
-router.put('/agent/sessions/:id', (req: Request, res: Response) => {
+router.put('/agent/sessions/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const { messages, title } = req.body;
-    const existing = library.getSession(id);
+    const existing = await library.getSession(id);
     if (!existing) {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
     if (messages) {
-      library.updateSessionMessages(id, messages);
+      await library.updateSessionMessages(id, messages);
     }
     if (title) {
-      library.updateSessionTitle(id, title);
+      await library.updateSessionTitle(id, title);
     }
-    const updated = library.getSession(id);
+    const updated = await library.getSession(id);
     res.json({ session: updated });
   } catch (error: any) {
     console.error('[library/agent/sessions PUT] Error:', error.message);
@@ -399,10 +399,10 @@ router.put('/agent/sessions/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/agent/sessions/:id', (req: Request, res: Response) => {
+router.delete('/agent/sessions/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const deleted = library.deleteSession(id);
+    const deleted = await library.deleteSession(id);
     if (!deleted) {
       res.status(404).json({ error: 'Session not found' });
       return;
@@ -414,7 +414,7 @@ router.delete('/agent/sessions/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/agent/verify-result', (req: Request, res: Response) => {
+router.post('/agent/verify-result', async (req: Request, res: Response) => {
   try {
     const { componentId, errors, success } = req.body;
     if (!componentId) {

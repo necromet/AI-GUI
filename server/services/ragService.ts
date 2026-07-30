@@ -1,5 +1,6 @@
-import { getDatabase } from '../db';
+import { getAll, getOne, run, transaction } from '../db/pg';
 import { getEmbedding, getEmbeddings, cosineSimilarity } from './embeddingService';
+import { safeJsonParse } from '../lib/safeJsonParse';
 
 export interface RAGChunk {
   id: string;
@@ -41,32 +42,22 @@ function chunkText(text: string): { text: string; startIndex: number; endIndex: 
 }
 
 export async function addDocument(name: string, type: string, content: string): Promise<RAGDocument> {
-  const db = getDatabase();
   const docId = generateId();
   const textChunks = chunkText(content);
   const embeddings = await getEmbeddings(textChunks.map(c => c.text));
 
-  const insertChunk = db.prepare(
-    'INSERT INTO rag_chunks (id, document_id, text, embedding, start_index, end_index) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-  const insertDoc = db.prepare(
-    'INSERT INTO rag_documents (id, name, type, chunk_count) VALUES (?, ?, ?, ?)'
-  );
-
-  const insertAll = db.transaction(() => {
-    insertDoc.run(docId, name, type, textChunks.length);
+  await transaction(async (q) => {
+    await q(
+      'INSERT INTO rag_documents (id, name, type, chunk_count) VALUES ($1, $2, $3, $4)',
+      [docId, name, type, textChunks.length]
+    );
     for (let i = 0; i < textChunks.length; i++) {
-      insertChunk.run(
-        generateId(),
-        docId,
-        textChunks[i].text,
-        JSON.stringify(embeddings[i]),
-        textChunks[i].startIndex,
-        textChunks[i].endIndex
+      await q(
+        'INSERT INTO rag_chunks (id, document_id, text, embedding, start_index, end_index) VALUES ($1, $2, $3, $4, $5, $6)',
+        [generateId(), docId, textChunks[i].text, JSON.stringify(embeddings[i]), textChunks[i].startIndex, textChunks[i].endIndex]
       );
     }
   });
-  insertAll();
 
   return {
     id: docId,
@@ -77,9 +68,8 @@ export async function addDocument(name: string, type: string, content: string): 
   };
 }
 
-export function listDocuments(): RAGDocument[] {
-  const db = getDatabase();
-  const rows = db.prepare('SELECT * FROM rag_documents ORDER BY created_at DESC').all() as any[];
+export async function listDocuments(): Promise<RAGDocument[]> {
+  const rows = await getAll('SELECT * FROM rag_documents ORDER BY created_at DESC');
   return rows.map(r => ({
     id: r.id,
     name: r.name,
@@ -89,15 +79,13 @@ export function listDocuments(): RAGDocument[] {
   }));
 }
 
-export function deleteDocument(docId: string): boolean {
-  const db = getDatabase();
-  const result = db.prepare('DELETE FROM rag_documents WHERE id = ?').run(docId);
-  return result.changes > 0;
+export async function deleteDocument(docId: string): Promise<boolean> {
+  const result = await run('DELETE FROM rag_documents WHERE id = $1', [docId]);
+  return result.rowCount > 0;
 }
 
 export async function retrieveRelevantChunks(query: string, topK: number = 5): Promise<RAGChunk[]> {
-  const db = getDatabase();
-  const rows = db.prepare('SELECT * FROM rag_chunks').all() as any[];
+  const rows = await getAll('SELECT * FROM rag_chunks');
   if (rows.length === 0) return [];
 
   const queryEmbedding = await getEmbedding(query);
@@ -106,7 +94,7 @@ export async function retrieveRelevantChunks(query: string, topK: number = 5): P
     id: r.id,
     documentId: r.document_id,
     text: r.text,
-    embedding: JSON.parse(r.embedding),
+    embedding: safeJsonParse(r.embedding, []),
     startIndex: r.start_index,
     endIndex: r.end_index,
   }));

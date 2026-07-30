@@ -17,7 +17,7 @@ AI chat web app powered by the Xiaomi MiMo API.
 - TTS / ASR / Voice design / Voice clone panels
 - RAG experiments (embeddings + retrieval)
 - Agent plugin system
-- Stitch visual design editor (Fabric.js canvas, HTML + image generation)
+- Skema visual design editor (Fabric.js canvas, HTML + image generation)
 - Persistent conversations in IndexedDB
 - Token usage tracking and charts
 - Neon theme customization
@@ -47,7 +47,7 @@ MIMO_API_KEY=your_token_plan_key           # required — token-plan MiMo key
 MIMO_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
 MIMO_DIRECT_API_KEY=your_direct_api_key     # required — direct MiMo key
 MIMO_DIRECT_BASE_URL=https://api.xiaomimimo.com/v1
-OPENAI_API_KEY=your_openai_key              # optional — needed for Stitch image generation
+OPENAI_API_KEY=your_openai_key              # optional — needed for Skema image generation
 SERVER_PORT=3001                            # optional — backend port (default: 3001)
 ```
 
@@ -55,7 +55,7 @@ SERVER_PORT=3001                            # optional — backend port (default
 
 ### 3. Run the App
 
-The app has two servers — the Vite frontend and the Express API backend. For full functionality (chat, TTS, ASR, agent, stitch), **both must be running**.
+The app has two servers — the Vite frontend and the Express API backend. For full functionality (chat, TTS, ASR, agent, skema), **both must be running**.
 
 ```bash
 # Option A: Run both concurrently (recommended)
@@ -95,7 +95,7 @@ npm run docker:down    # Stop containers
 Client (React + Vite, localhost:5173)
   → Express API server (localhost:3001)
     → Xiaomi MiMo API
-    → OpenAI API (Stitch image gen)
+    → OpenAI API (Skema image gen)
 
 IndexedDB (browser) ← databaseAdapter ← databaseService
 ```
@@ -107,7 +107,7 @@ IndexedDB (browser) ← databaseAdapter ← databaseService
 | `components/` | React UI components |
 | `services/` | Client-side API and DB adapters |
 | `server/` | Express backend (routes, services, DB) |
-| `lib/` | Shared utilities (`cn`, layout, stitch renderer) |
+| `lib/` | Shared utilities (`cn`, layout, skema renderer) |
 | `types/` | TypeScript type definitions |
 
 ### Model Routing

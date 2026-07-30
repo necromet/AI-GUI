@@ -1,7 +1,7 @@
 import { runInNewContext } from 'vm';
 import * as cheerio from 'cheerio';
 import { chatCompletion, streamChatCompletion, readSSEStream, ChatMessage } from './mimoService';
-import { buildSpecSystemPrompt, buildSpecEditSystemPrompt } from './stitchSpecPrompt';
+import { buildSpecSystemPrompt, buildSpecEditSystemPrompt } from './skemaSpecPrompt';
 import * as libraryService from './libraryService';
 
 export async function analyzeImages(images: any[], model?: string, provider?: string): Promise<string> {
@@ -720,12 +720,12 @@ export async function toolEditSpec(
   }
 }
 
-export function buildStitchSystemPrompt(context?: Record<string, any>): string {
+export function buildSkemaSystemPrompt(context?: Record<string, any>): string {
   const currentHtml = context?.currentHtml;
   const layout = context?.layout || '16:9';
   const dims = LAYOUT_DIMS[layout] || '1920x1080';
   const boardDescription = context?.boardDescription;
-  const projectType = context?.projectType || 'website';
+  const projectType = context?.projectType || 'canvas';
   const images = context?.images || [];
   const slideNumber = context?.slideNumber;
   const totalSlides = context?.totalSlides;

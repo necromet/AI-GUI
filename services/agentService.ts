@@ -23,7 +23,7 @@ export interface AgentStreamChunk {
 }
 
 export async function getAvailableTools(): Promise<ToolDefinition[]> {
-  const response = await fetch(`${API_BASE}/stitch-agent/tools`);
+  const response = await fetch(`${API_BASE}/skema-agent/tools`);
   if (!response.ok) throw new Error(`Tools error ${response.status}`);
   const data = await response.json();
   return data.tools || [];
@@ -38,7 +38,7 @@ export async function* sendAgentMessage(
   context?: Record<string, any>,
   systemPromptAppend?: string,
 ): AsyncGenerator<AgentStreamChunk> {
-  const response = await fetch(`${API_BASE}/stitch-agent/chat`, {
+  const response = await fetch(`${API_BASE}/skema-agent/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

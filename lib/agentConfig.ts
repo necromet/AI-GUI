@@ -1,4 +1,4 @@
-export type AgentType = 'plugin' | 'library' | 'stitch' | 'rag';
+export type AgentType = 'plugin' | 'library' | 'skema' | 'rag';
 
 export interface AgentToolConfig {
   enabled: boolean;
@@ -28,15 +28,17 @@ export const AGENT_TOOL_INFO: Record<AgentType, { name: string; description: str
     { name: 'list_folders', description: 'List all library folders' },
     { name: 'list_folder_contents', description: 'List all components in a specific folder' },
   ],
-  stitch: [
-    { name: 'web_browse', description: 'Fetch and extract text content from a URL' },
-    { name: 'execute_code', description: 'Execute JavaScript code in a sandboxed environment' },
-    { name: 'search_web', description: 'Search the web for information via DuckDuckGo' },
-    { name: 'edit_html', description: 'Apply surgical edits to HTML using CSS selectors' },
-    { name: 'generate_html', description: 'Generate a complete HTML file from scratch' },
-    { name: 'generate_spec', description: 'Generate a JSON design spec for IG content' },
-    { name: 'edit_spec', description: 'Edit fields in an existing JSON design spec' },
-    { name: 'search_library', description: 'Search the component library for reusable components' },
+  skema: [
+    { name: 'place_component', description: 'Place a new section on the canvas grid' },
+    { name: 'remove_component', description: 'Remove a section from the canvas' },
+    { name: 'move_component', description: 'Move a section up or down' },
+    { name: 'resize_component', description: 'Change section height' },
+    { name: 'update_component', description: 'Update section description or type' },
+    { name: 'regenerate_component', description: 'Regenerate section content' },
+    { name: 'search_library', description: 'Search the component library' },
+    { name: 'web_browse', description: 'Fetch URL content' },
+    { name: 'execute_code', description: 'Run JavaScript in sandbox' },
+    { name: 'search_web', description: 'Search the web' },
   ],
   rag: [],
 };
@@ -52,7 +54,7 @@ function buildDefaults(agent: AgentType): AgentConfig {
 export const AGENT_DEFAULTS: Record<AgentType, AgentConfig> = {
   plugin: buildDefaults('plugin'),
   library: buildDefaults('library'),
-  stitch: buildDefaults('stitch'),
+  skema: buildDefaults('skema'),
   rag: buildDefaults('rag'),
 };
 

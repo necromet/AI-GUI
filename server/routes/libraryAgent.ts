@@ -215,7 +215,7 @@ function buildLibraryTools(componentId?: string) {
       execute: async ({ id }) => {
         const effectiveId = id || componentId;
         if (!effectiveId) return 'Error: Missing required field: id. Provide the component ID.';
-        const comp = library.getComponent(effectiveId);
+        const comp = await library.getComponent(effectiveId);
         if (!comp) return `Component not found: ${effectiveId}`;
         const header = `Component: ${comp.name}\nID: ${comp.id}\nCategory: ${comp.category}\nDescription: ${comp.description}\nTags: ${comp.tags.join(', ')}\nCreated: ${comp.createdAt}\nUpdated: ${comp.updatedAt}\n\nFiles:\n`;
         const MAX_TOTAL = 12000;
@@ -266,9 +266,9 @@ function buildLibraryTools(componentId?: string) {
         if (!componentId) return 'Error: Missing required field: componentId';
         if (!filename) return 'Error: Missing required field: filename';
         if (content === undefined || content === null) return 'Error: Missing required field: content';
-        const targetComp = library.getComponent(componentId);
+        const targetComp = await library.getComponent(componentId);
         if (!targetComp) return `Component not found: ${componentId}`;
-        const written = library.writeComponentFile(componentId, filename, content);
+        const written = await library.writeComponentFile(componentId, filename, content);
         return `File written successfully:\n  Component ID: ${componentId}\n  Filename: ${written.filename}\n  Content type: ${written.contentType}\n  Size: ${content.length} chars`;
       },
     }),
@@ -282,15 +282,15 @@ function buildLibraryTools(componentId?: string) {
       execute: async ({ componentId, filename }) => {
         if (!componentId) return 'Error: Missing required field: componentId';
         if (!filename) return 'Error: Missing required field: filename';
-        const targetComp = library.getComponent(componentId);
+        const targetComp = await library.getComponent(componentId);
         if (!targetComp) return `Component not found: ${componentId}`;
         const fileToDelete = (targetComp.files || []).find(f => f.filename === filename);
         if (!fileToDelete) return `File not found: ${filename} in component ${componentId}`;
         const remainingFiles = (targetComp.files || []).filter(f => f.filename !== filename);
-        if (remainingFiles.length === 0) return 'Error: Cannot delete the last file in a component.';
-        const deleted = library.deleteComponentFile(fileToDelete.id);
+        if (remainingFiles.length == 0) return 'Error: Cannot delete the last file in a component.';
+        const deleted = await library.deleteComponentFile(fileToDelete.id);
         if (deleted && fileToDelete.isEntry && remainingFiles.length > 0) {
-          library.updateComponentFile(remainingFiles[0].id, { isEntry: true } as any);
+          await library.updateComponentFile(remainingFiles[0].id, { isEntry: true } as any);
         }
         return deleted
           ? `File deleted: ${filename} from component ${componentId}. Remaining files: ${remainingFiles.map(f => f.filename).join(', ')}`
@@ -332,7 +332,7 @@ function buildLibraryTools(componentId?: string) {
       }),
       execute: async ({ componentId }) => {
         if (!componentId) return 'Error: Missing componentId. Use {"componentId": "..."} not {"id": "..."}';
-        const comp = library.getComponent(componentId);
+        const comp = await library.getComponent(componentId);
         if (!comp) return `Component not found: ${componentId}`;
         return 'Verification triggered. The preview will render the component and check for errors. You can continue working — the result will be shown to the user.';
       },
@@ -342,7 +342,7 @@ function buildLibraryTools(componentId?: string) {
       description: 'List all library folders with their IDs, names, descriptions, and component counts.',
       parameters: z.object({}),
       execute: async () => {
-        const allFolders = library.listFolders();
+        const allFolders = await library.listFolders();
         if (allFolders.length === 0) return 'No folders exist yet.';
         const summary = allFolders.map(f =>
           `[${f.id}] ${f.name} — ${f.componentCount ?? 0} component(s)${f.description ? '\n  ' + f.description : ''}`
@@ -358,9 +358,9 @@ function buildLibraryTools(componentId?: string) {
       }),
       execute: async ({ folderId }) => {
         if (!folderId) return 'Error: Missing required field: folderId';
-        const listFolder = library.getFolder(folderId);
+        const listFolder = await library.getFolder(folderId);
         if (!listFolder) return `Folder not found: ${folderId}`;
-        const folderComps = library.getComponentsInFolder(folderId);
+        const folderComps = await library.getComponentsInFolder(folderId);
         if (folderComps.length === 0) return `Folder "${listFolder.name}" is empty.`;
         const summary = folderComps.map(c =>
           `[${c.id}] ${c.name} — ${c.category}${c.description ? '\n  ' + c.description.substring(0, 100) : ''}`
@@ -445,7 +445,7 @@ router.post('/chat', async (req, res) => {
 
     let componentContext = '';
     if (componentId) {
-      const comp = library.getComponent(componentId);
+      const comp = await library.getComponent(componentId);
       if (comp) componentContext = buildComponentContext(comp);
     }
 
@@ -524,7 +524,7 @@ router.post('/chat', async (req, res) => {
         if (tr.toolName === 'create_component' && !outputStr.startsWith('Error:')) {
           const match = outputStr.match(/ID:\s*(\w+)/);
           if (match) {
-            const comp = library.getComponent(match[1]);
+            const comp = await library.getComponent(match[1]);
             if (comp) emitEvent({ component_created: comp });
           }
         }
@@ -532,7 +532,7 @@ router.post('/chat', async (req, res) => {
         if ((tr.toolName === 'write_component_file' || tr.toolName === 'update_component' || tr.toolName === 'delete_component_file') && !outputStr.startsWith('Error:')) {
           const match = outputStr.match(/Component ID:\s*(\w+)/) || outputStr.match(/ID:\s*(\w+)/) || outputStr.match(/component\s+(\w+)/i);
           if (match) {
-            const comp = library.getComponent(match[1]);
+            const comp = await library.getComponent(match[1]);
             if (comp) emitEvent({ component_updated: comp });
           }
         }

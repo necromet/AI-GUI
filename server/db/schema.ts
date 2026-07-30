@@ -43,12 +43,12 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 
--- Stitch projects table
-CREATE TABLE IF NOT EXISTS stitch_projects (
+-- Skema projects table
+CREATE TABLE IF NOT EXISTS skema_projects (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
-  project_type TEXT NOT NULL DEFAULT 'website',
+  project_type TEXT NOT NULL DEFAULT 'canvas',
   boards_json TEXT NOT NULL,
   images_json TEXT,
   theme_json TEXT,
@@ -77,8 +77,8 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_rag_chunks_document ON rag_chunks(document_id);
 
--- Stitch component library
-CREATE TABLE IF NOT EXISTS stitch_components (
+-- Skema component library
+CREATE TABLE IF NOT EXISTS skema_components (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   category TEXT NOT NULL,
@@ -94,13 +94,13 @@ CREATE TABLE IF NOT EXISTS stitch_components (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS stitch_component_embeddings (
+CREATE TABLE IF NOT EXISTS skema_component_embeddings (
   id TEXT PRIMARY KEY,
-  component_id TEXT NOT NULL REFERENCES stitch_components(id) ON DELETE CASCADE,
+  component_id TEXT NOT NULL REFERENCES skema_components(id) ON DELETE CASCADE,
   chunk_text TEXT NOT NULL,
   embedding TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sce_component ON stitch_component_embeddings(component_id);
+CREATE INDEX IF NOT EXISTS idx_sce_component ON skema_component_embeddings(component_id);
 
 -- General-purpose component library
 CREATE TABLE IF NOT EXISTS library_components (
@@ -152,17 +152,17 @@ CREATE TABLE IF NOT EXISTS library_agent_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_las_component ON library_agent_sessions(component_id);
 
--- Stitch agent chat sessions (per-project)
-CREATE TABLE IF NOT EXISTS stitch_agent_sessions (
+-- Skema agent chat sessions (per-project)
+CREATE TABLE IF NOT EXISTS skema_agent_sessions (
   id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES stitch_projects(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES skema_projects(id) ON DELETE CASCADE,
   board_idx INTEGER NOT NULL DEFAULT 0,
   title TEXT,
   messages_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_sas_project ON stitch_agent_sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_sas_project ON skema_agent_sessions(project_id);
 
 -- Python executor projects
 CREATE TABLE IF NOT EXISTS python_projects (

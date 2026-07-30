@@ -1,6 +1,6 @@
-import type { StitchLayout } from '../types';
+import type { SkemaLayout } from '../types';
 
-export function getLayoutDimensions(layout: StitchLayout): { width: number; height: number } {
+export function getLayoutDimensions(layout: SkemaLayout): { width: number; height: number } {
   switch (layout) {
     case '16:9': return { width: 1920, height: 1080 };
     case '1:1': return { width: 1080, height: 1080 };

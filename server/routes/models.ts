@@ -3,9 +3,9 @@ import * as modelDb from '../db/models';
 
 const router = Router();
 
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
-    const models = modelDb.getModels();
+    const models = await modelDb.getModels();
     res.json({ models });
   } catch (error: any) {
     console.error('[models] Error:', error.message);
@@ -13,9 +13,9 @@ router.get('/', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/all', (_req: Request, res: Response) => {
+router.get('/all', async (_req: Request, res: Response) => {
   try {
-    const models = modelDb.getAllModels();
+    const models = await modelDb.getAllModels();
     res.json({ models });
   } catch (error: any) {
     console.error('[models/all] Error:', error.message);
@@ -23,9 +23,9 @@ router.get('/all', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const model = modelDb.getModelById(Number(req.params.id));
+    const model = await modelDb.getModelById(Number(req.params.id));
     if (!model) {
       res.status(404).json({ error: 'Model not found' });
       return;
@@ -37,14 +37,14 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { name, description, context_window_size, api_key, provider, system_instruction, is_custom } = req.body;
     if (!name) {
       res.status(400).json({ error: 'Missing required field: name' });
       return;
     }
-    const id = modelDb.addModel(
+    const id = await modelDb.addModel(
       name,
       description || null,
       context_window_size || null,
@@ -60,16 +60,16 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
-    const existing = modelDb.getModelById(id);
+    const existing = await modelDb.getModelById(id);
     if (!existing) {
       res.status(404).json({ error: 'Model not found' });
       return;
     }
     const { name, description, context_window_size, api_key, provider, system_instruction, is_custom } = req.body;
-    modelDb.updateModel(
+    await modelDb.updateModel(
       id,
       name ?? existing.name,
       description ?? existing.description,
@@ -86,9 +86,9 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    modelDb.deactivateModel(Number(req.params.id));
+    await modelDb.deactivateModel(Number(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     console.error('[models DELETE] Error:', error.message);

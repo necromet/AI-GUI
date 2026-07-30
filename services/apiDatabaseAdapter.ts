@@ -91,7 +91,7 @@ export const getConversations = async () => {
   return data.conversations;
 };
 
-export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'stitch') => {
+export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
   const data = await apiFetch<{ conversations: any[] }>(`/conversations?type=${type}`);
   return data.conversations;
 };
@@ -101,7 +101,7 @@ export const getConversationById = async (conversationId: number) => {
   return data.conversation;
 };
 
-export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch') => {
+export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
   const data = await apiFetch<{ id: number }>('/conversations', {
     method: 'POST',
     body: JSON.stringify({ model_id: modelId, title: title || null, type: type || 'chat' }),
@@ -195,17 +195,17 @@ export const getTokenStatsByConversation = async (limit: number = 20) => {
   return data.stats;
 };
 
-export const getStitchProjects = async () => {
-  const data = await apiFetch<{ projects: any[] }>('/stitch/projects');
+export const getSkemaProjects = async () => {
+  const data = await apiFetch<{ projects: any[] }>('/skema/projects');
   return data.projects;
 };
 
-export const getStitchProject = async (id: string) => {
-  const data = await apiFetch<{ project: any }>(`/stitch/projects/${id}`);
+export const getSkemaProject = async (id: string) => {
+  const data = await apiFetch<{ project: any }>(`/skema/projects/${id}`);
   return data.project;
 };
 
-export const saveStitchProject = async (project: {
+export const saveSkemaProject = async (project: {
   id: string;
   title: string;
   description?: string;
@@ -216,12 +216,12 @@ export const saveStitchProject = async (project: {
   createdAt: number;
   updatedAt: number;
 }) => {
-  await apiFetch<any>(`/stitch/projects/${project.id}`, {
+  await apiFetch<any>(`/skema/projects/${project.id}`, {
     method: 'PUT',
     body: JSON.stringify({
       title: project.title,
       description: project.description,
-      project_type: project.projectType || 'website',
+      project_type: project.projectType || 'canvas',
       boards_json: JSON.stringify(project.boards),
       theme_json: project.theme ? JSON.stringify(project.theme) : null,
       full_design_spec_json: project.fullDesignSpec ? JSON.stringify(project.fullDesignSpec) : null,
@@ -231,8 +231,8 @@ export const saveStitchProject = async (project: {
   });
 };
 
-export const deleteStitchProject = async (id: string) => {
-  await apiFetch<any>(`/stitch/projects/${id}`, { method: 'DELETE' });
+export const deleteSkemaProject = async (id: string) => {
+  await apiFetch<any>(`/skema/projects/${id}`, { method: 'DELETE' });
 };
 
 // ===== Python Projects =====

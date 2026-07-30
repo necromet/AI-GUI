@@ -11,7 +11,7 @@ import {
   executeTool,
   parseToolCalls,
   AVAILABLE_TOOLS,
-  buildStitchSystemPrompt,
+  buildSkemaSystemPrompt,
   analyzeImages,
 } from '../services/agentService';
 
@@ -31,9 +31,9 @@ router.post('/chat', async (req: Request, res: Response) => {
     const detectedLang = detectLanguage(userQuery);
     const langInstruction = buildLanguageInstruction(detectedLang);
 
-    const hasStitchTools = tools.includes('edit_html') || tools.includes('generate_html') || tools.includes('edit_spec') || tools.includes('generate_spec');
+    const hasSkemaTools = tools.includes('edit_html') || tools.includes('generate_html') || tools.includes('edit_spec') || tools.includes('generate_spec');
 
-    if (hasStitchTools && context?.images?.length > 0 && !context.imageAnalysis) {
+    if (hasSkemaTools && context?.images?.length > 0 && !context.imageAnalysis) {
       if (stream) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -46,11 +46,11 @@ router.post('/chat', async (req: Request, res: Response) => {
       }
     }
 
-    const stitchPrompt = hasStitchTools ? buildStitchSystemPrompt(context) : '';
-    const toolPrompt = !hasStitchTools && tools.length > 0 ? buildToolSystemPrompt(tools) : '';
+    const skemaPrompt = hasSkemaTools ? buildSkemaSystemPrompt(context) : '';
+    const toolPrompt = !hasSkemaTools && tools.length > 0 ? buildToolSystemPrompt(tools) : '';
 
     const apiMessages: ChatMessage[] = [];
-    const fullSystem = [stitchPrompt, systemInstruction, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
+    const fullSystem = [skemaPrompt, systemInstruction, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
     apiMessages.push({ role: 'system', content: fullSystem });
 
     for (const msg of messages) {

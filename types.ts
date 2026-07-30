@@ -49,12 +49,12 @@ export interface ChatSession {
   updatedAt: number;
   dbConversationId?: number; // Database conversation ID
   modelId?: number; // Database model ID
-  type?: 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'library';
+  type?: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'library';
 }
 
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
 
-export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'stitch' | 'library';
+export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'library';
 
 export type Mode = 'selector' | 'chat' | 'experiments' | 'library';
 
@@ -133,40 +133,40 @@ export interface ModelConfig {
   supportsVision?: boolean; // Can accept image inputs
 }
 
-// ===== Stitch Types =====
+// ===== Skema Types =====
 
-export type StitchLayout = '16:9' | '1:1' | '9:16' | '4:5' | '1.91:1' | '4:3' | '3:4' | '32:9';
+export type SkemaLayout = '16:9' | '1:1' | '9:16' | '4:5' | '1.91:1' | '4:3' | '3:4' | '32:9';
 
-export type StitchProjectType = 'website' | 'ig-carousel' | 'ig-story';
+export type SkemaProjectType = 'canvas';
 
-export interface StitchImageRef {
+export interface SkemaImageRef {
   id: string;
   label: string;
   url: string;
   mimeType?: string;
 }
 
-export interface StitchBoard {
+export interface SkemaBoard {
   id: string;
   projectId: string;
   title: string;
-  layout: StitchLayout;
+  layout: SkemaLayout;
   generatedHtml?: string;
-  designSpec?: import('./types/stitchSpec').StitchSlideSpec;
+  designSpec?: import('./types/skemaSpec').SkemaSlideSpec;
   bgImage?: string;
   bgColor?: string;
   createdAt: number;
   updatedAt: number;
 }
 
-export interface StitchProject {
+export interface SkemaProject {
   id: string;
   title: string;
   description?: string;
-  projectType: StitchProjectType;
-  boards: StitchBoard[];
-  theme?: import('./types/stitchSpec').StitchTheme;
-  fullDesignSpec?: import('./types/stitchSpec').StitchDesignSpec;
+  projectType: SkemaProjectType;
+  boards: SkemaBoard[];
+  theme?: import('./types/skemaSpec').SkemaTheme;
+  fullDesignSpec?: import('./types/skemaSpec').SkemaDesignSpec;
   createdAt: number;
   updatedAt: number;
 }

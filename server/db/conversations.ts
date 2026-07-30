@@ -1,4 +1,4 @@
-import { getDatabase } from './index';
+import { getAll, getOne, run, runReturning } from './pg';
 
 export interface DBConversation {
   id: number;
@@ -9,37 +9,33 @@ export interface DBConversation {
   updated_at: string;
 }
 
-export function getConversations(): DBConversation[] {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC').all() as DBConversation[];
+export async function getConversations(): Promise<DBConversation[]> {
+  return getAll<DBConversation>('SELECT * FROM conversations ORDER BY updated_at DESC');
 }
 
-export function getConversationsByType(type: string): DBConversation[] {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM conversations WHERE type = ? ORDER BY updated_at DESC').all(type) as DBConversation[];
+export async function getConversationsByType(type: string): Promise<DBConversation[]> {
+  return getAll<DBConversation>('SELECT * FROM conversations WHERE type = $1 ORDER BY updated_at DESC', [type]);
 }
 
-export function getConversationById(id: number): DBConversation | undefined {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM conversations WHERE id = ?').get(id) as DBConversation | undefined;
+export async function getConversationById(id: number): Promise<DBConversation | undefined> {
+  return getOne<DBConversation>('SELECT * FROM conversations WHERE id = $1', [id]);
 }
 
-export function createConversation(modelId: number, title: string | null, type: string = 'chat'): number {
-  const db = getDatabase();
-  const result = db.prepare(
-    'INSERT INTO conversations (model_id, title, type) VALUES (?, ?, ?)'
-  ).run(modelId, title, type);
-  return Number(result.lastInsertRowid);
+export async function createConversation(modelId: number, title: string | null, type: string = 'chat'): Promise<number> {
+  const row = await runReturning<{ id: number }>(
+    'INSERT INTO conversations (model_id, title, type) VALUES ($1, $2, $3) RETURNING id',
+    [modelId, title, type]
+  );
+  return row!.id;
 }
 
-export function updateConversationTitle(id: number, title: string): void {
-  const db = getDatabase();
-  db.prepare(
-    "UPDATE conversations SET title = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(title, id);
+export async function updateConversationTitle(id: number, title: string): Promise<void> {
+  await run(
+    'UPDATE conversations SET title = $1, updated_at = NOW() WHERE id = $2',
+    [title, id]
+  );
 }
 
-export function deleteConversation(id: number): void {
-  const db = getDatabase();
-  db.prepare('DELETE FROM conversations WHERE id = ?').run(id);
+export async function deleteConversation(id: number): Promise<void> {
+  await run('DELETE FROM conversations WHERE id = $1', [id]);
 }
