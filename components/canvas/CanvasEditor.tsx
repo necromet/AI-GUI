@@ -4,13 +4,8 @@ import type { SkemaProject, SkemaBoard, ModelConfig } from '../../types';
 import type { GridComponent, GridState, GridBounds, ResolutionTemplate, SectionType, ProjectFile } from './types';
 import { RESOLUTIONS, SECTION_TYPES, DEFAULT_TEMPLATE, ROWS } from './constants';
 import { CanvasGrid } from './CanvasGrid';
-import { CanvasSidebar } from './CanvasSidebar';
 import { CanvasExportModal } from './CanvasExportModal';
 import { compileProject, generateComponentTsx, generateAppTsx, generateMainTsx, generateGlobalsCss } from '../../lib/tsxCompiler';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Monitor, Tablet, Smartphone, Laptop, Eye, Code2 } from 'lucide-react';
-import SkemaAgentSidebar from '@/components/skema/SkemaAgentSidebar';
 
 export interface CanvasControls {
   onExport: () => void;
@@ -20,6 +15,7 @@ export interface CanvasControls {
   layout: string;
   viewMode: 'preview' | 'source' | 'canvas';
   onViewModeToggle: () => void;
+  onViewModeChange: (mode: 'canvas' | 'preview') => void;
   onRegenerate: () => void;
   onStopGeneration: () => void;
   onCopy: () => void;
@@ -29,6 +25,36 @@ export interface CanvasControls {
   isLibraryOpen: boolean;
   isFullscreen: boolean;
   onFullscreenToggle: () => void;
+  onToggleAgent: () => void;
+  isAgentOpen: boolean;
+  template: string;
+  onTemplateChange: (template: string) => void;
+  cols: number;
+  cursorPos: { col: number; row: number } | null;
+  fileCount: number;
+  componentCount: number;
+  agentGridState: GridState;
+  onComponentPlaced: (component: GridComponent) => void;
+  onComponentRemoved: (componentId: string) => void;
+  onComponentUpdated: (component: GridComponent) => void;
+}
+
+export interface CanvasSidebarControls {
+  onAiGenerate: (prompt: string) => void;
+  onQuickAdd: (type: SectionType) => void;
+  components: GridComponent[];
+  selectedComponent: GridComponent | null;
+  resolution: ResolutionConfig;
+  onUpdatePrompt: (id: string, prompt: string) => void;
+  onUpdateTsxCode: (id: string, tsxCode: string) => void;
+  onRemove: (id: string) => void;
+  onRegenerate: (id: string) => void;
+  onMove: (id: string, dc: number, dr: number) => void;
+  onCatalogueAdd: (component: any) => void;
+  projectFiles: ProjectFile[];
+  activeFile: string | null;
+  onFileSelect: (path: string) => void;
+  onBack: () => void;
 }
 
 interface CanvasEditorProps {
@@ -40,6 +66,7 @@ interface CanvasEditorProps {
   modelConfig?: ModelConfig;
   models?: ModelConfig[];
   onControlsChange?: (controls: CanvasControls | null) => void;
+  onSidebarControlsChange?: (controls: CanvasSidebarControls | null) => void;
 }
 
 function deserializeGridState(board?: SkemaBoard): GridState {
@@ -133,9 +160,11 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   project,
   onNotification,
   onSave,
+  onBack,
   modelConfig,
   models,
   onControlsChange,
+  onSidebarControlsChange,
 }) => {
   const board = project.boards[0];
   const idCounterRef = useRef(0);
@@ -149,8 +178,6 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const [showAgentSidebar, setShowAgentSidebar] = useState(true);
-  const [selectedModelId, setSelectedModelId] = useState<string>(modelConfig?.id || '');
-  const chatModels = models?.filter(m => (m.modelType || 'chat') === 'chat') || [];
 
   const selectedId = gridState.selectedId ?? null;
   const setSelectedId = useCallback((id: string | null) => {
@@ -605,6 +632,7 @@ export default defineConfig({
       layout: resolution.label,
       viewMode,
       onViewModeToggle: () => setViewMode(v => v === 'canvas' ? 'preview' : 'canvas'),
+      onViewModeChange: (mode) => setViewMode(mode),
       onRegenerate: () => {},
       onStopGeneration: () => {},
       onCopy: () => {},
@@ -614,126 +642,51 @@ export default defineConfig({
       isLibraryOpen: false,
       isFullscreen: false,
       onFullscreenToggle: () => {},
+      onToggleAgent: () => setShowAgentSidebar(v => !v),
+      isAgentOpen: showAgentSidebar,
+      template: gridState.template,
+      onTemplateChange: (t) => updateTemplate(t as ResolutionTemplate),
+      cols: resolution.cols,
+      cursorPos,
+      fileCount: projectFiles.length,
+      componentCount: gridState.components.filter(c => c.generated).length,
+      agentGridState: gridState,
+      onComponentPlaced: handleComponentPlaced,
+      onComponentRemoved: handleComponentRemoved,
+      onComponentUpdated: handleComponentUpdated,
     });
     return () => onControlsChange?.(null);
-  }, [isGenerating, gridState, resolution, viewMode, onControlsChange, handleExportZip]);
+  }, [isGenerating, gridState, resolution, viewMode, showAgentSidebar, onControlsChange, handleExportZip, cursorPos, projectFiles, updateTemplate, handleComponentPlaced, handleComponentRemoved, handleComponentUpdated]);
+
+  useEffect(() => {
+    onSidebarControlsChange?.({
+      onAiGenerate: handleAiGenerate,
+      onQuickAdd: handleQuickAdd,
+      components: gridState.components,
+      selectedComponent,
+      resolution,
+      onUpdatePrompt: handleUpdatePrompt,
+      onUpdateTsxCode: handleUpdateTsxCode,
+      onRemove: handleRemove,
+      onRegenerate: handleRegenerate,
+      onMove: handleMove,
+      onCatalogueAdd: handleCatalogueAdd,
+      projectFiles,
+      activeFile,
+      onFileSelect: (path) => {
+        setActiveFile(path);
+        const comp = gridState.components.find(c => `src/components/${c.fileName || toPascalCase(c.type)}.tsx` === path);
+        if (comp) setSelectedId(comp.id);
+      },
+      onBack: () => onBack?.(),
+    });
+    return () => onSidebarControlsChange?.(null);
+  }, [gridState, selectedComponent, resolution, projectFiles, activeFile, handleAiGenerate, handleQuickAdd, handleUpdatePrompt, handleUpdateTsxCode, handleRemove, handleRegenerate, handleMove, handleCatalogueAdd, onSidebarControlsChange, onBack]);
 
   return (
     <div className="flex h-full overflow-hidden">
-      <CanvasSidebar
-        onAiGenerate={handleAiGenerate}
-        onQuickAdd={handleQuickAdd}
-        projectFiles={projectFiles}
-        components={gridState.components}
-        activeFile={activeFile}
-        onFileSelect={(path) => {
-          setActiveFile(path);
-          const comp = gridState.components.find(c => `src/components/${c.fileName || toPascalCase(c.type)}.tsx` === path);
-          if (comp) setSelectedId(comp.id);
-        }}
-        selectedComponent={selectedComponent}
-        resolution={resolution}
-        onUpdatePrompt={handleUpdatePrompt}
-        onUpdateTsxCode={handleUpdateTsxCode}
-        onRemove={handleRemove}
-        onRegenerate={handleRegenerate}
-        onMove={handleMove}
-        onCatalogueAdd={handleCatalogueAdd}
-      />
 
       <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--bg-100)' }}>
-        {/* Canvas toolbar */}
-        <div
-          className="h-9 flex items-center justify-between px-3.5 flex-shrink-0 border-b"
-          style={{ background: 'var(--bg-0)', borderColor: 'var(--border-200)' }}
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setViewMode('canvas')}
-                className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-                style={{
-                  background: viewMode === 'canvas' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                  color: viewMode === 'canvas' ? 'var(--neon-color)' : 'var(--text-400)',
-                  border: viewMode === 'canvas' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
-                }}
-              >
-                <Code2 size={12} className="inline mr-1" />
-                Canvas
-              </button>
-              <button
-                onClick={() => setViewMode('preview')}
-                className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-                style={{
-                  background: viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                  color: viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-400)',
-                  border: viewMode === 'preview' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
-                }}
-              >
-                <Eye size={12} className="inline mr-1" />
-                Preview
-              </button>
-            </div>
-            <div className="text-[11px] font-mono flex gap-3.5" style={{ color: 'var(--text-400)' }}>
-              {viewMode === 'canvas' ? (
-                <>
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--neon-color)' }} />
-                    Draw to place component
-                  </span>
-                  <span style={{ color: 'var(--neon-color)' }}>
-                    {cursorPos ? `col ${cursorPos.col} / row ${cursorPos.row}` : '—'}
-                  </span>
-                </>
-              ) : (
-                <span>{projectFiles.length} files · {gridState.components.filter(c => c.generated).length} components</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-400)' }}>
-              Template
-            </span>
-            <Select value={gridState.template} onValueChange={(v) => updateTemplate(v as ResolutionTemplate)}>
-              <SelectTrigger
-                className="h-7 text-[11px] font-mono rounded-md w-[160px] cursor-pointer"
-                style={{
-                  background: 'var(--bg-200)',
-                  borderColor: 'var(--border-300)',
-                  color: 'var(--text-100)',
-                }}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent style={{ background: 'var(--bg-100)', borderColor: 'var(--border-300)' }}>
-                {Object.entries(RESOLUTIONS).map(([key, res]) => (
-                  <SelectItem key={key} value={key} className="text-[11px] font-mono cursor-pointer">
-                    <span className="flex items-center gap-1.5">
-                      {key.includes('mobile') ? (
-                        <Smartphone size={12} />
-                      ) : key.includes('tablet') ? (
-                        <Tablet size={12} />
-                      ) : key.includes('macbook') ? (
-                        <Laptop size={12} />
-                      ) : (
-                        <Monitor size={12} />
-                      )}
-                      {res.label} ({res.width}×{res.height})
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Badge
-              variant="outline"
-              className="text-[10px] font-mono"
-              style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
-            >
-              {resolution.cols}-col
-            </Badge>
-          </div>
-        </div>
-
         {/* Main content area */}
         {viewMode === 'canvas' ? (
           <CanvasGrid
@@ -778,23 +731,6 @@ export default defineConfig({
           </div>
         )}
       </div>
-
-      <SkemaAgentSidebar
-        isOpen={showAgentSidebar}
-        onToggle={() => setShowAgentSidebar(!showAgentSidebar)}
-        project={project}
-        activeBoardIdx={0}
-        currentHtml=""
-        modelConfig={modelConfig}
-        onNotification={onNotification}
-        models={chatModels.map(m => ({ id: m.id, name: m.name }))}
-        selectedModelId={selectedModelId}
-        onModelChange={setSelectedModelId}
-        gridState={gridState}
-        onComponentPlaced={handleComponentPlaced}
-        onComponentRemoved={handleComponentRemoved}
-        onComponentUpdated={handleComponentUpdated}
-      />
 
       <CanvasExportModal
         open={showExport}

@@ -1,38 +1,45 @@
 export const SCHEMA_SQL = `
+-- Migration tracking
+CREATE TABLE IF NOT EXISTS _migrations (
+  id          SERIAL PRIMARY KEY,
+  name        VARCHAR(255) NOT NULL UNIQUE,
+  applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Models table
 CREATE TABLE IF NOT EXISTS models (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   description TEXT,
   context_window_size INTEGER,
-  active INTEGER NOT NULL DEFAULT 1,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
   api_key TEXT,
   provider TEXT,
   system_instruction TEXT,
-  is_custom INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  is_custom BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Conversations table
 CREATE TABLE IF NOT EXISTS conversations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   title TEXT,
   model_id INTEGER NOT NULL REFERENCES models(id),
   type TEXT NOT NULL DEFAULT 'chat',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(type);
 
 -- Messages table
 CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   message_order INTEGER NOT NULL,
-  timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   token_count INTEGER,
   prompt_tokens INTEGER,
   candidates_tokens INTEGER,
@@ -53,8 +60,8 @@ CREATE TABLE IF NOT EXISTS skema_projects (
   images_json TEXT,
   theme_json TEXT,
   full_design_spec_json TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- RAG documents table
@@ -63,7 +70,7 @@ CREATE TABLE IF NOT EXISTS rag_documents (
   name TEXT NOT NULL,
   type TEXT NOT NULL,
   chunk_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- RAG chunks table
@@ -89,9 +96,9 @@ CREATE TABLE IF NOT EXISTS skema_components (
   content TEXT NOT NULL,
   spec_snippet TEXT,
   thumbnail TEXT,
-  is_global INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  is_global BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS skema_component_embeddings (
@@ -101,6 +108,19 @@ CREATE TABLE IF NOT EXISTS skema_component_embeddings (
   embedding TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sce_component ON skema_component_embeddings(component_id);
+
+-- Library folders (must come before library_components due to FK)
+CREATE TABLE IF NOT EXISTS library_folders (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT NOT NULL DEFAULT '#6366f1',
+  icon TEXT NOT NULL DEFAULT 'folder',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  agent_accessible BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- General-purpose component library
 CREATE TABLE IF NOT EXISTS library_components (
@@ -113,11 +133,13 @@ CREATE TABLE IF NOT EXISTS library_components (
   content TEXT NOT NULL,
   metadata TEXT,
   thumbnail TEXT,
-  is_global INTEGER NOT NULL DEFAULT 1,
-  agent_accessible INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  is_global BOOLEAN NOT NULL DEFAULT TRUE,
+  agent_accessible BOOLEAN NOT NULL DEFAULT TRUE,
+  folder_id VARCHAR(50) REFERENCES library_folders(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_lc_folder ON library_components(folder_id);
 
 CREATE TABLE IF NOT EXISTS library_embeddings (
   id TEXT PRIMARY KEY,
@@ -135,9 +157,9 @@ CREATE TABLE IF NOT EXISTS library_component_files (
   content_type TEXT NOT NULL,
   content TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
-  is_entry INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  is_entry BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_lcf_component ON library_component_files(component_id);
 
@@ -147,8 +169,8 @@ CREATE TABLE IF NOT EXISTS library_agent_sessions (
   component_id TEXT NOT NULL REFERENCES library_components(id) ON DELETE CASCADE,
   title TEXT,
   messages_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_las_component ON library_agent_sessions(component_id);
 
@@ -159,8 +181,8 @@ CREATE TABLE IF NOT EXISTS skema_agent_sessions (
   board_idx INTEGER NOT NULL DEFAULT 0,
   title TEXT,
   messages_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sas_project ON skema_agent_sessions(project_id);
 
@@ -171,25 +193,13 @@ CREATE TABLE IF NOT EXISTS python_projects (
   description TEXT,
   files_json TEXT NOT NULL DEFAULT '[]',
   settings_json TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Library folders (grouping for components)
-CREATE TABLE IF NOT EXISTS library_folders (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  color TEXT NOT NULL DEFAULT '#6366f1',
-  icon TEXT NOT NULL DEFAULT 'folder',
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  agent_accessible INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `;
 
 export const SEED_SQL = `
-INSERT OR IGNORE INTO models (name, description, context_window_size, active)
-VALUES ('gemini-2.5-flash-preview-09-2025', 'Google''s fast and versatile model.', 1000000, 1);
+INSERT INTO models (name, description, context_window_size, active)
+VALUES ('gemini-2.5-flash-preview-09-2025', 'Google''s fast and versatile model.', 1000000, TRUE)
+ON CONFLICT (name) DO NOTHING;
 `;

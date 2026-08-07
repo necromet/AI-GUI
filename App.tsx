@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X } from 'lucide-react';
+import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Splitter } from '@ark-ui/react/splitter';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
@@ -25,8 +26,10 @@ import AgentChatPanel from './components/AgentChatPanel';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
+import SkemaAgentSidebar from './components/skema/SkemaAgentSidebar';
 import { SkemaControls } from './components/SkemaEditor';
-import type { CanvasControls } from './components/canvas';
+import type { CanvasControls, CanvasSidebarControls } from './components/canvas';
+import { RESOLUTIONS } from './components/canvas/constants';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -225,16 +228,16 @@ const App: React.FC = () => {
     return localStorage.getItem('edward:labs_fontFamily') || 'default';
   });
   const [neonColor, setNeonColor] = useState<string>(() => {
-    return localStorage.getItem('neonColor') || 'red';
+    return localStorage.getItem('edward:labs_neonColor') || 'red';
   });
   const [neonPreset, setNeonPreset] = useState<string>(() => {
-    return localStorage.getItem('neonPreset') || 'cyber';
+    return localStorage.getItem('edward:labs_neonPreset') || 'cyber';
   });
   const [themePreset, setThemePreset] = useState<string>(() => {
     return localStorage.getItem('edward:labs_themePreset') || 'default';
   });
   const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
-    const stored = localStorage.getItem('maxOutputTokens');
+    const stored = localStorage.getItem('edward:labs_maxOutputTokens');
     if (stored) {
       const val = parseInt(stored, 10);
       return isNaN(val) || val <= 0 ? undefined : val;
@@ -254,6 +257,7 @@ const App: React.FC = () => {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [skemaActiveProject, setSkemaActiveProject] = useState<SkemaProject | null>(null);
   const [skemaControls, setSkemaControls] = useState<SkemaControls | null>(null);
+  const [canvasSidebarControls, setCanvasSidebarControls] = useState<CanvasSidebarControls | null>(null);
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
     try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
@@ -335,8 +339,8 @@ const App: React.FC = () => {
       root.style.setProperty('--neon-accent', variant.tailwind);
     }
 
-    localStorage.setItem('neonPreset', neonPreset);
-    localStorage.setItem('neonColor', neonColor);
+    localStorage.setItem('edward:labs_neonPreset', neonPreset);
+    localStorage.setItem('edward:labs_neonColor', neonColor);
   }, [neonColor, neonPreset, theme]);
 
   useEffect(() => {
@@ -375,9 +379,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (maxOutputTokens) {
-      localStorage.setItem('maxOutputTokens', maxOutputTokens.toString());
+      localStorage.setItem('edward:labs_maxOutputTokens', maxOutputTokens.toString());
     } else {
-      localStorage.removeItem('maxOutputTokens');
+      localStorage.removeItem('edward:labs_maxOutputTokens');
     }
   }, [maxOutputTokens]);
 
@@ -1051,6 +1055,7 @@ const App: React.FC = () => {
         onSidebarPanelChange={setSidebarPanel}
         availableModels={models}
         libraryControls={libraryControls}
+        canvasControls={canvasSidebarControls}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -1105,32 +1110,117 @@ const App: React.FC = () => {
           )}
           {location.pathname.startsWith('/experiments/skema') && skemaControls ? (
             <>
+              {/* Left: project info */}
               <div className="flex items-center gap-2 min-w-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => { setSkemaActiveProject(null); navigate('/experiments/skema'); }}
-                  className="text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
+                <Layers size={16} className="flex-shrink-0" style={{ color: 'var(--neon-color)' }} />
+                <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{skemaControls.projectTitle}</span>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] flex-shrink-0"
+                  style={{
+                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                    color: 'var(--neon-color)',
+                    borderColor: 'rgba(var(--neon-rgb), 0.2)',
+                  }}
                 >
-                  <ArrowLeft size={18} />
-                </Button>
-                <div className="flex items-center gap-2 min-w-0">
-                  <Layers size={16} className="flex-shrink-0" style={{ color: 'var(--neon-color)' }} />
-                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>{skemaControls.projectTitle}</span>
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] flex-shrink-0"
-                    style={{
-                      backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                      color: 'var(--neon-color)',
-                      borderColor: 'rgba(var(--neon-rgb), 0.2)',
-                    }}
-                  >
-                    {skemaControls.layout || '16:9'}
-                  </Badge>
-                </div>
+                  {skemaControls.layout || '16:9'}
+                </Badge>
               </div>
+
+              {/* Center: Canvas/Preview toggle + status */}
+              {'viewMode' in skemaControls && (
+                <div className="flex items-center gap-3 ml-4">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => (skemaControls as CanvasControls).onViewModeChange('canvas')}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      style={{
+                        background: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                        color: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'var(--neon-color)' : 'var(--text-400)',
+                        border: (skemaControls as CanvasControls).viewMode === 'canvas' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
+                      }}
+                    >
+                      <Code2 size={12} className="inline mr-1" />
+                      Canvas
+                    </button>
+                    <button
+                      onClick={() => (skemaControls as CanvasControls).onViewModeChange('preview')}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      style={{
+                        background: (skemaControls as CanvasControls).viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                        color: (skemaControls as CanvasControls).viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-400)',
+                        border: (skemaControls as CanvasControls).viewMode === 'preview' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
+                      }}
+                    >
+                      <Eye size={12} className="inline mr-1" />
+                      Preview
+                    </button>
+                  </div>
+                  <div className="text-[11px] font-mono flex gap-3.5" style={{ color: 'var(--text-400)' }}>
+                    {(skemaControls as CanvasControls).viewMode === 'canvas' ? (
+                      <>
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--neon-color)' }} />
+                          Draw to place component
+                        </span>
+                        <span style={{ color: 'var(--neon-color)' }}>
+                          {(skemaControls as CanvasControls).cursorPos
+                            ? `col ${(skemaControls as CanvasControls).cursorPos!.col} / row ${(skemaControls as CanvasControls).cursorPos!.row}`
+                            : '—'}
+                        </span>
+                      </>
+                    ) : (
+                      <span>{(skemaControls as CanvasControls).fileCount} files · {(skemaControls as CanvasControls).componentCount} components</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Right: template + actions */}
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                {'template' in skemaControls && (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-400)' }}>
+                      Template
+                    </span>
+                    <Select
+                      value={(skemaControls as CanvasControls).template}
+                      onValueChange={(v) => (skemaControls as CanvasControls).onTemplateChange(v)}
+                    >
+                      <SelectTrigger
+                        className="h-7 text-[11px] font-mono rounded-md w-[160px] cursor-pointer"
+                        style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent style={{ background: 'var(--bg-100)', borderColor: 'var(--border-300)' }}>
+                        {Object.entries(RESOLUTIONS).map(([key, res]) => (
+                          <SelectItem key={key} value={key} className="text-[11px] font-mono cursor-pointer">
+                            <span className="flex items-center gap-1.5">
+                              {key.includes('mobile') ? (
+                                <Smartphone size={12} />
+                              ) : key.includes('tablet') ? (
+                                <Tablet size={12} />
+                              ) : key.includes('macbook') ? (
+                                <Laptop size={12} />
+                              ) : (
+                                <Monitor size={12} />
+                              )}
+                              {res.label} ({res.width}×{res.height})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-mono"
+                      style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
+                    >
+                      {(skemaControls as CanvasControls).cols}-col
+                    </Badge>
+                  </>
+                )}
                 {'onToggleProperties' in skemaControls && (
                   <Button
                     variant="ghost"
@@ -1140,6 +1230,17 @@ const App: React.FC = () => {
                     title="Toggle properties panel"
                   >
                     <PanelRight size={16} style={{ opacity: (skemaControls as CanvasControls).showProperties ? 1 : 0.5 }} />
+                  </Button>
+                )}
+                {'onToggleAgent' in skemaControls && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(skemaControls as CanvasControls).onToggleAgent}
+                    className="h-8 w-8 text-[var(--text-500)] hover:text-[var(--text-100)]"
+                    title={(skemaControls as CanvasControls).isAgentOpen ? 'Hide Agent' : 'Show Agent'}
+                  >
+                    {(skemaControls as CanvasControls).isAgentOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
                   </Button>
                 )}
                 {!skemaControls.isGenerating && skemaControls.hasLastPrompt && (
@@ -1372,12 +1473,12 @@ const App: React.FC = () => {
                           setSkemaActiveProject(project);
                           if (project) {
                             navigate(`/experiments/skema/${project.id}`, { replace: true });
-                            setIsSidebarOpen(false);
                           } else {
                             navigate('/experiments/skema', { replace: true });
                           }
                         }}
                         onControlsChange={setSkemaControls}
+                        onSidebarControlsChange={setCanvasSidebarControls}
                       />
                     </div>
                   </RequireAuth>
@@ -1396,13 +1497,14 @@ const App: React.FC = () => {
                           setSkemaActiveProject(project);
                           if (project) {
                             navigate(`/experiments/skema/${project.id}`, { replace: true });
-                            setIsSidebarOpen(false);
                           } else {
                             navigate('/experiments/skema', { replace: true });
                             setSkemaControls(null);
+                            setCanvasSidebarControls(null);
                           }
                         }}
                         onControlsChange={setSkemaControls}
+                        onSidebarControlsChange={setCanvasSidebarControls}
                       />
                     </div>
                   </RequireAuth>
@@ -1534,6 +1636,23 @@ const App: React.FC = () => {
           onRedoAgent={libraryControls.onRedoAgent}
           canUndoAgent={libraryControls.canUndoAgent}
           canRedoAgent={libraryControls.canRedoAgent}
+        />
+      )}
+
+      {skemaControls && 'onComponentPlaced' in skemaControls && skemaActiveProject && (
+        <SkemaAgentSidebar
+          isOpen={(skemaControls as CanvasControls).isAgentOpen}
+          onToggle={(skemaControls as CanvasControls).onToggleAgent}
+          project={skemaActiveProject}
+          activeBoardIdx={0}
+          currentHtml=""
+          modelConfig={selectedModelConfig}
+          onNotification={handleNotification}
+          models={models.filter(m => (m.modelType || 'chat') === 'chat').map(m => ({ id: m.id, name: m.name }))}
+          gridState={(skemaControls as CanvasControls).agentGridState}
+          onComponentPlaced={(skemaControls as CanvasControls).onComponentPlaced}
+          onComponentRemoved={(skemaControls as CanvasControls).onComponentRemoved}
+          onComponentUpdated={(skemaControls as CanvasControls).onComponentUpdated}
         />
       )}
     </div>

@@ -1,14 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, Sparkles, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile } from '../types';
 import type { LibraryControls } from './LibraryPanel';
+import type { CanvasSidebarControls } from './canvas';
+import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
+import { SECTION_TYPES, COLORS } from './canvas/constants';
+import { CanvasCatalogue } from './canvas/CanvasCatalogue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import SidebarTokenStatsPanel from './SidebarTokenStatsPanel';
 import { SETTINGS_TABS, type SettingsTab } from './SettingsPage';
 
@@ -29,6 +34,7 @@ interface SidebarProps {
   onSidebarPanelChange: (panel: SidebarPanel) => void;
   availableModels: ModelConfig[];
   libraryControls?: LibraryControls | null;
+  canvasControls?: CanvasSidebarControls | null;
 }
 
 function getFileIcon(filename: string) {
@@ -38,6 +44,371 @@ function getFileIcon(filename: string) {
   if (filename.endsWith('.json')) return <FileJson size={12} />;
   return <FileText size={12} />;
 }
+
+function FileTree({ files, activeFile, onFileSelect }: { files: ProjectFile[]; activeFile?: string | null; onFileSelect?: (path: string) => void }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(['src', 'src/components']));
+  const tree: Record<string, ProjectFile[]> = {};
+  for (const f of files) {
+    const parts = f.path.split('/');
+    const dir = parts.slice(0, -1).join('/') || '.';
+    if (!tree[dir]) tree[dir] = [];
+    tree[dir].push(f);
+  }
+  const dirs = Object.keys(tree).sort();
+  return (
+    <div className="text-[11px] font-mono">
+      {dirs.map(dir => {
+        const isRoot = dir === '.';
+        const dirName = isRoot ? '' : dir.split('/').pop() || dir;
+        const isExpanded = expanded.has(dir);
+        return (
+          <div key={dir}>
+            {!isRoot && (
+              <button
+                onClick={() => setExpanded(prev => { const next = new Set(prev); if (next.has(dir)) next.delete(dir); else next.add(dir); return next; })}
+                className="flex items-center gap-1 w-full px-2 py-1 hover:bg-[var(--bg-200)] rounded transition-colors cursor-pointer"
+                style={{ color: 'var(--text-400)' }}
+              >
+                {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                <span className="text-[10px]">{dirName}/</span>
+              </button>
+            )}
+            {(isRoot || isExpanded) && tree[dir].map(file => {
+              const fileName = file.path.split('/').pop() || file.path;
+              const isActive = activeFile === file.path;
+              return (
+                <button
+                  key={file.path}
+                  onClick={() => onFileSelect?.(file.path)}
+                  className="flex items-center gap-1.5 w-full py-[5px] px-2 rounded transition-colors cursor-pointer"
+                  style={{
+                    paddingLeft: isRoot ? '8px' : '24px',
+                    background: isActive ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent',
+                    color: isActive ? 'var(--neon-color)' : 'var(--text-300)',
+                    border: isActive ? '1px solid rgba(var(--neon-rgb), 0.2)' : '1px solid transparent',
+                  }}
+                >
+                  {getFileIcon(file.language)}
+                  <span className="truncate">{fileName}</span>
+                  {file.isEntry && (
+                    <span className="text-[8px] ml-auto px-1 py-0.5 rounded" style={{ background: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}>
+                      entry
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const PropertyField: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-400)' }}>
+      {label}
+    </span>
+    {children}
+  </div>
+);
+
+const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ controls }) => {
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [tab, setTab] = useState<'components' | 'catalogue' | 'properties'>('components');
+  const [localPrompt, setLocalPrompt] = useState('');
+  const [localTsx, setLocalTsx] = useState('');
+  const [showCode, setShowCode] = useState(false);
+  const lastCompIdRef = useRef<string | null>(null);
+
+  const component = controls.selectedComponent;
+
+  if (component && component.id !== lastCompIdRef.current) {
+    lastCompIdRef.current = component.id;
+    setLocalPrompt(component.prompt);
+    setLocalTsx(component.tsxCode || '');
+    setShowCode(false);
+  }
+
+  const handleAiGenerate = () => {
+    controls.onAiGenerate(aiPrompt);
+    setAiPrompt('');
+  };
+
+  const handlePromptBlur = useCallback(() => {
+    if (component && localPrompt !== component.prompt) {
+      controls.onUpdatePrompt(component.id, localPrompt);
+    }
+  }, [component, localPrompt, controls.onUpdatePrompt]);
+
+  const tabs = [
+    { key: 'components' as const, label: 'Components' },
+    { key: 'catalogue' as const, label: 'Catalogue' },
+    { key: 'properties' as const, label: 'Properties' },
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex border-b flex-shrink-0" style={{ borderColor: 'var(--border-200)' }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+            style={{
+              color: tab === t.key ? 'var(--neon-color)' : 'var(--text-400)',
+              borderBottom: tab === t.key ? '2px solid var(--neon-color)' : '2px solid transparent',
+              background: tab === t.key ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {tab === 'components' && (
+          <>
+            <div className="p-3.5">
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
+                AI Describe
+              </div>
+              <Textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder={'Describe the full page...\ne.g. SaaS landing with hero, features, pricing'}
+                className="w-full resize-none h-16 text-xs rounded-lg"
+                style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); } }}
+              />
+              <Button
+                onClick={handleAiGenerate}
+                className="w-full mt-1.5 justify-center py-2 rounded-lg gap-1.5 cursor-pointer"
+                style={{ background: 'var(--neon-color)', color: '#000' }}
+              >
+                <Sparkles size={14} />
+                Generate TSX Codebase
+              </Button>
+            </div>
+
+            <div className="h-px mx-3.5" style={{ background: 'var(--border-200)' }} />
+
+            <div className="p-3.5">
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
+                Quick Add (Full Width)
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {(Object.entries(SECTION_TYPES) as [SectionType, typeof SECTION_TYPES[SectionType]][]).map(
+                  ([key, val]) => (
+                    <button
+                      key={key}
+                      onClick={() => controls.onQuickAdd(key)}
+                      className="flex items-center gap-2.5 py-[7px] px-2.5 bg-transparent border border-transparent rounded-md cursor-pointer transition-colors hover:bg-[var(--bg-200)] hover:border-[var(--border-300)] w-full text-left"
+                    >
+                      <span className="w-[7px] h-[7px] rounded-full flex-shrink-0" style={{ background: val.color }} />
+                      <span className="text-[12.5px] font-medium" style={{ color: 'var(--text-100)' }}>{val.label}</span>
+                      <span className="text-[10px] ml-auto font-mono" style={{ color: 'var(--text-400)' }}>{val.rows}r</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {controls.projectFiles.length > 0 && (
+              <>
+                <div className="h-px mx-3.5" style={{ background: 'var(--border-200)' }} />
+                <div className="p-3.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
+                    Project Files ({controls.projectFiles.length})
+                  </div>
+                  <FileTree files={controls.projectFiles} activeFile={controls.activeFile} onFileSelect={controls.onFileSelect} />
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'catalogue' && (
+          <CanvasCatalogue onAddToCanvas={(comp) => controls.onCatalogueAdd(comp)} />
+        )}
+
+        {tab === 'properties' && (
+          <>
+            {!component ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-5 text-center">
+                <div
+                  className="w-9 h-9 border-[1.5px] border-dashed rounded-[9px] flex items-center justify-center mb-3 text-[15px]"
+                  style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
+                >
+                  ✦
+                </div>
+                <div className="text-[11.5px] leading-relaxed" style={{ color: 'var(--text-400)' }}>
+                  Draw on the grid to create components, or click one to edit
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 flex flex-col gap-3.5">
+                <PropertyField label="Type">
+                  <span className="flex items-center gap-1.5 text-[12.5px] font-medium" style={{ color: 'var(--text-100)' }}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: COLORS[component.type] }} />
+                    {SECTION_TYPES[component.type].label}
+                  </span>
+                </PropertyField>
+
+                <PropertyField label="Grid Position">
+                  <span className="font-mono text-[11.5px]" style={{ color: 'var(--text-100)' }}>
+                    cols {component.cs}–{component.ce} · rows {component.rs}–{component.re}
+                  </span>
+                </PropertyField>
+
+                <PropertyField label="Size">
+                  <span className="font-mono text-[11.5px]" style={{ color: 'var(--text-100)' }}>
+                    {component.ce - component.cs + 1} cols × {component.re - component.rs + 1} rows
+                    {controls.resolution && ` (${(component.ce - component.cs + 1) * controls.resolution.cellW}px × ${(component.re - component.rs + 1) * controls.resolution.cellH}px)`}
+                  </span>
+                </PropertyField>
+
+                {controls.resolution && (
+                  <PropertyField label="Grid System">
+                    <span className="font-mono text-[11.5px]" style={{ color: 'var(--text-100)' }}>
+                      {controls.resolution.cols}-col · {controls.resolution.cellW}px cells
+                    </span>
+                  </PropertyField>
+                )}
+
+                <PropertyField label="Prompt">
+                  <Textarea
+                    value={localPrompt}
+                    onChange={(e) => setLocalPrompt(e.target.value)}
+                    onBlur={handlePromptBlur}
+                    className="w-full resize-none h-12 text-[11px] rounded-md"
+                    style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                  />
+                </PropertyField>
+
+                <PropertyField label="Status">
+                  <span
+                    className="text-[12.5px] font-medium"
+                    style={{
+                      color: component.generated ? '#34d399' : component.generating ? 'var(--neon-color)' : 'var(--text-400)',
+                    }}
+                  >
+                    {component.generated ? '✓ Generated' : component.generating ? '⟳ Generating...' : '○ Pending'}
+                  </span>
+                </PropertyField>
+
+                <div className="h-px" style={{ background: 'var(--border-200)' }} />
+
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-400)' }}>
+                    TSX Source
+                  </div>
+                  <button
+                    onClick={() => setShowCode(prev => !prev)}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    style={{
+                      background: showCode ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
+                      color: showCode ? 'var(--neon-color)' : 'var(--text-400)',
+                      border: '1px solid var(--border-300)',
+                    }}
+                  >
+                    {showCode ? <Eye size={10} className="inline mr-1" /> : <FileCode2 size={10} className="inline mr-1" />}
+                    {showCode ? 'Hide' : 'Edit'}
+                  </button>
+                </div>
+
+                {showCode && component.tsxCode && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-0)', color: 'var(--text-500)' }}>
+                      src/components/{component.fileName || component.type}.tsx
+                    </div>
+                    <Textarea
+                      value={localTsx}
+                      onChange={(e) => setLocalTsx(e.target.value)}
+                      onBlur={() => {
+                        if (component && localTsx !== component.tsxCode) {
+                          controls.onUpdateTsxCode(component.id, localTsx);
+                        }
+                      }}
+                      className="w-full resize-none font-mono text-[10px] leading-relaxed rounded-md"
+                      style={{ background: 'var(--bg-0)', borderColor: 'var(--border-300)', color: 'var(--text-100)', minHeight: '200px', tabSize: 2 }}
+                      spellCheck={false}
+                    />
+                  </div>
+                )}
+
+                <div className="h-px" style={{ background: 'var(--border-200)' }} />
+
+                <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-400)' }}>
+                  Nudge
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => controls.onMove(component.id, 0, -1)}
+                    className="flex-1 justify-center text-[11px] cursor-pointer gap-1"
+                    style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-200)' }}
+                  >
+                    <ArrowUp size={12} /> Up
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => controls.onMove(component.id, 0, 1)}
+                    className="flex-1 justify-center text-[11px] cursor-pointer gap-1"
+                    style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-200)' }}
+                  >
+                    <ArrowDown size={12} /> Down
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => controls.onMove(component.id, -1, 0)}
+                    className="flex-1 justify-center text-[11px] cursor-pointer gap-1"
+                    style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-200)' }}
+                  >
+                    ←
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => controls.onMove(component.id, 1, 0)}
+                    className="flex-1 justify-center text-[11px] cursor-pointer gap-1"
+                    style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-200)' }}
+                  >
+                    →
+                  </Button>
+                </div>
+
+                <div className="h-px" style={{ background: 'var(--border-200)' }} />
+
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    onClick={() => controls.onRegenerate(component.id)}
+                    className="w-full justify-center py-1.75 gap-1.5 cursor-pointer"
+                    style={{ background: 'var(--neon-color)', color: '#000' }}
+                  >
+                    <RefreshCw size={14} /> Regenerate
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => controls.onRemove(component.id)}
+                    className="w-full justify-center py-1.75 cursor-pointer"
+                    style={{ borderColor: 'var(--border-300)', color: '#f87171' }}
+                  >
+                    <Trash2 size={14} /> Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
@@ -54,6 +425,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSidebarPanelChange,
   availableModels,
   libraryControls,
+  canvasControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -185,6 +557,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Header: Logo + Mode Badge + Close */}
         <div className="relative flex w-full items-center p-2 pt-2">
           <div className="flex items-center gap-2 pl-2 h-8">
+            {canvasControls && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={canvasControls.onBack}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent h-10 w-10 text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
+              >
+                <ArrowLeft size={18} />
+              </Button>
+            )}
             <div className="flex flex-col leading-tight">
               <span className="font-semibold text-sm text-[var(--text-100)]">edward:labs</span>
               <span className="text-xs tabular-nums text-[var(--text-500)]">{gmt7Time}</span>
@@ -255,6 +637,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               })}
             </nav>
           </div>
+        ) : currentMode === 'experiments' && activeView === 'skema' && canvasControls ? (
+          /* Canvas mode: Components/Catalogue/Properties tabs */
+          <CanvasSidebarContent controls={canvasControls} />
         ) : currentMode === 'experiments' ? (
           /* Experiments mode: tool navigation + conversation history */
           <div className="flex-1 flex flex-col overflow-hidden">
