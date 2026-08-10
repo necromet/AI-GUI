@@ -94,7 +94,7 @@ export function useAgentSessions({
   }, [activeSessionId, onResetAgentState, setMessages]);
 
   const handleNewSession = useCallback(async () => {
-    if (!selectedComponent || sessions.length >= 3) return;
+    if (!selectedComponent) return;
     try {
       const resp = await fetch('/api/library/agent/sessions', {
         method: 'POST',

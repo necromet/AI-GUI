@@ -217,11 +217,9 @@ function Header({ isStreaming, onToggle }: {
   return (
     <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-300)' }}>
       <Sparkles size={18} style={{ color: 'var(--neon-color)', flexShrink: 0 }} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>Canvas Agent</p>
-        <p className="truncate text-xs" style={{ color: 'var(--text-500)' }}>{isStreaming ? 'Working...' : 'Ready to assist'}</p>
-      </div>
-      <button onClick={onToggle} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-80" style={{ color: 'var(--text-500)' }} title="Close panel">
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isStreaming ? 'animate-pulse' : ''}`} style={{ backgroundColor: isStreaming ? 'var(--neon-color)' : '#22c55e' }} />
+      <div className="flex-1" />
+      <button onClick={onToggle} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-80 cursor-pointer" style={{ color: 'var(--text-500)' }} title="Close panel">
         <X size={14} />
       </button>
     </div>
@@ -239,23 +237,23 @@ function SessionTabs({ sessions, activeSessionId, onSwitchSession, onNewSession,
 
   return (
     <div className="flex-shrink-0 px-3 pt-2 pb-0" style={{ borderBottom: '1px solid var(--border-300)' }}>
-      <div className="flex items-end gap-0.5 overflow-x-auto">
-        {sessions.slice(0, 3).map((session) => {
+      <div className="flex flex-col gap-0.5 overflow-y-auto max-h-32">
+        {sessions.map((session) => {
           const isActive = activeSessionId === session.id;
           return (
-            <div key={session.id} className="flex items-center gap-0.5 group/session flex-shrink-0">
+            <div key={session.id} className="flex items-center gap-1.5 group/session">
               <button
                 onClick={() => onSwitchSession(session.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] transition-colors truncate max-w-[110px] rounded-t-lg"
-                style={{ backgroundColor: isActive ? 'var(--bg-200)' : 'transparent', color: isActive ? 'var(--neon-color)' : 'var(--text-500)', borderBottom: isActive ? '2px solid var(--neon-color)' : '2px solid transparent' }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] transition-colors truncate flex-1 rounded-md"
+                style={{ backgroundColor: isActive ? 'var(--bg-200)' : 'transparent', color: isActive ? 'var(--neon-color)' : 'var(--text-500)' }}
                 title={session.title || 'New chat'}
               >
                 <MessageSquare size={10} style={{ flexShrink: 0, opacity: 0.6 }} />
-                <span className="truncate">{(() => { const t = session.title || 'New chat'; const w = t.split(/\s+/); return w.length > 3 ? w.slice(0, 3).join(' ') + '...' : t; })()}</span>
+                <span className="truncate">{session.title || 'New chat'}</span>
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="w-5 h-5 rounded flex items-center justify-center transition-opacity opacity-0 group-hover/session:opacity-100 flex-shrink-0" style={{ color: 'var(--text-500)', marginBottom: 2 }}>
+                  <button className={`w-5 h-5 rounded flex items-center justify-center transition-opacity flex-shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/session:opacity-100'}`} style={{ color: 'var(--text-500)' }}>
                     <MoreVertical size={10} />
                   </button>
                 </DropdownMenuTrigger>
@@ -268,11 +266,10 @@ function SessionTabs({ sessions, activeSessionId, onSwitchSession, onNewSession,
             </div>
           );
         })}
-        {sessions.length < 3 && (
-          <button onClick={onNewSession} className="flex items-center justify-center w-7 h-7 rounded-t-lg transition-colors flex-shrink-0 hover:opacity-80" style={{ color: 'var(--text-500)', marginBottom: 2 }} title="New chat">
-            <Plus size={12} />
-          </button>
-        )}
+        <button onClick={onNewSession} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors hover:opacity-80 text-[11px]" style={{ color: 'var(--text-500)' }} title="New chat">
+          <Plus size={10} />
+          <span>New session</span>
+        </button>
       </div>
     </div>
   );

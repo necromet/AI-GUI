@@ -51,8 +51,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     (e: React.MouseEvent): GridPos => {
       if (!canvasRef.current) return { col: 1, row: 1 };
       const r = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top - 26;
+      const bw = canvasRef.current.clientLeft;
+      const x = e.clientX - r.left - bw;
+      const y = e.clientY - r.top - bw - 26;
       return {
         col: Math.max(1, Math.min(cols, Math.floor(x / cellW) + 1)),
         row: Math.max(1, Math.min(ROWS, Math.floor(y / cellH) + 1)),
@@ -92,8 +93,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       setDEnd(p);
       setHoverPos(null);
       setPromptBar(null);
+      onSelect(null);
     },
-    [gridPos]
+    [gridPos, onSelect]
   );
 
   const handleMouseMove = useCallback(
@@ -315,6 +317,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  cancelSelection();
                   onSelect(comp.id);
                 }}
                 onMouseEnter={(e) => {

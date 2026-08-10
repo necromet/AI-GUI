@@ -218,13 +218,13 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     (newState: GridState) => {
       setGridState(newState);
       const updatedBoard: SkemaBoard = {
-        ...board,
+        ...boardRef.current,
         generatedHtml: serializeGridState(newState),
         updatedAt: Date.now(),
       };
-      onSave({ ...project, boards: [updatedBoard], updatedAt: Date.now() });
+      onSave({ ...projectRef.current, boards: [updatedBoard], updatedAt: Date.now() });
     },
-    [board, project, onSave]
+    [onSave]
   );
 
   const handleComponentPlaced = useCallback((component: GridComponent) => {
@@ -348,7 +348,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         toast.success(`${uniqueName}.tsx generated`);
       }, 900 + Math.random() * 600);
     },
-    [gridState, saveState, board, project, onSave]
+    [gridState, saveState]
   );
 
   const handleQuickAdd = useCallback(
@@ -432,7 +432,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
 
       toast.success('Generating TSX codebase...');
     },
-    [gridState, saveState, resolution.cols, board, project, onSave]
+    [gridState, saveState, resolution.cols]
   );
 
   const handleMove = useCallback(
@@ -502,7 +502,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         toast.success(`${name}.tsx regenerated`);
       }, 1200);
     },
-    [gridState, saveState, board, project, onSave]
+    [gridState, saveState]
   );
 
   const handleUpdateTsxCode = useCallback(

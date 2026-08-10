@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, Sparkles, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
 import { SECTION_TYPES, COLORS } from './canvas/constants';
-import { CanvasCatalogue } from './canvas/CanvasCatalogue';
+import { CatalogueModal } from './canvas/CatalogueModal';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -115,8 +115,8 @@ const PropertyField: React.FC<{ label: string; children: React.ReactNode }> = ({
 );
 
 const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ controls }) => {
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [tab, setTab] = useState<'components' | 'catalogue' | 'properties'>('components');
+  const [tab, setTab] = useState<'components' | 'properties'>('components');
+  const [showCatalogue, setShowCatalogue] = useState(false);
   const [localPrompt, setLocalPrompt] = useState('');
   const [localTsx, setLocalTsx] = useState('');
   const [showCode, setShowCode] = useState(false);
@@ -131,11 +131,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
     setShowCode(false);
   }
 
-  const handleAiGenerate = () => {
-    controls.onAiGenerate(aiPrompt);
-    setAiPrompt('');
-  };
-
   const handlePromptBlur = useCallback(() => {
     if (component && localPrompt !== component.prompt) {
       controls.onUpdatePrompt(component.id, localPrompt);
@@ -144,7 +139,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
 
   const tabs = [
     { key: 'components' as const, label: 'Components' },
-    { key: 'catalogue' as const, label: 'Catalogue' },
     { key: 'properties' as const, label: 'Properties' },
   ];
 
@@ -170,29 +164,18 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
       <div className="flex-1 overflow-y-auto">
         {tab === 'components' && (
           <>
-            <div className="p-3.5">
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
-                AI Describe
-              </div>
-              <Textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder={'Describe the full page...\ne.g. SaaS landing with hero, features, pricing'}
-                className="w-full resize-none h-16 text-xs rounded-lg"
-                style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); } }}
-              />
-              <Button
-                onClick={handleAiGenerate}
-                className="w-full mt-1.5 justify-center py-2 rounded-lg gap-1.5 cursor-pointer"
-                style={{ background: 'var(--neon-color)', color: '#000' }}
+            <div className="p-3.5 pb-0">
+              <button
+                onClick={() => setShowCatalogue(true)}
+                className="w-full flex items-center gap-2 py-2 px-3 rounded-lg transition-colors cursor-pointer"
+                style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-100)' }}
               >
-                <Sparkles size={14} />
-                Generate TSX Codebase
-              </Button>
+                <Package size={14} style={{ color: 'var(--neon-color)' }} />
+                <span className="text-[12px] font-medium">Open Catalogue</span>
+              </button>
             </div>
 
-            <div className="h-px mx-3.5" style={{ background: 'var(--border-200)' }} />
+            <div className="h-px mx-3.5 mt-3" style={{ background: 'var(--border-200)' }} />
 
             <div className="p-3.5">
               <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
@@ -227,10 +210,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
               </>
             )}
           </>
-        )}
-
-        {tab === 'catalogue' && (
-          <CanvasCatalogue onAddToCanvas={(comp) => controls.onCatalogueAdd(comp)} />
         )}
 
         {tab === 'properties' && (
@@ -406,6 +385,12 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
           </>
         )}
       </div>
+
+      <CatalogueModal
+        isOpen={showCatalogue}
+        onClose={() => setShowCatalogue(false)}
+        onAddToCanvas={(comp) => controls.onCatalogueAdd(comp)}
+      />
     </div>
   );
 };

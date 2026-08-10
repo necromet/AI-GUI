@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop } from 'lucide-react';
+import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop, MousePointer2, FileCode, LayoutGrid, Square } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
@@ -274,6 +274,26 @@ const App: React.FC = () => {
   }, []);
   const [skemaResetKey, setSkemaResetKey] = useState(0);
   const [experimentConversationId, setExperimentConversationId] = useState<number | null>(null);
+
+  const handleSkemaProjectChange = useCallback((project: SkemaProject | null) => {
+    setSkemaActiveProject(project);
+    if (project) {
+      navigate(`/experiments/skema/${project.id}`, { replace: true });
+    } else {
+      navigate('/experiments/skema', { replace: true });
+    }
+  }, [navigate]);
+
+  const handleSkemaProjectChangeWithReset = useCallback((project: SkemaProject | null) => {
+    setSkemaActiveProject(project);
+    if (project) {
+      navigate(`/experiments/skema/${project.id}`, { replace: true });
+    } else {
+      navigate('/experiments/skema', { replace: true });
+      setSkemaControls(null);
+      setCanvasSidebarControls(null);
+    }
+  }, [navigate]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1130,38 +1150,37 @@ const App: React.FC = () => {
               {/* Center: Canvas/Preview toggle + status */}
               {'viewMode' in skemaControls && (
                 <div className="flex items-center gap-3 ml-4">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => (skemaControls as CanvasControls).onViewModeChange('canvas')}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      title="Canvas"
+                      className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
                       style={{
                         background: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
                         color: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'var(--neon-color)' : 'var(--text-400)',
                         border: (skemaControls as CanvasControls).viewMode === 'canvas' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
                       }}
                     >
-                      <Code2 size={12} className="inline mr-1" />
-                      Canvas
+                      <Code2 size={14} />
                     </button>
                     <button
                       onClick={() => (skemaControls as CanvasControls).onViewModeChange('preview')}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      title="Preview"
+                      className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
                       style={{
                         background: (skemaControls as CanvasControls).viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
                         color: (skemaControls as CanvasControls).viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-400)',
                         border: (skemaControls as CanvasControls).viewMode === 'preview' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
                       }}
                     >
-                      <Eye size={12} className="inline mr-1" />
-                      Preview
+                      <Eye size={14} />
                     </button>
                   </div>
                   <div className="text-[11px] font-mono flex gap-3.5" style={{ color: 'var(--text-400)' }}>
                     {(skemaControls as CanvasControls).viewMode === 'canvas' ? (
                       <>
-                        <span className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--neon-color)' }} />
-                          Draw to place component
+                        <span className="flex items-center gap-1" title="Draw to place component">
+                          <MousePointer2 size={12} style={{ color: 'var(--neon-color)' }} />
                         </span>
                         <span style={{ color: 'var(--neon-color)' }}>
                           {(skemaControls as CanvasControls).cursorPos
@@ -1170,7 +1189,10 @@ const App: React.FC = () => {
                         </span>
                       </>
                     ) : (
-                      <span>{(skemaControls as CanvasControls).fileCount} files · {(skemaControls as CanvasControls).componentCount} components</span>
+                      <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-1"><FileCode size={12} /> {(skemaControls as CanvasControls).fileCount}</span>
+                        <span className="flex items-center gap-1"><LayoutGrid size={12} /> {(skemaControls as CanvasControls).componentCount}</span>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1180,9 +1202,6 @@ const App: React.FC = () => {
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                 {'template' in skemaControls && (
                   <>
-                    <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-400)' }}>
-                      Template
-                    </span>
                     <Select
                       value={(skemaControls as CanvasControls).template}
                       onValueChange={(v) => (skemaControls as CanvasControls).onTemplateChange(v)}
@@ -1246,23 +1265,23 @@ const App: React.FC = () => {
                 {!skemaControls.isGenerating && skemaControls.hasLastPrompt && (
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={skemaControls.onRegenerate}
-                    className="h-7 gap-1.5 text-xs"
-                    style={{ color: 'var(--text-300)' }}
+                    className="h-7 w-7 text-[var(--text-300)] cursor-pointer"
+                    title="Regenerate"
                   >
-                    <RotateCcw size={12} />
-                    Regenerate
+                    <RotateCcw size={14} />
                   </Button>
                 )}
                 {skemaControls.isGenerating && (
                   <Button
                     variant="destructive"
-                    size="sm"
+                    size="icon"
                     onClick={skemaControls.onStopGeneration}
-                    className="h-7 gap-1.5 text-xs"
+                    className="h-7 w-7 cursor-pointer"
+                    title="Stop generation"
                   >
-                    Stop
+                    <Square size={14} />
                   </Button>
                 )}
               </div>
@@ -1469,14 +1488,7 @@ const App: React.FC = () => {
                         onNotification={(msg, type) => type === 'success' ? toast.success(msg) : toast.error(msg)}
                         modelConfig={selectedModelConfig}
                         models={models}
-                        onProjectChange={(project) => {
-                          setSkemaActiveProject(project);
-                          if (project) {
-                            navigate(`/experiments/skema/${project.id}`, { replace: true });
-                          } else {
-                            navigate('/experiments/skema', { replace: true });
-                          }
-                        }}
+                        onProjectChange={handleSkemaProjectChange}
                         onControlsChange={setSkemaControls}
                         onSidebarControlsChange={setCanvasSidebarControls}
                       />
@@ -1493,16 +1505,7 @@ const App: React.FC = () => {
                         modelConfig={selectedModelConfig}
                         models={models}
                         initialProjectId={skemaProjectId}
-                        onProjectChange={(project) => {
-                          setSkemaActiveProject(project);
-                          if (project) {
-                            navigate(`/experiments/skema/${project.id}`, { replace: true });
-                          } else {
-                            navigate('/experiments/skema', { replace: true });
-                            setSkemaControls(null);
-                            setCanvasSidebarControls(null);
-                          }
-                        }}
+                        onProjectChange={handleSkemaProjectChangeWithReset}
                         onControlsChange={setSkemaControls}
                         onSidebarControlsChange={setCanvasSidebarControls}
                       />

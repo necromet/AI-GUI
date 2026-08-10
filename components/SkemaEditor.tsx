@@ -632,7 +632,7 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
               ) : (
                 <div className="w-full h-full relative">
                   <div className="flex items-center justify-between px-4 py-2 rounded-t-xl" style={{ backgroundColor: '#1c1b1b', border: '1px solid #4d4354', borderBottom: 'none' }}>
-                    <span className="text-xs font-medium" style={{ color: '#cfc2d6' }}>HTML Source</span>
+                    <Code size={12} style={{ color: '#cfc2d6' }} />
                     <div className="flex items-center gap-1">
                       <button onClick={() => editorRef.current?.undo()} className="p-1.5 rounded-lg transition-colors hover:opacity-80" style={{ color: '#cfc2d6' }} title="Undo">
                         <Undo2 size={12} />
@@ -641,8 +641,8 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
                         <Redo2 size={12} />
                       </button>
                       {editedHtml !== sourceOriginalHtml && (
-                        <button onClick={handleCancelEdits} className="flex items-center gap-1 px-2 py-1 ml-1 rounded-lg text-xs font-medium transition-all" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
-                          <X size={10} /> Cancel
+                        <button onClick={handleCancelEdits} title="Discard edits" className="flex items-center justify-center w-6 h-6 ml-1 rounded-lg transition-all cursor-pointer" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                          <X size={10} />
                         </button>
                       )}
                     </div>
@@ -685,7 +685,7 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
                   Create your design
                 </h2>
                 <p className="text-sm" style={{ color: '#7a7a7a' }}>
-                  Describe what you want in the AI Copilot and it will generate it
+                  Describe your design in the AI Copilot
                 </p>
               </div>
             )}

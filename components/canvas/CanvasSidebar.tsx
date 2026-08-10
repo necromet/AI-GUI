@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Sparkles, FileCode2, FileJson, FileText, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, Trash2, Eye } from 'lucide-react';
+import { FileCode2, FileJson, FileText, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, Trash2, Eye, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { SECTION_TYPES, COLORS } from './constants';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './types';
-import { CanvasCatalogue } from './CanvasCatalogue';
+import { CatalogueModal } from './CatalogueModal';
 
 interface LibraryComponent {
   id: string;
@@ -143,8 +143,8 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
   onMove,
   onCatalogueAdd,
 }) => {
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [tab, setTab] = useState<'components' | 'catalogue' | 'properties'>('components');
+  const [tab, setTab] = useState<'components' | 'properties'>('components');
+  const [showCatalogue, setShowCatalogue] = useState(false);
   const [localPrompt, setLocalPrompt] = useState('');
   const [localTsx, setLocalTsx] = useState('');
   const [showCode, setShowCode] = useState(false);
@@ -159,11 +159,6 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
     setShowCode(false);
   }
 
-  const handleAiGenerate = () => {
-    onAiGenerate(aiPrompt);
-    setAiPrompt('');
-  };
-
   const handlePromptBlur = useCallback(() => {
     if (component && localPrompt !== component.prompt) {
       onUpdatePrompt?.(component.id, localPrompt);
@@ -172,7 +167,6 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
 
   const tabs = [
     { key: 'components' as const, label: 'Components' },
-    { key: 'catalogue' as const, label: 'Catalogue' },
     { key: 'properties' as const, label: 'Properties' },
   ];
 
@@ -201,38 +195,18 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
       <div className="flex-1 overflow-y-auto">
         {tab === 'components' && (
           <>
-            <div className="p-3.5">
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
-                AI Describe
-              </div>
-              <Textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder={'Describe the full page...\ne.g. SaaS landing with hero, features, pricing'}
-                className="w-full resize-none h-16 text-xs rounded-lg"
-                style={{
-                  background: 'var(--bg-200)',
-                  borderColor: 'var(--border-300)',
-                  color: 'var(--text-100)',
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAiGenerate();
-                  }
-                }}
-              />
-              <Button
-                onClick={handleAiGenerate}
-                className="w-full mt-1.5 justify-center py-2 rounded-lg gap-1.5 cursor-pointer"
-                style={{ background: 'var(--neon-color)', color: '#000' }}
+            <div className="p-3.5 pb-0">
+              <button
+                onClick={() => setShowCatalogue(true)}
+                className="w-full flex items-center gap-2 py-2 px-3 rounded-lg transition-colors cursor-pointer"
+                style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-100)' }}
               >
-                <Sparkles size={14} />
-                Generate TSX Codebase
-              </Button>
+                <Package size={14} style={{ color: 'var(--neon-color)' }} />
+                <span className="text-[12px] font-medium">Open Catalogue</span>
+              </button>
             </div>
 
-            <div className="h-px mx-3.5" style={{ background: 'var(--border-200)' }} />
+            <div className="h-px mx-3.5 mt-3" style={{ background: 'var(--border-200)' }} />
 
             <div className="p-3.5">
               <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
@@ -274,10 +248,6 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
               </>
             )}
           </>
-        )}
-
-        {tab === 'catalogue' && (
-          <CanvasCatalogue onAddToCanvas={(comp) => onCatalogueAdd?.(comp)} />
         )}
 
         {tab === 'properties' && (
@@ -467,6 +437,12 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
           </>
         )}
       </div>
+
+      <CatalogueModal
+        isOpen={showCatalogue}
+        onClose={() => setShowCatalogue(false)}
+        onAddToCanvas={(comp) => onCatalogueAdd?.(comp)}
+      />
     </aside>
   );
 };

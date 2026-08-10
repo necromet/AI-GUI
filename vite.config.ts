@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5173,
         host: 'localhost',
+        hmr: {
+          host: 'localhost',
+          port: 5173,
+        },
         proxy: {
           '/mimo-api': {
             target: 'https://token-plan-sgp.xiaomimimo.com/v1',
