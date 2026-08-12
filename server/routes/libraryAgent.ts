@@ -47,6 +47,13 @@ The preview engine parses import statements and resolves them automatically:
 - \`import { useState, useEffect } from "react"\` → destructured from React global
 - \`import { motion, AnimatePresence } from "motion/react"\` → from esm.sh bundle
 - \`import { ChatIcon, XIcon } from "@phosphor-icons/react"\` → from esm.sh bundle
+- \`import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@radix-ui/react-accordion"\` → from esm.sh bundle
+- \`import { ChevronDownIcon } from "@radix-ui/react-icons"\` → from esm.sh bundle
+- \`import { Dialog, DialogContent, DialogTrigger } from "@radix-ui/react-dialog"\` → from esm.sh bundle
+- \`import { Command } from "cmdk"\` → from esm.sh bundle
+- \`import { Drawer } from "vaul"\` → from esm.sh bundle
+- \`import { useForm } from "react-hook-form"\` → from esm.sh bundle
+- \`import { format } from "date-fns"\` → from esm.sh bundle
 - \`import { MyHelper } from "./components"\` → resolved to components.tsx in the same component
 - \`"use client"\` directives are automatically stripped
 
@@ -63,13 +70,20 @@ The preview engine parses import statements and resolves them automatically:
 - Tailwind CSS classes, responsive design, dark mode classes
 - motion/react animations (motion.div, AnimatePresence, useReducedMotion)
 - @phosphor-icons/react icons (ChatIcon, XIcon, MicrophoneIcon, etc.)
+- lucide-react icons (any icon from the library)
+- Radix UI primitives (Accordion, AlertDialog, Avatar, Checkbox, Collapsible, ContextMenu, Dialog, DropdownMenu, HoverCard, Label, Menubar, NavigationMenu, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Slider, Slot, Switch, Tabs, Toast, Toggle, ToggleGroup, Tooltip)
+- shadcn/ui component patterns built with Radix UI + Tailwind CSS + class-variance-authority
+- cmdk (command palette), vaul (drawer), embla-carousel-react (carousel), recharts (charts)
+- react-hook-form + @hookform/resolvers + zod for form validation
+- react-day-picker for date selection
+- date-fns for date formatting and manipulation
+- class-variance-authority (cva) for component variant patterns
 - Any simple npm package that doesn't require a build step or Node.js APIs
 
 ### What Does NOT Work
-- shadcn/ui, Radix UI, Headless UI — not available. Use raw HTML + Tailwind.
+- @headlessui/react, Headless UI — not available. Use Radix UI instead.
 - zustand, jotai, Redux, Recoil — no state management libraries. Use React hooks.
 - react-router, next/link, wouter — no routing. The sandbox is a single page.
-- react-hook-form, Formik — no form libraries. Use controlled inputs with useState.
 - axios, SWR, React Query — no data fetching. Use local state.
 - CSS modules, styled-components, emotion — use Tailwind only.
 - \`import "./styles.css"\` — CSS files are not loaded by the preview engine.

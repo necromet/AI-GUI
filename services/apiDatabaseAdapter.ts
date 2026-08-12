@@ -293,3 +293,88 @@ export const savePythonProject = async (project: {
 export const deletePythonProject = async (id: string) => {
   await apiFetch<any>(`/python/projects/${id}`, { method: 'DELETE' });
 };
+
+// ===== Database Explorer =====
+
+export const getDbConnections = async () => {
+  const data = await apiFetch<{ connections: any[] }>('/database/connections');
+  return data.connections;
+};
+
+export const getDbConnection = async (id: string) => {
+  const data = await apiFetch<{ connection: any }>(`/database/connections/${id}`);
+  return data.connection;
+};
+
+export const saveDbConnection = async (conn: {
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl?: boolean;
+}) => {
+  const data = await apiFetch<{ id: string }>('/database/connections', {
+    method: 'POST',
+    body: JSON.stringify(conn),
+  });
+  return data.id;
+};
+
+export const updateDbConnection = async (id: string, updates: {
+  name?: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
+  password?: string;
+  ssl?: boolean;
+}) => {
+  await apiFetch<any>(`/database/connections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+};
+
+export const deleteDbConnection = async (id: string) => {
+  await apiFetch<any>(`/database/connections/${id}`, { method: 'DELETE' });
+};
+
+export const testDbConnection = async (conn: {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl?: boolean;
+}) => {
+  return await apiFetch<{ success: boolean; version?: string; error?: string }>('/database/test', {
+    method: 'POST',
+    body: JSON.stringify(conn),
+  });
+};
+
+export const getDbSchema = async (connectionId: string) => {
+  return await apiFetch<{ schemas: string[]; tables: any[] }>('/database/schema', {
+    method: 'POST',
+    body: JSON.stringify({ connectionId }),
+  });
+};
+
+export const executeDbQuery = async (connectionId: string, sql: string, maxRows?: number, force?: boolean, timeout?: number) => {
+  return await apiFetch<{ columns: string[]; rows: any[][]; rowCount: number; executionTime: number; error?: string; needsConfirmation?: boolean; warning?: string; truncated?: boolean }>('/database/query', {
+    method: 'POST',
+    body: JSON.stringify({ connectionId, sql, maxRows, force, timeout }),
+  });
+};
+
+export const releaseDbPool = async (connectionId: string) => {
+  await apiFetch<any>(`/database/connections/${connectionId}/pool`, { method: 'DELETE' });
+};
+
+export const pingDbConnection = async (connectionId: string) => {
+  return await apiFetch<{ reachable: boolean; error?: string }>(`/database/connections/${connectionId}/ping`, {
+    method: 'POST',
+  });
+};

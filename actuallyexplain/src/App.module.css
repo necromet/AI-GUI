@@ -1,0 +1,220 @@
+.container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.container[data-ready="true"] {
+  opacity: 1;
+}
+
+/* ─── Left Pane: SQL Editor ─── */
+
+.editorPane {
+  display: flex;
+  flex-direction: column;
+  width: 33%;
+  min-width: 22.5rem;
+  background-color: var(--bg);
+  border-right: 1px solid var(--ui-3);
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--tx);
+  background-color: var(--bg);
+}
+
+h1.appName {
+  font-size: 0.875rem;
+  font-weight: 575;
+  line-height: 1.125rem;
+}
+
+.appNameB {
+  text-transform: uppercase;
+}
+
+h2.sqlFlavor {
+  font-size: 0.875rem;
+  font-weight: 425;
+  line-height: 1.125rem;
+  color: var(--tx-2);
+}
+
+.actions {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.aboutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--br-md);
+  border: none;
+  color: var(--tx-2);
+  background: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.aboutBtn:hover {
+  color: var(--tx);
+  background: var(--bg-2);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.errorBar {
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  color: var(--re);
+  background-color: color-mix(in srgb, var(--re) 20%, transparent);
+  animation: fadeIn 0.2s ease-in;
+}
+
+.editorWrapper {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Right Pane: Flow Canvas ─── */
+
+.flowPane {
+  flex: 1;
+  position: relative;
+  background-color: var(--bg);
+}
+
+.flowWrapper {
+  position: absolute;
+  inset: 0;
+}
+
+/* ─── Details Overlay ─── */
+
+.detailsOverlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  z-index: 30;
+}
+
+/* ─── Mobile Nav (hidden on desktop) ─── */
+
+.mobileNav {
+  display: none;
+}
+
+.mobileNavBtn {
+  flex: 1;
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 625;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.0625em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.625rem;
+  color: var(--tx-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mobileNavBtn:hover {
+  color: var(--tx-2);
+}
+
+.mobileNavBtnActive {
+  color: var(--tx);
+}
+
+.mobileNavBtnActive:hover {
+  color: var(--tx);
+}
+
+.mobileNavBtnActive::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3rem;
+  height: 0.125rem;
+  border-radius: var(--br-sm) var(--br-sm) 0 0;
+  background: var(--cy);
+}
+
+/* ─── Mobile Layout (<720px) ─── */
+
+@media (max-width: 720px) {
+  .container {
+    height: 100%;
+  }
+
+  .editorPane {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    overflow: hidden;
+  }
+
+  .editorWrapper {
+    padding-bottom: 4.5rem;
+  }
+
+  .flowPane {
+    position: absolute;
+    inset: 0;
+  }
+
+  .container[data-mobile-view="editor"] .flowPane {
+    display: none;
+  }
+
+  .container[data-mobile-view="diagram"] .editorPane {
+    display: none;
+  }
+
+  .mobileNav {
+    display: flex;
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 40;
+    background: var(--bg);
+    border: 1px solid var(--ui);
+    border-radius: var(--br-md);
+    overflow: hidden;
+  }
+
+  .detailsOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+  }
+}

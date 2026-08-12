@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { SlidingGroup } from '@/components/ui/sliding-group';
 import { Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { GridComponent, ResolutionConfig, ProjectFile } from './types';
@@ -107,25 +108,24 @@ export const CanvasExportModal: React.FC<CanvasExportModalProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex border-b" style={{ borderColor: 'var(--border-200)' }}>
-          {tabs.map((tab) => (
+        <SlidingGroup
+          direction="horizontal"
+          activeKey={activeTab}
+          onSelect={(key) => setActiveTab(key as ExportTab)}
+          className="border-b"
+          style={{ borderColor: 'var(--border-200)' }}
+          indicatorClassName="!rounded-none"
+          indicatorStyle={{ top: 'auto', bottom: 0, height: 2, backgroundColor: 'var(--neon-color)', boxShadow: 'none' }}
+          items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
+          renderItem={(item, isActive) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="px-3.5 py-2.5 text-[11.5px] font-medium transition-colors border-b-2 cursor-pointer"
-              style={{
-                color: activeTab === tab.key ? 'var(--neon-color)' : 'var(--text-400)',
-                borderBottomColor: activeTab === tab.key ? 'var(--neon-color)' : 'transparent',
-                background: 'transparent',
-                border: 'none',
-                borderBottomWidth: 2,
-                borderBottomStyle: 'solid',
-              }}
+              className="px-3.5 py-2.5 text-[11.5px] font-medium transition-colors cursor-pointer"
+              style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-400)' }}
             >
-              {tab.label}
+              {item.label}
             </button>
-          ))}
-        </div>
+          )}
+        />
 
         {activeTab === 'tsx' && projectFiles.length > 0 && (
           <div className="flex gap-1 px-3.5 py-2 overflow-x-auto border-b" style={{ borderColor: 'var(--border-200)' }}>

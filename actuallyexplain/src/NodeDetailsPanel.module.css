@@ -1,0 +1,162 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22.5rem;
+  height: 100%;
+  z-index: 10;
+  background: var(--bg);
+  border-left: 1px solid var(--ui-3);
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+.panelClosing {
+  animation: slideOut 0.15s ease-in forwards;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
+/* ── Header ── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+}
+
+.headerTitle {
+  font-size: 1.125rem;
+  font-weight: 525;
+  line-height: 1.125;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--br-md);
+  border: none;
+  color: var(--tx-2);
+  background: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  color: var(--tx);
+  background: var(--bg-2);
+}
+
+/* ── Raw SQL block ── */
+
+.rawSql {
+  font-family: 'Martian Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 375;
+  padding: 0.75rem 1rem;
+  color: var(--tx-2);
+  background-color: var(--bg-2);
+  border-top: 1px solid var(--ui-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Sections ── */
+
+.section {
+  padding: 1rem 1rem 1.25rem;
+  border-top: 1px solid var(--ui-3);
+}
+
+.sectionTitle {
+  font-size: 0.875rem;
+  font-weight: 425;
+  text-transform: lowercase;
+  color: var(--tx-2);
+  margin-bottom: 1em;
+}
+
+.sectionBody {
+  font-size: 1rem;
+  font-weight: 375;
+  line-height: 1.375;
+  color: var(--tx);
+  margin-bottom: 1em;
+}
+
+/* ── Inline code (contextual variables) ── */
+
+.inlineCode {
+  font-family: 'Martian Mono', monospace;
+  font-size: 0.8125rem;
+  font-weight: 425;
+  line-height: 1.5;
+  display: inline;
+  padding: 0.125em 0.25em;
+  color: var(--tx-2);
+  background-color: color-mix(in srgb, var(--tx-2) 20%, transparent);
+  border-radius: var(--br-sm);
+  word-break: break-word;
+}
+
+/* ── Docs link ── */
+
+.docsLink {
+  font-size: 0.875rem;
+  line-height: 1.375;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375em;
+  color: var(--cy);
+  transition: color 0.15s;
+}
+
+.docsLink:hover {
+  color: var(--cy-2);
+}
+
+/* ─── Mobile: full-screen panel ─── */
+
+@media (max-width: 720px) {
+
+  .panel {
+    width: 100%;
+    height: 100%;
+    border-left: none;
+    animation: mobileSlideUp 0.3s ease-out;
+  }
+
+  .panelClosing {
+    animation: mobileSlideDown 0.15s ease-in forwards;
+  }
+
+  @keyframes mobileSlideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  @keyframes mobileSlideDown {
+    from { transform: translateY(0);    opacity: 1; }
+    to   { transform: translateY(40px); opacity: 0; }
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Trash2, Copy, Check, FileCode, MoreVertical, Pencil, ArrowUpRight, FolderInput, CopyPlus } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, LibraryComponentFile } from '../../types';
 import { Button } from '@/components/ui/button';
@@ -76,6 +76,36 @@ function buildCardPreview(files?: LibraryComponentFile[], componentId?: string, 
         'framer-motion': 'https://esm.sh/framer-motion@11?external=react,react-dom',
         '@phosphor-icons/react': 'https://esm.sh/@phosphor-icons/react?external=react,react-dom',
         'lucide-react': 'https://esm.sh/lucide-react@0.554.0?external=react,react-dom',
+        'class-variance-authority': 'https://esm.sh/class-variance-authority?external=react,react-dom',
+        'clsx': 'https://esm.sh/clsx?external=react,react-dom',
+        'tailwind-merge': 'https://esm.sh/tailwind-merge?external=react,react-dom',
+        '@radix-ui/react-accordion': 'https://esm.sh/@radix-ui/react-accordion?external=react,react-dom',
+        '@radix-ui/react-alert-dialog': 'https://esm.sh/@radix-ui/react-alert-dialog?external=react,react-dom',
+        '@radix-ui/react-checkbox': 'https://esm.sh/@radix-ui/react-checkbox?external=react,react-dom',
+        '@radix-ui/react-collapsible': 'https://esm.sh/@radix-ui/react-collapsible?external=react,react-dom',
+        '@radix-ui/react-dialog': 'https://esm.sh/@radix-ui/react-dialog?external=react,react-dom',
+        '@radix-ui/react-dropdown-menu': 'https://esm.sh/@radix-ui/react-dropdown-menu?external=react,react-dom',
+        '@radix-ui/react-icons': 'https://esm.sh/@radix-ui/react-icons?external=react,react-dom',
+        '@radix-ui/react-label': 'https://esm.sh/@radix-ui/react-label?external=react,react-dom',
+        '@radix-ui/react-popover': 'https://esm.sh/@radix-ui/react-popover?external=react,react-dom',
+        '@radix-ui/react-progress': 'https://esm.sh/@radix-ui/react-progress?external=react,react-dom',
+        '@radix-ui/react-scroll-area': 'https://esm.sh/@radix-ui/react-scroll-area?external=react,react-dom',
+        '@radix-ui/react-select': 'https://esm.sh/@radix-ui/react-select?external=react,react-dom',
+        '@radix-ui/react-separator': 'https://esm.sh/@radix-ui/react-separator?external=react,react-dom',
+        '@radix-ui/react-slot': 'https://esm.sh/@radix-ui/react-slot?external=react,react-dom',
+        '@radix-ui/react-switch': 'https://esm.sh/@radix-ui/react-switch?external=react,react-dom',
+        '@radix-ui/react-tabs': 'https://esm.sh/@radix-ui/react-tabs?external=react,react-dom',
+        '@radix-ui/react-toast': 'https://esm.sh/@radix-ui/react-toast?external=react,react-dom',
+        '@radix-ui/react-tooltip': 'https://esm.sh/@radix-ui/react-tooltip?external=react,react-dom',
+        'cmdk': 'https://esm.sh/cmdk?external=react,react-dom',
+        'vaul': 'https://esm.sh/vaul?external=react,react-dom',
+        'recharts': 'https://esm.sh/recharts?external=react,react-dom',
+        'date-fns': 'https://esm.sh/date-fns?external=react,react-dom',
+        'react-day-picker': 'https://esm.sh/react-day-picker?external=react,react-dom',
+        'react-hook-form': 'https://esm.sh/react-hook-form?external=react,react-dom',
+        '@hookform/resolvers': 'https://esm.sh/@hookform/resolvers?external=react,react-dom',
+        'zod': 'https://esm.sh/zod?external=react,react-dom',
+        'sonner': 'https://esm.sh/sonner?external=react,react-dom',
       },
     });
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{background:#1a1a1a;color:#ececec;font-family:system-ui,sans-serif;height:100%;overflow:hidden;display:flex;justify-content:center;align-items:center}#root{width:100%;height:100%}#e{position:fixed;inset:0;background:rgba(10,10,26,0.92);color:#f87171;padding:12px;font:11px 'JetBrains Mono',monospace;white-space:pre-wrap;overflow:auto;z-index:9999;display:none}</style><script type="importmap">${importmap}</script><script src="https://cdn.tailwindcss.com"></script></head><body><div id="root"></div><div id="e"></div><script type="module">function s(m){var e=document.getElementById('e');e.style.display='block';e.textContent=m}window.onerror=function(m){s(m)};window.onunhandledrejection=function(e){s('Unhandled: '+(e.reason?.message||e.reason))};try{const[R,_,RC]=await Promise.all([import('react'),import('react-dom'),import('react-dom/client')]);if(!window.React)window.React=R;if(!window.ReactDOM)window.ReactDOM={..._};if(!window.ReactDOM.createRoot)window.ReactDOM.createRoot=RC.createRoot;var mod=await import('/api/library/components/${componentId}/compiled');var root=document.getElementById('root');if(root&&!root.hasChildNodes()){var C=mod.default;if(C==null){var n=Object.entries(mod).find(function(e){return e[0]!=='default'&&e[0][0]!=='_'&&typeof e[1]==='function'});if(n)C=n[1]}if(C!=null)RC.createRoot(root).render(R.createElement(C))}}catch(e){s(e.message)}</script></body></html>`;
@@ -150,6 +180,19 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({
 }) => {
   const isScored = 'score' in comp;
   const previewHtml = useMemo(() => buildCardPreview(comp.files, comp.id, comp.category), [comp.files, comp.id, comp.category]);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el || !previewHtml) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [previewHtml]);
 
   return (
     <div
@@ -176,22 +219,25 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({
         {/* Preview */}
         {previewHtml && (
           <div
+            ref={previewRef}
             className="relative overflow-hidden rounded-t-2xl"
             style={{ height: 140, backgroundColor: '#1a1a1a' }}
           >
-            <iframe
-              srcDoc={previewHtml}
-              sandbox="allow-scripts"
-              className="w-full h-full border-0 pointer-events-none"
-              style={{
-                width: '200%',
-                height: '200%',
-                transform: 'scale(0.5)',
-                transformOrigin: 'top left',
-              }}
-              title={`Preview of ${comp.name}`}
-              tabIndex={-1}
-            />
+            {isVisible && (
+              <iframe
+                srcDoc={previewHtml}
+                sandbox="allow-scripts"
+                className="w-full h-full border-0 pointer-events-none"
+                style={{
+                  width: '200%',
+                  height: '200%',
+                  transform: 'scale(0.5)',
+                  transformOrigin: 'top left',
+                }}
+                title={`Preview of ${comp.name}`}
+                tabIndex={-1}
+              />
+            )}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{

@@ -32,6 +32,7 @@ const { default: conversationRoutes } = await import('./routes/conversations');
 const { default: messageRoutes } = await import('./routes/messages');
 const { default: statsRoutes } = await import('./routes/stats');
 const { default: pythonRoutes } = await import('./routes/python');
+const { default: databaseRoutes } = await import('./routes/database');
 const { initializeDatabase } = await import('./db');
 
 await initializeDatabase();
@@ -91,6 +92,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/db', messageRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/python', pythonRoutes);
+app.use('/api/database', databaseRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

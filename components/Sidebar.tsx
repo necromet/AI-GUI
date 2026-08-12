@@ -1,21 +1,24 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
-import type { LibraryComponentFile } from '../types';
+import type { LibraryComponentFile, LibraryFolder } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
+import type { DatabaseSidebarControls } from './DatabasePanel';
+import DatabaseSchemaBrowser from './DatabaseSchemaBrowser';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
 import { SECTION_TYPES, COLORS } from './canvas/constants';
 import { CatalogueModal } from './canvas/CatalogueModal';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { SlidingGroup } from '@/components/ui/sliding-group';
 import SidebarTokenStatsPanel from './SidebarTokenStatsPanel';
 import { SETTINGS_TABS, type SettingsTab } from './SettingsPage';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 export type SidebarPanel = 'none' | 'token-stats';
 
@@ -35,6 +38,7 @@ interface SidebarProps {
   availableModels: ModelConfig[];
   libraryControls?: LibraryControls | null;
   canvasControls?: CanvasSidebarControls | null;
+  dbSidebarControls?: DatabaseSidebarControls | null;
 }
 
 function getFileIcon(filename: string) {
@@ -144,22 +148,24 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex border-b flex-shrink-0" style={{ borderColor: 'var(--border-200)' }}>
-        {tabs.map(t => (
+      <SlidingGroup
+        direction="horizontal"
+        activeKey={tab}
+        onSelect={(key) => setTab(key as 'components' | 'properties')}
+        className="border-b flex-shrink-0"
+        style={{ borderColor: 'var(--border-200)' }}
+        indicatorClassName="!rounded-none"
+        indicatorStyle={{ top: 'auto', bottom: 0, height: 2, backgroundColor: 'var(--neon-color)', boxShadow: 'none' }}
+        items={tabs.map((t) => ({ key: t.key, label: t.label }))}
+        renderItem={(item, isActive) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
             className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-            style={{
-              color: tab === t.key ? 'var(--neon-color)' : 'var(--text-400)',
-              borderBottom: tab === t.key ? '2px solid var(--neon-color)' : '2px solid transparent',
-              background: tab === t.key ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
-            }}
+            style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-400)' }}
           >
-            {t.label}
+            {item.label}
           </button>
-        ))}
-      </div>
+        )}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'components' && (
@@ -395,6 +401,51 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
   );
 };
 
+const TOOL_ITEMS = [
+  { key: 'rag' as const, icon: Database, label: 'RAG' },
+  { key: 'plugin-agent' as const, icon: Puzzle, label: 'Plug-in Agent' },
+  { key: 'skema' as const, icon: Layers, label: 'Skema' },
+  { key: 'python' as const, icon: Terminal, label: 'Python' },
+];
+
+type ToolView = 'rag' | 'plugin-agent' | 'skema' | 'python';
+
+const ToolGroup: React.FC<{ activeView: ToolView; onNavigate: (path: string) => void }> = ({ activeView, onNavigate }) => {
+  return (
+    <SlidingGroup
+      direction="vertical"
+      activeKey={activeView}
+      onSelect={(key) => onNavigate(`/experiments/${key}`)}
+      className="sidebar-tool-group gap-0.5 p-1 rounded-xl"
+      style={{ backgroundColor: 'var(--bg-200)' }}
+      indicatorStyle={{ left: 4, right: 4 }}
+      items={TOOL_ITEMS.map((item) => ({
+        key: item.key,
+        label: item.label,
+        icon: item.icon,
+      }))}
+      renderItem={(item, isActive) => {
+        const Icon = TOOL_ITEMS.find((t) => t.key === item.key)!.icon;
+        return (
+          <button
+            className={`group/tool w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200 cursor-pointer ${
+              isActive ? 'text-[var(--text-100)]' : 'text-[var(--text-500)] hover:text-[var(--text-100)]'
+            }`}
+          >
+            <div
+              className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200"
+              style={isActive ? { backgroundColor: 'rgba(var(--neon-rgb), 0.12)' } : undefined}
+            >
+              <Icon size={14} style={isActive ? { color: 'var(--neon-color)' } : undefined} />
+            </div>
+            <span className="truncate text-[13px]">{item.label}</span>
+          </button>
+        );
+      }}
+    />
+  );
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
@@ -411,6 +462,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   availableModels,
   libraryControls,
   canvasControls,
+  dbSidebarControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -431,10 +483,32 @@ const Sidebar: React.FC<SidebarProps> = ({
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
   const isChatMode = location.pathname.startsWith('/chat');
   const isLibraryMode = location.pathname.startsWith('/library');
+  const isDatabaseMode = location.pathname.startsWith('/database');
   const isSettingsPage = location.pathname === '/settings';
-  const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : 'experiments';
+
+  const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
+  const fetchLibraryFolders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/library/folders');
+      if (!res.ok) return;
+      const data = await res.json();
+      setLibraryFolders(data.folders || []);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    if (isLibraryMode) fetchLibraryFolders();
+  }, [isLibraryMode, fetchLibraryFolders]);
+  useEffect(() => {
+    if (!isLibraryMode) return;
+    const handler = () => fetchLibraryFolders();
+    window.addEventListener('library-reload', handler);
+    return () => window.removeEventListener('library-reload', handler);
+  }, [isLibraryMode, fetchLibraryFolders]);
+
+  const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'experiments';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
@@ -462,14 +536,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   const olderConvos = conversations.filter(c => c.updatedAt < lastWeek.getTime());
 
   const itemClassName = (isActive: boolean) =>
-    `w-full text-left flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-all duration-150 truncate ${
+    `w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200 truncate ${
       isActive
-        ? 'bg-[var(--bg-300)] text-[var(--text-100)]'
-        : 'text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)]'
+        ? 'bg-[var(--bg-200)] text-[var(--text-100)]'
+        : 'text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)]'
     }`;
-
-  const sidebarItemClassName =
-    'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)] transition-all duration-150';
 
   const truncateTitle = (title: string) => {
     const words = title.split(/\s+/);
@@ -484,7 +555,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
           className={`${itemClassName(isActive)} group cursor-pointer relative`}
         >
-          <span className="truncate flex-1">
+          <span className="truncate flex-1 text-[13px]">
             {truncateTitle(conv.title)}
           </span>
           <Button
@@ -494,7 +565,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               e.stopPropagation();
               conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
             }}
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-[var(--text-500)] hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-[var(--text-500)] hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 rounded-lg"
           >
             <Trash2 size={13} />
           </Button>
@@ -504,24 +575,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sectionLabel = (text: string) => (
-    <div className="px-3 pt-4 pb-2">
-      <span className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-500)]">
+    <div className="px-2 pt-5 pb-2">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">
         {text}
       </span>
     </div>
-  );
-
-  const modeBadge = (
-    <Badge
-      variant="outline"
-      className="text-xs font-medium border-0 px-2 py-0.5"
-      style={{
-        backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-        color: 'var(--neon-color)',
-      }}
-    >
-      {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : isSettingsPage ? 'Settings' : 'Lab'}
-    </Badge>
   );
 
   return (
@@ -539,46 +597,62 @@ const Sidebar: React.FC<SidebarProps> = ({
     >
       <div className={`flex flex-col h-full w-[288px] transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
 
-        {/* Header: Logo + Mode Badge + Close */}
-        <div className="relative flex w-full items-center p-2 pt-2">
-          <div className="flex items-center gap-2 pl-2 h-8">
+        {/* Header */}
+        <div className="relative flex w-full items-center px-3 pt-4 pb-2">
+          <div className="flex items-center gap-2.5 pl-1">
             {canvasControls && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={canvasControls.onBack}
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent h-10 w-10 text-[var(--text-500)] hover:text-[var(--text-100)] flex-shrink-0"
+                className="h-8 w-8 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] flex-shrink-0 transition-all duration-200"
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={16} />
               </Button>
             )}
-            <div className="flex flex-col leading-tight">
-              <span className="font-semibold text-sm text-[var(--text-100)]">edward:labs</span>
-              <span className="text-xs tabular-nums text-[var(--text-500)]">{gmt7Time}</span>
+            <div className="flex items-center gap-2.5">
+              <div className="sidebar-brand-mark flex items-center justify-center w-7 h-7 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.15), rgba(var(--neon-rgb), 0.05))' }}>
+                <span className="text-xs font-bold" style={{ color: 'var(--neon-color)' }}>e</span>
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="font-semibold text-[13px] tracking-tight text-[var(--text-100)]">edward:labs</span>
+                <span className="text-[10px] tabular-nums tracking-wide text-[var(--text-500)]">{gmt7Time}</span>
+              </div>
             </div>
-            {modeBadge}
+            <Badge
+              variant="outline"
+              className="text-[10px] font-semibold border-0 px-1.5 py-0.5 ml-0.5"
+              style={{
+                backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                color: 'var(--neon-color)',
+              }}
+            >
+              {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : isSettingsPage ? 'Settings' : 'Lab'}
+            </Badge>
           </div>
-          <div className="absolute flex items-center gap-1 right-3 top-2">
+          <div className="absolute flex items-center right-3 top-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className="h-8 w-8 text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)]"
+              className="h-7 w-7 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
             >
-              <PanelLeftClose size={16} />
+              <PanelLeftClose size={15} />
             </Button>
           </div>
         </div>
 
+        {/* Divider after header */}
+        <div className="mx-3 h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border-300), transparent)' }} />
+
         {sidebarPanel === 'token-stats' ? (
-          /* Token Stats panel */
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--border-300)' }}>
+            <div className="flex items-center gap-2 px-4 py-3">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => onSidebarPanelChange('none')}
-                className="h-7 w-7 text-[var(--text-500)] hover:text-[var(--text-100)]"
+                className="h-7 w-7 rounded-lg text-[var(--text-500)] hover:text-[var(--text-100)] hover:bg-[var(--bg-200)] transition-all duration-200"
               >
                 <ArrowLeft size={14} />
               </Button>
@@ -588,112 +662,79 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarTokenStatsPanel availableModels={availableModels} />
           </div>
         ) : isSettingsPage ? (
-          /* Settings: tab navigation */
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-2 pt-2">
+            <div className="px-3 pt-3">
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-300)] hover:text-[var(--text-100)] transition-all duration-150"
+                className="w-full justify-start gap-2.5 px-3 py-2 h-auto rounded-xl text-sm font-medium text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
                 onClick={() => navigate(prevPathRef.current)}
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft size={15} />
                 <span>Back</span>
               </Button>
             </div>
-            {sectionLabel('Settings')}
-            <nav className="px-2 space-y-0.5">
-              {SETTINGS_TABS.map((tab) => {
-                const isActive = (activeSettingsTab || 'appearance') === tab.id;
-                return (
-                  <Button
-                    key={tab.id}
-                    variant="ghost"
-                    className="w-full justify-start gap-3 px-3 py-2.5 h-auto rounded-lg text-sm font-medium transition-all duration-150"
-                    style={{
-                      backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
-                      color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
-                    }}
-                    onClick={() => navigate(`/settings?tab=${tab.id}`)}
-                  >
-                    <tab.icon size={16} />
-                    <span>{tab.label}</span>
-                  </Button>
-                );
-              })}
-            </nav>
+            <div className="px-4 pt-5 pb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">
+                Settings
+              </span>
+            </div>
+            <SlidingGroup
+              direction="vertical"
+              activeKey={activeSettingsTab || 'appearance'}
+              onSelect={(key) => navigate(`/settings?tab=${key}`)}
+              className="px-3 gap-0.5"
+              items={SETTINGS_TABS.map((tab) => ({
+                key: tab.id,
+                label: tab.label,
+                icon: <tab.icon size={15} />,
+              }))}
+              renderItem={(item, isActive) => (
+                <button
+                  className="w-full justify-start gap-3 px-3 py-2.5 h-auto rounded-xl text-sm font-medium transition-all duration-200 flex items-center cursor-pointer"
+                  style={{
+                    color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                  }}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              )}
+            />
           </div>
         ) : currentMode === 'experiments' && activeView === 'skema' && canvasControls ? (
-          /* Canvas mode: Components/Catalogue/Properties tabs */
           <CanvasSidebarContent controls={canvasControls} />
         ) : currentMode === 'experiments' ? (
-          /* Experiments mode: tool navigation + conversation history */
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-2 pt-2">
-              {sectionLabel('Tools')}
-              <ul className="space-y-0.5">
-                <li>
-                  <Button
-                    variant="ghost"
-                    className={itemClassName(activeView === 'rag')}
-                    onClick={() => navigate('/experiments/rag')}
-                  >
-                    <Database size={16} className={activeView === 'rag' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
-                    <span className="truncate">RAG</span>
-                  </Button>
-                </li>
-                <li>
-                  <Button
-                    variant="ghost"
-                    className={itemClassName(activeView === 'plugin-agent')}
-                    onClick={() => navigate('/experiments/plugin-agent')}
-                  >
-                    <Puzzle size={16} className={activeView === 'plugin-agent' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
-                    <span className="truncate">Plug-in Agent</span>
-                  </Button>
-                </li>
-                <li>
-                  <Button
-                    variant="ghost"
-                    className={itemClassName(activeView === 'skema')}
-                    onClick={() => navigate('/experiments/skema')}
-                  >
-                    <Layers size={16} className={activeView === 'skema' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
-                    <span className="truncate">Skema</span>
-                  </Button>
-                </li>
-                <li>
-                  <Button
-                    variant="ghost"
-                    className={itemClassName(activeView === 'python')}
-                    onClick={() => navigate('/experiments/python')}
-                  >
-                    <Terminal size={16} className={activeView === 'python' ? 'text-[var(--text-100)]' : 'text-[var(--text-500)]'} />
-                    <span className="truncate">Python</span>
-                  </Button>
-                </li>
-              </ul>
+            <div className="px-3 pt-3">
+              <div className="px-2 pb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Tools</span>
+              </div>
+              <ToolGroup activeView={activeView} onNavigate={(path) => navigate(path)} />
             </div>
 
-            {/* Experiment conversation history */}
             {activeView !== 'skema' && activeView !== 'python' && (
               <>
-                <div className="px-2 pt-1">
-                  <Button
-                    variant="ghost"
-                    className={sidebarItemClassName}
+                <div className="px-3 pt-3">
+                  <button
+                    className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
+                      border: '1px solid rgba(var(--neon-rgb), 0.12)',
+                      color: 'var(--text-100)',
+                    }}
                     onClick={onNewChat}
                   >
                     <div
-                      className="flex items-center justify-center rounded-full w-5 h-5 transition-all duration-200 group-hover:scale-110"
-                      style={{ backgroundColor: 'var(--surface-hover)' }}
+                      className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
+                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)' }}
                     >
-                      <Plus size={14} className="text-[var(--text-300)]" />
+                      <Plus size={13} style={{ color: 'var(--neon-color)' }} />
                     </div>
                     <span>New chat</span>
-                  </Button>
+                  </button>
                 </div>
 
-                <ScrollArea className="flex-1 px-2 pt-2">
+                <ScrollArea className="flex-1 px-3 pt-3">
                   {todayConvos.length > 0 && (
                     <>
                       {sectionLabel('Today')}
@@ -731,8 +772,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                   )}
 
                   {conversations.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-xs text-[var(--text-500)]">
-                      <p>No conversations yet</p>
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
+                        <Plus size={18} className="text-[var(--text-500)]" />
+                      </div>
+                      <p className="text-xs font-medium text-[var(--text-500)]">No conversations yet</p>
                     </div>
                   )}
                 </ScrollArea>
@@ -740,45 +784,43 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         ) : currentMode === 'library' ? (
-          /* Library mode: file list when editing, otherwise info */
           <div className="flex-1 flex flex-col overflow-hidden">
             {libraryControls ? (
               <>
-                {/* View mode toggle */}
-                <div className="px-3 pt-2 pb-1 flex items-center gap-1">
-                  <button
-                    onClick={() => libraryControls.onViewModeChange('code')}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
-                    style={{
-                      backgroundColor: libraryControls.viewMode === 'code' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                      color: libraryControls.viewMode === 'code' ? 'var(--neon-color)' : 'var(--text-500)',
-                    }}
-                  >
-                    <Code size={12} />
-                    Code
-                  </button>
-                  <button
-                    onClick={() => libraryControls.onViewModeChange('preview')}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
-                    style={{
-                      backgroundColor: libraryControls.viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                      color: libraryControls.viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-500)',
-                    }}
-                  >
-                    <Eye size={12} />
-                    Preview
-                  </button>
+                <div className="px-3 pt-3 pb-1">
+                  <SlidingGroup
+                    direction="horizontal"
+                    activeKey={libraryControls.viewMode}
+                    onSelect={(key) => libraryControls.onViewModeChange(key as 'code' | 'preview')}
+                    className="gap-1 p-1 rounded-xl"
+                    style={{ backgroundColor: 'var(--bg-200)' }}
+                    indicatorStyle={{ top: 2, bottom: 2 }}
+                    items={[
+                      { key: 'code', label: 'Code', icon: <Code size={12} /> },
+                      { key: 'preview', label: 'Preview', icon: <Eye size={12} /> },
+                    ]}
+                    renderItem={(item, isActive) => (
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"
+                        style={{
+                          color: isActive ? 'var(--text-100)' : 'var(--text-500)',
+                        }}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </button>
+                    )}
+                  />
                 </div>
 
-                {/* File list */}
-                <div className="px-3 pt-3">
-                  <div className="flex items-center justify-between pb-1.5">
-                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-500)]">
+                <div className="px-4 pt-4">
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">
                       Files
                     </span>
                     <button
                       onClick={libraryControls.onAddFile}
-                      className="p-0.5 rounded transition-colors hover:opacity-80"
+                      className="p-1 rounded-lg transition-all duration-200 hover:opacity-80"
                       style={{ color: 'var(--neon-color)' }}
                       title="Add file"
                     >
@@ -786,7 +828,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                   </div>
                 </div>
-                <ScrollArea className="flex-1 px-2">
+                <ScrollArea className="flex-1 px-3">
                   <div className="space-y-0.5">
                     {libraryControls.files.map(file => (
                       <div
@@ -795,9 +837,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <button
                           onClick={() => libraryControls.onSelectFile(file.id)}
-                          className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors min-w-0"
+                          className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-200 min-w-0"
                           style={{
-                            backgroundColor: libraryControls.activeFileId === file.id ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent',
+                            backgroundColor: libraryControls.activeFileId === file.id ? 'rgba(var(--neon-rgb), 0.08)' : 'transparent',
                             color: libraryControls.activeFileId === file.id ? 'var(--neon-color)' : 'var(--text-500)',
                             fontSize: '12px',
                           }}
@@ -814,7 +856,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         {libraryControls.files.length > 1 && (
                           <button
                             onClick={() => libraryControls.onDeleteFile(file.id)}
-                            className="p-1 rounded opacity-0 group-hover/file:opacity-100 transition-opacity flex-shrink-0"
+                            className="p-1 rounded-lg opacity-0 group-hover/file:opacity-100 transition-all duration-200 flex-shrink-0"
                             style={{ color: '#ef4444' }}
                             title="Delete file"
                           >
@@ -828,56 +870,109 @@ const Sidebar: React.FC<SidebarProps> = ({
               </>
             ) : (
               <>
-                <div className="px-2 pt-2">
-                  {sectionLabel('Library')}
+                <div className="px-3 pt-3">
+                  <div className="px-2 pb-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Library</span>
+                  </div>
                   <ul className="space-y-0.5">
                     <li>
                       <Button
                         variant="ghost"
-                        className={itemClassName(true)}
+                        className={itemClassName(location.pathname === '/library')}
                         onClick={() => navigate('/library')}
                       >
-                        <Package size={18} className="text-[var(--text-100)]" />
-                        <span className="truncate text-base">All Components</span>
+                        <Package size={16} className="text-[var(--text-100)]" />
+                        <span className="truncate text-[13px]">All Components</span>
                       </Button>
                     </li>
                   </ul>
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-                  <Package size={36} className="mb-3 text-[var(--text-500)]" />
-                  <p className="text-sm font-medium mb-1 text-[var(--text-300)]">Component Library</p>
-                  <p className="text-xs leading-relaxed text-[var(--text-500)]">
-                    Browse, search, and manage reusable components. Use the AI agent to find or create components.
-                  </p>
-                </div>
+                {libraryFolders.length > 0 && (
+                  <div className="px-3 pt-2">
+                    <div className="px-2 pb-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Folders</span>
+                    </div>
+                    <ScrollArea className="flex-1">
+                      <ul className="space-y-0.5">
+                        {libraryFolders.map(folder => {
+                          const isActive = location.pathname.startsWith(`/library/folder/${folder.id}`);
+                          return (
+                            <li key={folder.id}>
+                              <Button
+                                variant="ghost"
+                                className={itemClassName(isActive)}
+                                onClick={() => navigate(`/library/folder/${folder.id}`)}
+                              >
+                                <div
+                                  className="w-3 h-3 rounded-sm flex-shrink-0"
+                                  style={{ backgroundColor: folder.color }}
+                                />
+                                <span className="truncate text-[13px] flex-1 text-left">{folder.name}</span>
+                                <span className="text-[10px] text-[var(--text-500)] flex-shrink-0">
+                                  {folder.componentCount ?? 0}
+                                </span>
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+                )}
               </>
             )}
           </div>
+        ) : currentMode === 'database' ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {dbSidebarControls ? (
+              <DatabaseSchemaBrowser
+                schemas={dbSidebarControls.schemas}
+                tables={dbSidebarControls.tables}
+                isLoading={dbSidebarControls.isLoading}
+                onRefresh={dbSidebarControls.onRefresh}
+                onSelectTable={dbSidebarControls.onSelectTable}
+                onQuickAction={dbSidebarControls.onQuickAction}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.12), rgba(var(--neon-rgb), 0.04))' }}>
+                  <Database size={22} style={{ color: 'var(--neon-color)' }} />
+                </div>
+                <p className="text-sm font-semibold mb-1.5 text-[var(--text-300)]">Database Explorer</p>
+                <p className="text-xs leading-relaxed text-[var(--text-500)]">
+                  Connect to PostgreSQL databases, browse schemas, and run SQL queries.
+                </p>
+              </div>
+            )}
+          </div>
         ) : (
-          /* Chat mode: standard sidebar */
           <>
             {/* New Chat */}
-            <div className="px-2 pt-1">
-              <Button
-                variant="ghost"
-                className={sidebarItemClassName}
+            <div className="px-3 pt-3">
+              <button
+                className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
+                  border: '1px solid rgba(var(--neon-rgb), 0.12)',
+                  color: 'var(--text-100)',
+                }}
                 onClick={onNewChat}
               >
                 <div
-                  className="flex items-center justify-center rounded-full w-5 h-5 transition-all duration-200 group-hover:scale-110"
-                  style={{ backgroundColor: 'var(--surface-hover)' }}
+                  className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
+                  style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)' }}
                 >
-                  <Plus size={14} className="text-[var(--text-300)]" />
+                  <Plus size={13} style={{ color: 'var(--neon-color)' }} />
                 </div>
                 <span>New chat</span>
-                <span className="ml-auto text-xs opacity-0 group-hover:opacity-60 transition-opacity text-[var(--text-500)]">
+                <span className="ml-auto text-[10px] opacity-0 group-hover:opacity-60 transition-opacity text-[var(--text-500)] font-mono">
                   Ctrl+⇧+O
                 </span>
-              </Button>
+              </button>
             </div>
 
             {/* Conversation History */}
-            <ScrollArea className="flex-1 px-2 pt-2">
+            <ScrollArea className="flex-1 px-3 pt-3">
               {todayConvos.length > 0 && (
                 <>
                   {sectionLabel('Today')}
@@ -915,77 +1010,115 @@ const Sidebar: React.FC<SidebarProps> = ({
               )}
 
               {conversations.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-xs text-[var(--text-500)]">
-                  <p>No conversations yet</p>
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
+                    <Plus size={18} className="text-[var(--text-500)]" />
+                  </div>
+                  <p className="text-xs font-medium text-[var(--text-500)]">No conversations yet</p>
                 </div>
               )}
             </ScrollArea>
           </>
         )}
 
-        {/* Footer */}
-        <div className="p-2 space-y-0.5">
-          <Separator className="mx-1 my-1 bg-[var(--border-300)]" />
+        {/* Footer — user card with popover menu */}
+        <div className="px-3 pb-3 pt-1">
+          <div className="mx-1 my-2 h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border-300), transparent)' }} />
 
-          {!isSettingsPage && (
-            <>
-              <Button
-                variant="ghost"
-                className={sidebarItemClassName}
-                onClick={() => navigate('/')}
-              >
-                <Home size={16} />
-                <span>Back to selector</span>
-              </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="sidebar-user-card w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)]">
+                <div className="sidebar-user-avatar relative">
+                  <Avatar className="h-8 w-8 ring-2 ring-transparent transition-all duration-200">
+                    <AvatarFallback
+                      className="text-xs font-bold"
+                      style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.2), rgba(var(--neon-rgb), 0.08))', color: 'var(--neon-color)' }}
+                    >
+                      E
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2" style={{ backgroundColor: '#34d399', borderColor: 'var(--bg-100)' }} />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1 text-left">
+                  <span className="font-semibold text-[13px] truncate text-[var(--text-100)]">Edward</span>
+                  <span className="text-[10px] truncate text-[var(--text-500)]">
+                    {currentModelName || 'MiMo V2.5'}
+                  </span>
+                </div>
+                <ChevronUp size={14} className="text-[var(--text-500)] flex-shrink-0" />
+              </button>
+            </PopoverTrigger>
 
-              <Button
-                variant="ghost"
-                className={sidebarItemClassName}
-                onClick={() => onSidebarPanelChange('token-stats')}
-              >
-                <BarChart3 size={16} />
-                <span>Token Stats</span>
-              </Button>
-            </>
-          )}
+            <PopoverContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="w-[260px] p-1.5 rounded-xl border-[var(--border-300)]"
+              style={{
+                backgroundColor: 'var(--bg-100)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+              }}
+            >
+              {/* User info header inside popover */}
+              <div className="flex items-center gap-3 px-3 py-2.5 mb-1">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback
+                    className="text-xs font-bold"
+                    style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.2), rgba(var(--neon-rgb), 0.08))', color: 'var(--neon-color)' }}
+                  >
+                    E
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-[13px] truncate text-[var(--text-100)]">Edward</span>
+                  <span className="text-[10px] truncate text-[var(--text-500)]">
+                    {currentModelName || 'MiMo V2.5'}
+                  </span>
+                </div>
+              </div>
 
-          <Button
-            variant="ghost"
-            className={sidebarItemClassName}
-            onClick={() => navigate('/settings')}
-            style={isSettingsPage ? { backgroundColor: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)' } : undefined}
-          >
-            <SettingsIcon size={16} />
-            <span>Settings</span>
-          </Button>
+              <div className="h-px mx-2" style={{ background: 'var(--border-300)' }} />
 
-          <Button
-            variant="ghost"
-            className={sidebarItemClassName}
-            onClick={onToggleTheme}
-          >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-          </Button>
+              <div className="py-1">
+                {!isSettingsPage && (
+                  <>
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200 cursor-pointer"
+                      onClick={() => navigate('/')}
+                    >
+                      <Home size={15} />
+                      <span>Home</span>
+                    </button>
 
-          <Separator className="mx-1 my-1 bg-[var(--border-300)]" />
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200 cursor-pointer"
+                      onClick={() => onSidebarPanelChange('token-stats')}
+                    >
+                      <BarChart3 size={15} />
+                      <span>Token Stats</span>
+                    </button>
+                  </>
+                )}
 
-          {/* User profile */}
-          <div className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback
-                className="text-sm font-bold bg-[var(--bg-300)] text-[var(--text-300)]"
-              >
-                E
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col min-w-0 flex-1">
-              <span className="font-medium truncate text-[var(--text-100)]">Edward</span>
-              <span className="text-xs truncate text-[var(--text-500)]">
-                {currentModelName || 'MiMo V2.5'}
-              </span>
-            </div>
-          </div>
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200 cursor-pointer"
+                  onClick={() => navigate('/settings')}
+                  style={isSettingsPage ? { backgroundColor: 'rgba(var(--neon-rgb), 0.08)', color: 'var(--neon-color)' } : undefined}
+                >
+                  <SettingsIcon size={15} />
+                  <span>Settings</span>
+                </button>
+
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200 cursor-pointer"
+                  onClick={onToggleTheme}
+                >
+                  {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                  <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </aside>

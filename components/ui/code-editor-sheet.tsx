@@ -67,7 +67,7 @@ interface CodeEditorProps {
   value?: string;
   onChange?: (value: string) => void;
   onBlur?: () => void;
-  onLoad?: (editor: any) => void;
+  onLoad?: (editor: any, monaco?: any) => void;
   placeholder?: string;
 }
 
@@ -330,23 +330,21 @@ function CodeEditor({
         }
       }
 
-      const wrapper = {
-        ...editor,
-        undo: () => editor.trigger("keyboard", "undo", null),
-        redo: () => editor.trigger("keyboard", "redo", null),
-        getSession: () => ({
-          getUndoManager: () => ({
-            reset: () => {
-              const model = editor.getModel();
-              if (model) {
-                (model as any)._commandManager?.clear?.();
-              }
-            },
-          }),
+      (editor as any).undo = () => editor.trigger("keyboard", "undo", null);
+      (editor as any).redo = () => editor.trigger("keyboard", "redo", null);
+      (editor as any).getSession = () => ({
+        getUndoManager: () => ({
+          reset: () => {
+            const model = editor.getModel();
+            if (model) {
+              (model as any)._commandManager?.clear?.();
+            }
+          },
         }),
-      };
+      });
 
-      onLoad?.(wrapper);
+      onLoad?.(editor, monaco);
+      requestAnimationFrame(() => editor.layout());
     },
     [onLoad, placeholder, value, language]
   );

@@ -3,6 +3,7 @@ import { TrendingUp, Zap, BarChart3, MessageSquare } from 'lucide-react';
 import * as db from '../services/apiDatabaseAdapter';
 import { ModelConfig } from '../types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SlidingGroup } from '@/components/ui/sliding-group';
 
 interface SidebarTokenStatsPanelProps {
   availableModels?: ModelConfig[];
@@ -96,22 +97,31 @@ const SidebarTokenStatsPanel: React.FC<SidebarTokenStatsPanelProps> = ({ availab
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tab buttons */}
-      <div className="flex items-center gap-1 px-3 pt-3 pb-2">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setSelectedView(id)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all"
-            style={{
-              backgroundColor: selectedView === id ? 'rgba(var(--neon-rgb), 0.1)' : 'transparent',
-              color: selectedView === id ? 'var(--neon-color)' : 'var(--text-500)',
-              border: `1px solid ${selectedView === id ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent'}`,
-            }}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+      <div className="px-3 pt-3 pb-2">
+        <SlidingGroup
+          direction="horizontal"
+          activeKey={selectedView}
+          onSelect={(key) => setSelectedView(key as 'overview' | 'models' | 'conversations')}
+          className="gap-1 p-0.5 rounded-lg"
+          style={{ backgroundColor: 'var(--bg-200)' }}
+          indicatorStyle={{ top: 2, bottom: 2 }}
+          items={tabs.map(({ id, label, icon: Icon }) => ({
+            key: id,
+            label,
+            icon: <Icon size={13} />,
+          }))}
+          renderItem={(item, isActive) => (
+            <button
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all cursor-pointer"
+              style={{
+                color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          )}
+        />
       </div>
 
       <ScrollArea className="flex-1">

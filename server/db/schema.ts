@@ -196,6 +196,20 @@ CREATE TABLE IF NOT EXISTS python_projects (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Database explorer connections
+CREATE TABLE IF NOT EXISTS database_connections (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL DEFAULT 5432,
+  database_name TEXT NOT NULL,
+  username TEXT NOT NULL,
+  password_encrypted TEXT NOT NULL,
+  ssl BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 export const SEED_SQL = `

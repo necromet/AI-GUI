@@ -2,7 +2,7 @@
 
 ## Project
 
-**edward:labs** — AI chat web app (React 19 + Vite) with Express 5 + SQLite backend, using Xiaomi MiMo, DeepSeek, and OpenAI APIs.
+**edward:labs** — AI chat web app (React 19 + Vite) with Express 5 + PostgreSQL backend, using Xiaomi MiMo, DeepSeek, and OpenAI APIs.
 
 ## Commands
 
@@ -18,7 +18,7 @@ No lint, typecheck, test, or formatter scripts exist. The only verification is `
 
 ## Architecture
 
-Frontend is a single-page React app. Backend is Express 5 with SQLite (`better-sqlite3`). Client talks to backend via REST + SSE streaming — there is no direct DB access from the browser.
+Frontend is a single-page React app. Backend is Express 5 with PostgreSQL (`pg`). Client talks to backend via REST + SSE streaming — there is no direct DB access from the browser.
 
 | Layer | Files | Notes |
 |-------|-------|-------|
@@ -33,7 +33,7 @@ Frontend is a single-page React app. Backend is Express 5 with SQLite (`better-s
 | Constants | `constants.tsx` | Default model list, logo SVG, neon presets |
 | Utilities | `lib/utils.ts` | `cn()` helper (clsx + tailwind-merge) |
 | **Express server** | `server/index.ts` | Express 5 API backend on port 3001 |
-| Server DB | `server/db/index.ts` | SQLite via `better-sqlite3`, WAL mode, auto-migration. DB file: `data/edwardlabs.db` |
+| Server DB | `server/db/index.ts` | PostgreSQL via `pg` pool. Connection via `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` env vars |
 | Server DB schema | `server/db/schema.ts` | `SCHEMA_SQL` + `SEED_SQL` constants, run on every startup |
 | Chat routes | `server/routes/chat.ts` | `/api/chat/*` — completions, title, TTS, ASR |
 | Skema routes | `server/routes/skema.ts` | `/api/skema/*` — image gen (OpenAI), HTML gen (MiMo) |
@@ -43,6 +43,7 @@ Frontend is a single-page React app. Backend is Express 5 with SQLite (`better-s
 | OpenCode agent routes | `server/routes/opencodeAgent.ts` | `/api/agent/opencode/*` — OpenCode sidecar proxy |
 | Library agent routes | `server/routes/libraryAgent.ts` | `/api/library-agent/*` — library agent via Vercel AI SDK |
 | Library routes | `server/routes/library.ts` | `/api/library/*` — CRUD for library components/folders |
+| Database routes | `server/routes/database.ts` | `/api/database/*` — connection CRUD, test, schema introspection, query execution |
 | Server MiMo | `server/services/mimoService.ts` | Server-side MiMo API + language detection |
 | Server RAG | `server/services/ragService.ts` + `embeddingService.ts` | In-memory vector store + embeddings |
 | Server Agent | `server/services/agentService.ts` | Tool definitions + execution for agent loop |
@@ -66,7 +67,7 @@ In `types.ts`, `Role.Assistant` is the string `'model'` (for MiMo API compatibil
 
 `vite.config.ts` injects `process.env.MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_DIRECT_API_KEY`, `MIMO_DIRECT_BASE_URL` from `.env` via `define`. Services read `process.env.*` directly (string-replaced at build time). Requires `.env` with these keys (see `.env.example`).
 
-Server-side only (not injected via Vite): `OPENAI_API_KEY` (Skema image gen), `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `SERVER_PORT`, `DATABASE_PATH`.
+Server-side only (not injected via Vite): `OPENAI_API_KEY` (Skema image gen), `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `SERVER_PORT`, `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD`.
 
 ### Vite dev server proxies
 
@@ -104,6 +105,7 @@ Each mode has its own password and `sessionStorage` key, checked in `components/
 | Chat | `thelordismyshepherd` | `edward:labs_chat_session` |
 | Experiments | `ilacknothing` | `edward:labs_experiments_session` |
 | Library | `psalm23` | `edward:labs_library_session` |
+| Database | `heleadsmebesidestillwaters` | `edward:labs_database_session` |
 
 ### Notifications via sonner
 
@@ -117,7 +119,7 @@ The Express server auto-detects the user's language from the last message and pr
 
 `server/index.ts` manually parses `.env` via `readFileSync` + line splitting (no `dotenv` package). It only sets keys not already in `process.env`, so shell env vars take precedence. The `.env` is resolved from `process.cwd()`, so `npm run dev:server` must be run from the project root. The server uses top-level `await import(...)` — requires ESM (`"type": "module"` in package.json).
 
-`SERVER_PORT` env var controls the backend port (default: 3001). `DATABASE_PATH` controls the SQLite file location (default: `data/edwardlabs.db`).
+`SERVER_PORT` env var controls the backend port (default: 3001). PostgreSQL connection is configured via `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` env vars.
 
 ### Docker: nginx + Express
 
@@ -130,7 +132,7 @@ The Skema feature is a Google Skema-inspired visual design editor accessible fro
 - **Canvas**: Uses iframe `srcDoc` for HTML preview (not Fabric.js)
 - **Layouts**: Supports `16:9`, `1:1`, `9:16`, `4:5`, `1.91:1`, `4:3`, `3:4`, `32:9`
 - **AI Generation**: Two modes — HTML generation (via MiMo) and image generation (via OpenAI `gpt-image-2`)
-- **Persistence**: SQLite `skema_projects` table, boards serialized as JSON
+- **Persistence**: PostgreSQL `skema_projects` table, boards serialized as JSON
 - **Export**: HTML file download, PNG/JPEG export (via `html-to-image`), copy to clipboard
 - **Components**: `SkemaPanel` (project grid), `SkemaEditor` (workspace), `SkemaAgentSidebar` (agent chat), `SkemaExportModal`, `SkemaLibrary`
 
@@ -159,7 +161,7 @@ The sidebar reuses `MessageBubble`, `EmptyState`, `AgentMarkdown`, and `ModelPic
 
 Tools: `generate_html`, `edit_html`, `generate_spec`, `edit_spec`, `search_library`, `web_browse`, `execute_code`, `search_web`.
 
-Session data stored in SQLite `skema_agent_sessions` table (references `skema_projects(id)`).
+Session data stored in PostgreSQL `skema_agent_sessions` table (references `skema_projects(id)`).
 
 ### Library agent (Vercel AI SDK)
 
@@ -167,8 +169,31 @@ The Library feature uses Vercel AI SDK (`ai` package) for its agent chat. Tool d
 
 Frontend agent components live in `components/library/agent/` — `useAgentStream.ts` (SSE multi-round loop), `useAgentSessions.ts` (session CRUD), `MessageBlocks.tsx` (rendering), `AgentMarkdown.tsx`, `ModelPicker.tsx`. The main sidebar is `components/library/AgentSidebar.tsx`. These are reused by the Skema Agent. See `docs/LIBRARY_AGENT.md` for full architecture documentation.
 
+### Database explorer
+
+The Database mode is a top-level mode (alongside Chat, Experiments, Library) that lets developers connect to external PostgreSQL databases and explore them with SQL.
+
+- **Frontend**: `components/DatabasePanel.tsx` (main), `DatabaseConnectForm.tsx` (connection dialog), `DatabaseSchemaBrowser.tsx` (schema tree), `DatabaseResultsTable.tsx` (results grid)
+- **Backend**: `server/routes/database.ts` — connection CRUD, test, schema introspection, query execution
+- **DB schema**: `database_connections` table stores connection configs (passwords base64-encoded)
+- **SQL editor**: Monaco editor with SQL language mode, Ctrl+Enter to run
+- **Pool caching**: Server caches `pg.Pool` per connection ID, auto-cleanup after 5 min idle
+- **Row limit**: 1000 rows max per query (configurable)
+- **Query history**: Last 50 queries stored in `localStorage` key `edward:labs_dbQueryHistory`
+
+#### Database UI layout — no separate sidebar
+
+The Database mode does NOT create its own left sidebar. It reuses the **main sidebar** and **main header** in `App.tsx` via callback props:
+
+- `onSidebarControls` — `DatabasePanel` passes a `DatabaseSidebarControls` object to `App.tsx`, which renders the schema browser inside the main sidebar (the same sidebar used by Chat/Experiments/Library).
+- `onHeaderControls` — `DatabasePanel` passes a `DatabaseHeaderControls` object to `App.tsx`, which renders toolbar actions (connection picker, run query, format, history, word wrap, font size, shortcuts) in the main header area.
+
+Both interfaces are exported from `components/DatabasePanel.tsx`. When implementing database UI features, add controls to these callback objects rather than creating new sidebar or header elements inside `DatabasePanel` itself.
+
+The scroll container in `App.tsx` (`#scroll-container`) uses `overflow-hidden` on `/database` routes (instead of `overflow-y-auto`) so the editor fills the viewport exactly. The route wrapper divs use `h-full flex flex-col` to ensure the flex height chain resolves properly down to Monaco.
+
 ## Build Artifacts (all gitignored)
 
 - `dist/` — Vite web build output
 - `generated_images/` — AI-generated image output
-- `data/` — SQLite database files
+- `data/` — Runtime data (python files, tmp)

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, LayoutGrid, Folder, ChevronRight } from 'lucide-react';
+import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, LayoutGrid, Folder, ChevronRight, Loader2 } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, ModelConfig } from '../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,7 @@ interface LibraryPanelProps {
 
 const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig, onNotification, onControlsChange }) => {
   const navigate = useNavigate();
-  const { componentId } = useParams<{ componentId: string }>();
+  const { componentId, folderId: routeFolderId } = useParams<{ componentId: string; folderId: string }>();
   const [components, setComponents] = useState<LibraryComponent[]>([]);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,10 +38,18 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingComponent, setEditingComponent] = useState<LibraryComponent | null>(null);
-  const [activeFolder, setActiveFolder] = useState<LibraryFolder | null>(null);
   const [editingFolder, setEditingFolder] = useState<LibraryFolder | null>(null);
   const [isEditingFolder, setIsEditingFolder] = useState(false);
   const [movingComponentId, setMovingComponentId] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const pageSize = 24;
+
+  const activeFolder = useMemo(() => {
+    if (!routeFolderId || folders.length === 0) return null;
+    return folders.find(f => f.id === routeFolderId) || null;
+  }, [routeFolderId, folders]);
 
   const loadComponents = useCallback(async () => {
     setIsLoading(true);
@@ -53,17 +61,48 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       } else if (folders.length > 0) {
         params.set('unfoldered', 'true');
       }
+      params.set('limit', String(pageSize));
+      params.set('offset', '0');
 
       const response = await fetch(`/api/library/components?${params}`);
       if (!response.ok) throw new Error('Failed to load components');
       const data = await response.json();
       setComponents(data.components || []);
+      setTotal(data.total || 0);
+      setHasMore(data.hasMore || false);
     } catch (err: any) {
       onNotification?.(err.message, 'error');
     } finally {
       setIsLoading(false);
     }
   }, [activeCategory, activeFolder, folders.length, onNotification]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    try {
+      const params = new URLSearchParams();
+      if (activeCategory !== 'all') params.set('category', activeCategory);
+      if (activeFolder) {
+        params.set('folderId', activeFolder.id);
+      } else if (folders.length > 0) {
+        params.set('unfoldered', 'true');
+      }
+      params.set('limit', String(pageSize));
+      params.set('offset', String(components.length));
+
+      const response = await fetch(`/api/library/components?${params}`);
+      if (!response.ok) throw new Error('Failed to load components');
+      const data = await response.json();
+      setComponents(prev => [...prev, ...(data.components || [])]);
+      setHasMore(data.hasMore || false);
+      setTotal(data.total || 0);
+    } catch (err: any) {
+      onNotification?.(err.message, 'error');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [activeCategory, activeFolder, folders.length, onNotification, isLoadingMore, hasMore, components.length]);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -84,6 +123,11 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     window.addEventListener('library-reload', handler);
     return () => window.removeEventListener('library-reload', handler);
   }, [loadComponents, loadFolders]);
+
+  useEffect(() => {
+    setActiveCategory('all');
+    setSearchQuery('');
+  }, [routeFolderId]);
 
   useEffect(() => {
     if (!componentId || components.length === 0) return;
@@ -137,7 +181,11 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       setComponents(prev => prev.filter(c => c.id !== id));
       if (selectedComponent?.id === id) {
         setSelectedComponent(null);
-        navigate('/library');
+        if (activeFolder) {
+          navigate(`/library/folder/${activeFolder.id}`);
+        } else {
+          navigate('/library');
+        }
       }
       onNotification?.('Component deleted', 'success');
       loadFolders();
@@ -187,18 +235,19 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
   const handleSelectComponent = (comp: LibraryComponent) => {
     setSelectedComponent(comp);
-    navigate(`/library/${comp.id}`, { replace: true });
+    if (activeFolder) {
+      navigate(`/library/folder/${activeFolder.id}/${comp.id}`, { replace: true });
+    } else {
+      navigate(`/library/${comp.id}`, { replace: true });
+    }
   };
 
   const handleSelectFolder = (folder: LibraryFolder) => {
-    setActiveFolder(folder);
-    setActiveCategory('all');
-    setSearchQuery('');
+    navigate(`/library/folder/${folder.id}`, { replace: true });
   };
 
   const handleBackToFolders = () => {
-    setActiveFolder(null);
-    setSearchQuery('');
+    navigate('/library', { replace: true });
   };
 
   const handleFolderCreated = (folder: LibraryFolder) => {
@@ -215,7 +264,9 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       const response = await fetch(`/api/library/folders/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete folder failed');
       setFolders(prev => prev.filter(f => f.id !== id));
-      if (activeFolder?.id === id) setActiveFolder(null);
+      if (activeFolder?.id === id) {
+        navigate('/library', { replace: true });
+      }
       onNotification?.('Folder deleted', 'success');
       loadComponents();
     } catch (err: any) {
@@ -251,7 +302,13 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
         selectedComponent={selectedComponent}
         setSelectedComponent={(comp) => {
           setSelectedComponent(comp);
-          if (!comp) navigate('/library');
+          if (!comp) {
+            if (activeFolder) {
+              navigate(`/library/folder/${activeFolder.id}`);
+            } else {
+              navigate('/library');
+            }
+          }
         }}
         onNotification={onNotification}
         onControlsChange={onControlsChange}
@@ -260,7 +317,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     );
   }
 
-  const filteredCount = components.length;
+  const filteredCount = total || components.length;
   const showFolders = !activeFolder && !searchQuery;
 
   return (
@@ -602,7 +659,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                   <div className="flex items-center gap-2 mb-3">
                     <LayoutGrid size={14} style={{ color: 'var(--text-500)' }} />
                     <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
-                      {activeCategory !== 'all' ? CATEGORIES.find(c => c.key === activeCategory)?.label || 'Components' : 'Unfiled Components'}
+                      {activeCategory !== 'all' ? CATEGORIES.find(c => c.key === activeCategory)?.label || 'Components' : 'Components'}
                     </span>
                   </div>
                 )}
@@ -623,6 +680,32 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
                     />
                   ))}
                 </div>
+                {hasMore && !searchQuery && (
+                  <div className="flex justify-center mt-6">
+                    <Button
+                      variant="outline"
+                      onClick={loadMore}
+                      disabled={isLoadingMore}
+                      className="gap-2 rounded-xl text-xs h-9 px-6"
+                      style={{
+                        backgroundColor: 'var(--bg-200)',
+                        color: 'var(--text-300)',
+                        borderColor: 'var(--border-300)',
+                      }}
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          Load More ({components.length} of {total})
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>

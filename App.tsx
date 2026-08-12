@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop, MousePointer2, FileCode, LayoutGrid, Square } from 'lucide-react';
+import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop, MousePointer2, FileCode, LayoutGrid, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { SlidingGroup } from '@/components/ui/sliding-group';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, SkemaProject, ConversationType } from './types';
@@ -32,6 +33,9 @@ import type { CanvasControls, CanvasSidebarControls } from './components/canvas'
 import { RESOLUTIONS } from './components/canvas/constants';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
+import DatabasePanel from './components/DatabasePanel';
+import type { DatabaseSidebarControls } from './components/DatabasePanel';
+import type { DatabaseHeaderControls } from './components/DatabasePanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 const isDocumentFile = (file: File) => {
@@ -185,8 +189,9 @@ const App: React.FC = () => {
   const isChatMode = location.pathname.startsWith('/chat');
   const isExperimentsMode = location.pathname.startsWith('/experiments');
   const isLibraryMode = location.pathname.startsWith('/library');
+  const isDatabaseMode = location.pathname.startsWith('/database');
   const isSettingsPage = location.pathname === '/settings';
-  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : 'library';
+  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'library';
   const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
     if (isChatMode) return 'chat';
     if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
@@ -213,6 +218,9 @@ const App: React.FC = () => {
   });
   const [isLibraryAuthenticated, setIsLibraryAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_library_session');
+  });
+  const [isDatabaseAuthenticated, setIsDatabaseAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_database_session');
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [htmlFullscreenCode, setHtmlFullscreenCode] = useState<string | null>(null);
@@ -259,6 +267,8 @@ const App: React.FC = () => {
   const [skemaControls, setSkemaControls] = useState<SkemaControls | null>(null);
   const [canvasSidebarControls, setCanvasSidebarControls] = useState<CanvasSidebarControls | null>(null);
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
+  const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
+  const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
     try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
   });
@@ -1017,9 +1027,11 @@ const App: React.FC = () => {
         isChatAuthenticated={isChatAuthenticated}
         isExperimentsAuthenticated={isExperimentsAuthenticated}
         isLibraryAuthenticated={isLibraryAuthenticated}
+        isDatabaseAuthenticated={isDatabaseAuthenticated}
         onSelectChat={() => navigate('/chat')}
         onSelectExperiments={() => navigate('/experiments')}
         onSelectLibrary={() => navigate('/library')}
+        onSelectDatabase={() => navigate('/database')}
         onUnlockChat={() => {
           setIsChatAuthenticated(true);
           sessionStorage.setItem('edward:labs_chat_session', 'true');
@@ -1031,6 +1043,10 @@ const App: React.FC = () => {
         onUnlockLibrary={() => {
           setIsLibraryAuthenticated(true);
           sessionStorage.setItem('edward:labs_library_session', 'true');
+        }}
+        onUnlockDatabase={() => {
+          setIsDatabaseAuthenticated(true);
+          sessionStorage.setItem('edward:labs_database_session', 'true');
         }}
       />
     );
@@ -1076,6 +1092,7 @@ const App: React.FC = () => {
         availableModels={models}
         libraryControls={libraryControls}
         canvasControls={canvasSidebarControls}
+        dbSidebarControls={dbSidebarControls}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -1093,7 +1110,7 @@ const App: React.FC = () => {
 
         {/* Top bar — hidden on settings page */}
         {isSettingsPage ? (
-          <RequireAuth isAuth={isChatAuthenticated || isExperimentsAuthenticated || isLibraryAuthenticated}>
+          <RequireAuth isAuth={isChatAuthenticated || isExperimentsAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated}>
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -1150,32 +1167,29 @@ const App: React.FC = () => {
               {/* Center: Canvas/Preview toggle + status */}
               {'viewMode' in skemaControls && (
                 <div className="flex items-center gap-3 ml-4">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => (skemaControls as CanvasControls).onViewModeChange('canvas')}
-                      title="Canvas"
-                      className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
-                      style={{
-                        background: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                        color: (skemaControls as CanvasControls).viewMode === 'canvas' ? 'var(--neon-color)' : 'var(--text-400)',
-                        border: (skemaControls as CanvasControls).viewMode === 'canvas' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
-                      }}
-                    >
-                      <Code2 size={14} />
-                    </button>
-                    <button
-                      onClick={() => (skemaControls as CanvasControls).onViewModeChange('preview')}
-                      title="Preview"
-                      className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
-                      style={{
-                        background: (skemaControls as CanvasControls).viewMode === 'preview' ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                        color: (skemaControls as CanvasControls).viewMode === 'preview' ? 'var(--neon-color)' : 'var(--text-400)',
-                        border: (skemaControls as CanvasControls).viewMode === 'preview' ? '1px solid rgba(var(--neon-rgb), 0.3)' : '1px solid transparent',
-                      }}
-                    >
-                      <Eye size={14} />
-                    </button>
-                  </div>
+                  <SlidingGroup
+                    direction="horizontal"
+                    activeKey={(skemaControls as CanvasControls).viewMode}
+                    onSelect={(key) => (skemaControls as CanvasControls).onViewModeChange(key as 'canvas' | 'preview')}
+                    className="gap-1 p-0.5 rounded-md"
+                    style={{ backgroundColor: 'var(--bg-200)' }}
+                    indicatorStyle={{ top: 2, bottom: 2, borderRadius: 6 }}
+                    items={[
+                      { key: 'canvas', label: 'Canvas', icon: <Code2 size={14} /> },
+                      { key: 'preview', label: 'Preview', icon: <Eye size={14} /> },
+                    ]}
+                    renderItem={(item, isActive) => (
+                      <button
+                        title={item.label}
+                        className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
+                        style={{
+                          color: isActive ? 'var(--neon-color)' : 'var(--text-400)',
+                        }}
+                      >
+                        {item.icon}
+                      </button>
+                    )}
+                  />
                   <div className="text-[11px] font-mono flex gap-3.5" style={{ color: 'var(--text-400)' }}>
                     {(skemaControls as CanvasControls).viewMode === 'canvas' ? (
                       <>
@@ -1340,6 +1354,98 @@ const App: React.FC = () => {
                     <X size={14} />
                   </Button>
                 </>
+              ) : dbHeaderControls ? (
+                <>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono" style={{ color: 'var(--text-400)' }}>SQL</span>
+                    {dbHeaderControls.lastExecTime !== null && (
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-500)' }}>
+                        {dbHeaderControls.lastExecTime}ms
+                      </span>
+                    )}
+                  </div>
+                  <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={dbHeaderControls.onFormatSql}
+                      title="Format SQL (Ctrl+Shift+F)"
+                    >
+                      <Wand2 size={15} style={{ color: 'var(--text-400)' }} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={dbHeaderControls.onClear}
+                      title="Clear editor"
+                    >
+                      <X size={15} style={{ color: 'var(--text-400)' }} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={dbHeaderControls.onToggleWordWrap}
+                      title={dbHeaderControls.wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
+                    >
+                      <WrapText size={15} style={{ color: dbHeaderControls.wordWrap ? 'var(--neon-color)' : 'var(--text-400)' }} />
+                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => dbHeaderControls.onChangeFontSize(-1)} title="Decrease font size">
+                        <Type size={12} style={{ color: 'var(--text-400)' }} />
+                      </Button>
+                      <span className="text-[9px] font-mono w-5 text-center" style={{ color: 'var(--text-500)' }}>{dbHeaderControls.fontSize}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => dbHeaderControls.onChangeFontSize(1)} title="Increase font size">
+                        <Type size={15} style={{ color: 'var(--text-400)' }} />
+                      </Button>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-mono" style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}>
+                      Ctrl+Enter
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => dbHeaderControls.onToggleShortcuts(true)}
+                      title="Keyboard shortcuts"
+                    >
+                      <HelpCircle size={15} style={{ color: 'var(--text-400)' }} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={dbHeaderControls.onToggleHistory}
+                      title="Query history"
+                    >
+                      <History size={16} style={{ color: dbHeaderControls.showHistory ? 'var(--neon-color)' : 'var(--text-400)' }} />
+                    </Button>
+                    {dbHeaderControls.isExecuting ? (
+                      <Button
+                        onClick={dbHeaderControls.onCancelExecution}
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 px-3 gap-1.5 cursor-pointer"
+                      >
+                        <StopCircle size={14} />
+                        Cancel
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={dbHeaderControls.onExecute}
+                        disabled={!dbHeaderControls.sql.trim()}
+                        size="sm"
+                        className="h-7 px-3 gap-1.5 cursor-pointer"
+                        style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+                      >
+                        <Play size={14} />
+                        Run
+                      </Button>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="flex items-center gap-2 md:hidden">
@@ -1408,7 +1514,7 @@ const App: React.FC = () => {
         ) : (
           <>
             {/* Content area */}
-            <div className="flex-1 overflow-y-auto relative scroll-smooth" id="scroll-container">
+            <div className={`flex-1 relative scroll-smooth ${location.pathname.startsWith('/database') ? 'overflow-hidden' : 'overflow-y-auto'}`} id="scroll-container">
               <Routes>
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
@@ -1540,18 +1646,6 @@ const App: React.FC = () => {
                   </RequireAuth>
                 } />
                 <Route path="/library" element={
-<RequireAuth isAuth={isLibraryAuthenticated}>
-                      <div className="h-full">
-                        <LibraryPanel
-                          theme={theme}
-                          modelConfig={selectedModelConfig}
-                          onNotification={handleNotification}
-                          onControlsChange={setLibraryControls}
-                        />
-                      </div>
-                    </RequireAuth>
-                  } />
-                  <Route path="/library/:componentId" element={
                   <RequireAuth isAuth={isLibraryAuthenticated}>
                     <div className="h-full">
                       <LibraryPanel
@@ -1559,6 +1653,70 @@ const App: React.FC = () => {
                         modelConfig={selectedModelConfig}
                         onNotification={handleNotification}
                         onControlsChange={setLibraryControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/library/folder/:folderId" element={
+                  <RequireAuth isAuth={isLibraryAuthenticated}>
+                    <div className="h-full">
+                      <LibraryPanel
+                        theme={theme}
+                        modelConfig={selectedModelConfig}
+                        onNotification={handleNotification}
+                        onControlsChange={setLibraryControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/library/folder/:folderId/:componentId" element={
+                  <RequireAuth isAuth={isLibraryAuthenticated}>
+                    <div className="h-full">
+                      <LibraryPanel
+                        theme={theme}
+                        modelConfig={selectedModelConfig}
+                        onNotification={handleNotification}
+                        onControlsChange={setLibraryControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/library/:componentId" element={
+                  <RequireAuth isAuth={isLibraryAuthenticated}>
+                    <div className="h-full">
+                      <LibraryPanel
+                        theme={theme}
+                        modelConfig={selectedModelConfig}
+                        onNotification={handleNotification}
+                        onControlsChange={setLibraryControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/database" element={
+                  <RequireAuth isAuth={isDatabaseAuthenticated}>
+                    <div className="h-full flex flex-col">
+                      <DatabasePanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        isSidebarOpen={isSidebarOpen}
+                        onToggleSidebar={() => setIsSidebarOpen(true)}
+                        onSidebarControls={setDbSidebarControls}
+                        onHeaderControls={setDbHeaderControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/database/:connectionId" element={
+                  <RequireAuth isAuth={isDatabaseAuthenticated}>
+                    <div className="h-full flex flex-col">
+                      <DatabasePanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        isSidebarOpen={isSidebarOpen}
+                        onToggleSidebar={() => setIsSidebarOpen(true)}
+                        onSidebarControls={setDbSidebarControls}
+                        onHeaderControls={setDbHeaderControls}
                       />
                     </div>
                   </RequireAuth>
