@@ -654,3 +654,94 @@ html.dark .skema-outline-variant { border-color: #4d4354; }
 .lc-a { color: #a78bfa; }
 .lc-v { color: #34d399; }
 .lc-c { color: var(--text-400); font-style: italic; }
+
+/* Sidebar refinements */
+.sidebar-new-chat:hover {
+  border-color: rgba(var(--neon-rgb), 0.22) !important;
+  box-shadow: 0 0 0 1px rgba(var(--neon-rgb), 0.06), 0 2px 8px rgba(var(--neon-rgb), 0.06);
+}
+
+.sidebar-brand-mark {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sidebar-brand-mark:hover {
+  transform: scale(1.05);
+}
+
+.sidebar-user-card:hover {
+  background-color: var(--bg-200);
+}
+
+.sidebar-user-card:hover .sidebar-user-avatar .ring-2 {
+  ring-color: rgba(var(--neon-rgb), 0.2);
+}
+
+.sidebar-tool-group {
+  transition: all 0.2s ease;
+}
+
+/* ═══ actuallyexplain — ReactFlow dark theme overrides ═══ */
+
+.react-flow.dark {
+  --xy-background-color: var(--bg-100, #0e0e0e);
+  --xy-background-pattern-color: rgba(255,255,255,0.03);
+  --xy-controls-button-background-color: var(--bg-200, #1a1a1a);
+  --xy-controls-button-background-color-hover: var(--bg-300, #252525);
+  --xy-controls-button-color: var(--text-400);
+  --xy-controls-button-color-hover: var(--text-100);
+  --xy-controls-button-border-color: var(--border-200);
+  --xy-node-background-color: var(--bg-200, #1a1a1a);
+  --xy-node-color: var(--text-100);
+  --xy-node-border: 2px solid var(--border-300);
+  --xy-node-border-radius: 0.5rem;
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: 0 0 16px 6px rgba(90, 189, 172, 0.7);
+}
+
+.react-flow__node-sql {
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5em 0.5em 0.25em rgba(0, 0, 0, 0.3);
+}
+
+.react-flow__panel {
+  margin: 0.75rem !important;
+}
+
+.react-flow__controls {
+  border: 1px solid var(--border-200, #2a2a30);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  width: 2rem !important;
+  height: 2rem !important;
+}
+
+.react-flow__controls-button svg {
+  max-width: 0.625rem !important;
+  max-height: 0.625rem !important;
+}
+
+.react-flow__edge {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+.react-flow__edge-interaction {
+  pointer-events: none !important;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

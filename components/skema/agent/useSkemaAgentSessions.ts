@@ -95,7 +95,7 @@ export function useSkemaAgentSessions({
   }, [activeSessionId, onResetAgentState, setMessages]);
 
   const handleNewSession = useCallback(async () => {
-    if (!project?.id || sessions.length >= 3) return;
+    if (!project?.id) return;
     try {
       const resp = await fetch('/api/skema-agent/sessions', {
         method: 'POST',

@@ -56,7 +56,7 @@ export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 
 
 export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'library';
 
-export type Mode = 'selector' | 'chat' | 'experiments' | 'library';
+export type Mode = 'selector' | 'chat' | 'experiments' | 'library' | 'database';
 
 export interface LibraryComponent {
   id: string;
@@ -169,4 +169,59 @@ export interface SkemaProject {
   fullDesignSpec?: import('./types/skemaSpec').SkemaDesignSpec;
   createdAt: number;
   updatedAt: number;
+}
+
+// ===== Database Explorer Types =====
+
+export interface DatabaseConnection {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  ssl?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatabaseConnectionInput {
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl?: boolean;
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: any[][];
+  rowCount: number;
+  executionTime: number;
+  error?: string;
+}
+
+export interface ColumnInfo {
+  name: string;
+  dataType: string;
+  isNullable: boolean;
+  isPrimaryKey: boolean;
+  columnDefault: string | null;
+  characterMaximumLength: number | null;
+  foreignKey?: { refTable: string; refColumn: string };
+}
+
+export interface TableInfo {
+  schema: string;
+  name: string;
+  type: 'table' | 'view';
+  columns: ColumnInfo[];
+  rowCount?: number | null;
+}
+
+export interface SchemaInfo {
+  schemas: string[];
+  tables: TableInfo[];
 }

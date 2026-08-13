@@ -51,8 +51,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     (e: React.MouseEvent): GridPos => {
       if (!canvasRef.current) return { col: 1, row: 1 };
       const r = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top + (scrollRef.current?.scrollTop || 0);
+      const bw = canvasRef.current.clientLeft;
+      const x = e.clientX - r.left - bw;
+      const y = e.clientY - r.top - bw - 26;
       return {
         col: Math.max(1, Math.min(cols, Math.floor(x / cellW) + 1)),
         row: Math.max(1, Math.min(ROWS, Math.floor(y / cellH) + 1)),
@@ -92,8 +93,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       setDEnd(p);
       setHoverPos(null);
       setPromptBar(null);
+      onSelect(null);
     },
-    [gridPos]
+    [gridPos, onSelect]
   );
 
   const handleMouseMove = useCallback(
@@ -163,7 +165,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
   }, [cancelSelection, onSelect, selectedId, onRemove]);
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-auto p-6 flex justify-center items-start relative isolate" style={{ background: 'var(--bg-100)' }}>
+    <div ref={scrollRef} className="flex-1 overflow-auto relative isolate" style={{ background: 'var(--bg-100)' }}>
+      <div className="p-6 flex justify-center items-start min-h-full">
       <div
         ref={canvasRef}
         className="relative rounded-xl border flex-shrink-0 cursor-crosshair select-none"
@@ -288,7 +291,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
         )}
 
         {/* Components layer */}
-        <div className="relative z-[3]">
+        <div className="absolute inset-0 z-[3] pointer-events-none">
           {components.map((comp) => {
             const sectionDef = SECTION_TYPES[comp.type];
             const color = COLORS[comp.type];
@@ -299,7 +302,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
             return (
               <div
                 key={comp.id}
-                className="canvas-comp absolute rounded-lg overflow-hidden cursor-pointer transition-shadow border"
+                className="canvas-comp absolute rounded-lg overflow-hidden cursor-pointer transition-shadow border pointer-events-auto"
                 style={{
                   left: gx(comp.cs),
                   top: gy(comp.rs) + 26,
@@ -314,6 +317,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  cancelSelection();
                   onSelect(comp.id);
                 }}
                 onMouseEnter={(e) => {
@@ -450,6 +454,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

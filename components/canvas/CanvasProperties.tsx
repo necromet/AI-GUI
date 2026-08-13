@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowUp, ArrowDown, RefreshCw, Trash2, FileCode2, Eye } from 'lucide-react';
+import { ArrowUp, ArrowDown, RefreshCw, Trash2, FileCode2, Eye, Package } from 'lucide-react';
 import type { GridComponent, ResolutionConfig } from './types';
 import { COLORS, SECTION_TYPES } from './constants';
-import { CanvasCatalogue } from './CanvasCatalogue';
+import { CatalogueModal } from './CatalogueModal';
 
 interface LibraryComponent {
   id: string;
@@ -39,10 +39,11 @@ export const CanvasProperties: React.FC<CanvasPropertiesProps> = ({
   onCatalogueAdd,
   collapsed = false,
 }) => {
+  const [tab, setTab] = useState<'properties'>('properties');
+  const [showCatalogue, setShowCatalogue] = useState(false);
   const [localPrompt, setLocalPrompt] = useState('');
   const [localTsx, setLocalTsx] = useState('');
   const [showCode, setShowCode] = useState(false);
-  const [tab, setTab] = useState<'properties' | 'catalogue'>('properties');
   const lastCompIdRef = useRef<string | null>(null);
 
   if (component && component.id !== lastCompIdRef.current) {
@@ -64,45 +65,31 @@ export const CanvasProperties: React.FC<CanvasPropertiesProps> = ({
         className="flex-shrink-0 border-l flex flex-col overflow-y-auto transition-all duration-300"
         style={{ width: collapsed ? 0 : 270, overflow: 'hidden', background: 'var(--bg-100)', borderColor: collapsed ? 'transparent' : 'var(--border-300)' }}
       >
-        <div className="flex border-b" style={{ borderColor: 'var(--border-200)' }}>
-          <button
-            onClick={() => setTab('properties')}
-            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-            style={{
-              color: tab === 'properties' ? 'var(--neon-color)' : 'var(--text-400)',
-              borderBottom: tab === 'properties' ? '2px solid var(--neon-color)' : '2px solid transparent',
-              background: tab === 'properties' ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
-            }}
+        <div className="flex-1 flex flex-col items-center justify-center p-5 text-center">
+          <div
+            className="w-9 h-9 border-[1.5px] border-dashed rounded-[9px] flex items-center justify-center mb-3 text-[15px]"
+            style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
           >
-            Properties
-          </button>
+            ✦
+          </div>
+          <div className="text-[11.5px] leading-relaxed mb-3" style={{ color: 'var(--text-400)' }}>
+            Draw on the grid to create components, or click one to edit
+          </div>
           <button
-            onClick={() => setTab('catalogue')}
-            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-            style={{
-              color: tab === 'catalogue' ? 'var(--neon-color)' : 'var(--text-400)',
-              borderBottom: tab === 'catalogue' ? '2px solid var(--neon-color)' : '2px solid transparent',
-              background: tab === 'catalogue' ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
-            }}
+            onClick={() => setShowCatalogue(true)}
+            className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg transition-colors cursor-pointer text-[11px] font-medium"
+            style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-100)' }}
           >
+            <Package size={12} style={{ color: 'var(--neon-color)' }} />
             Catalogue
           </button>
         </div>
-        {tab === 'catalogue' ? (
-          <CanvasCatalogue onAddToCanvas={(comp) => onCatalogueAdd?.(comp)} />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-5 text-center">
-            <div
-              className="w-9 h-9 border-[1.5px] border-dashed rounded-[9px] flex items-center justify-center mb-3 text-[15px]"
-              style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
-            >
-              ✦
-            </div>
-            <div className="text-[11.5px] leading-relaxed" style={{ color: 'var(--text-400)' }}>
-              Draw on the grid to create components, or click one to edit
-            </div>
-          </div>
-        )}
+
+        <CatalogueModal
+          isOpen={showCatalogue}
+          onClose={() => setShowCatalogue(false)}
+          onAddToCanvas={(comp) => onCatalogueAdd?.(comp)}
+        />
       </aside>
     );
   }
@@ -119,34 +106,21 @@ export const CanvasProperties: React.FC<CanvasPropertiesProps> = ({
       className="flex-shrink-0 border-l flex flex-col overflow-y-auto transition-all duration-300"
       style={{ width: collapsed ? 0 : 270, overflow: 'hidden', background: 'var(--bg-100)', borderColor: collapsed ? 'transparent' : 'var(--border-300)' }}
     >
-      <div className="flex border-b" style={{ borderColor: 'var(--border-200)' }}>
-        <button
-          onClick={() => setTab('properties')}
-          className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-          style={{
-            color: tab === 'properties' ? 'var(--neon-color)' : 'var(--text-400)',
-            borderBottom: tab === 'properties' ? '2px solid var(--neon-color)' : '2px solid transparent',
-            background: tab === 'properties' ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
-          }}
-        >
+      <div className="flex items-center border-b px-3 py-2" style={{ borderColor: 'var(--border-200)' }}>
+        <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--neon-color)' }}>
           Properties
-        </button>
+        </span>
         <button
-          onClick={() => setTab('catalogue')}
-          className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-          style={{
-            color: tab === 'catalogue' ? 'var(--neon-color)' : 'var(--text-400)',
-            borderBottom: tab === 'catalogue' ? '2px solid var(--neon-color)' : '2px solid transparent',
-            background: tab === 'catalogue' ? 'rgba(var(--neon-rgb), 0.04)' : 'transparent',
-          }}
+          onClick={() => setShowCatalogue(true)}
+          className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors cursor-pointer"
+          style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-400)' }}
+          title="Open Catalogue"
         >
-          Catalogue
+          <Package size={11} />
+          <span className="text-[10px] font-medium">Catalogue</span>
         </button>
       </div>
 
-      {tab === 'catalogue' ? (
-        <CanvasCatalogue onAddToCanvas={(comp) => onCatalogueAdd?.(comp)} />
-      ) : (
       <div className="p-3.5 flex flex-col gap-3.5">
         <PropertyField label="Type">
           <span className="flex items-center gap-1.5 text-[12.5px] font-medium" style={{ color: 'var(--text-100)' }}>
@@ -312,7 +286,12 @@ export const CanvasProperties: React.FC<CanvasPropertiesProps> = ({
           </Button>
         </div>
       </div>
-      )}
+
+      <CatalogueModal
+        isOpen={showCatalogue}
+        onClose={() => setShowCatalogue(false)}
+        onAddToCanvas={(comp) => onCatalogueAdd?.(comp)}
+      />
     </aside>
   );
 };

@@ -10,6 +10,23 @@ const EXTERNAL_PACKAGES = [
   'framer-motion',
   '@phosphor-icons/react',
   'lucide-react',
+  'class-variance-authority',
+  'clsx',
+  'tailwind-merge',
+  'zod',
+  'date-fns',
+  'sonner',
+];
+
+const EXTERNAL_PREFIXES = [
+  '@radix-ui/',
+  'cmdk',
+  'vaul',
+  'embla-carousel-react',
+  'recharts',
+  'react-day-picker',
+  'react-hook-form',
+  '@hookform/',
 ];
 
 function resolveInternalImport(
@@ -63,6 +80,81 @@ function resolveInternalImport(
   return null;
 }
 
+function extractNamedImports(clause: string): string[] {
+  if (!clause) return [];
+  const inner = clause.replace(/[{}]/g, '').trim();
+  if (!inner) return [];
+  return inner.split(',').map(s => {
+    const part = s.trim();
+    if (!part || part === 'type') return '';
+    const asMatch = part.match(/(?:type\s+)?(\w+)\s+as\s+\w+/);
+    if (asMatch) return asMatch[1];
+    const nameMatch = part.match(/(?:type\s+)?(\w+)/);
+    return nameMatch ? nameMatch[1] : '';
+  }).filter(Boolean);
+}
+
+function fileExportsName(content: string, name: string): boolean {
+  const patterns = [
+    new RegExp(`export\\s+(?:default\\s+)?(?:const|let|var|function|class|async\\s+function)\\s+${name}\\b`),
+    new RegExp(`export\\s+\\{[^}]*\\b${name}\\b[^}]*\\}`),
+    new RegExp(`export\\s+default\\s+${name}\\b`),
+  ];
+  return patterns.some(p => p.test(content));
+}
+
+function findFileExportingNames(
+  files: LibraryComponentFile[],
+  names: string[],
+  excludeFile: string,
+): string | null {
+  for (const f of files) {
+    if (f.filename === excludeFile) continue;
+    if (f.contentType === 'css' || f.contentType === 'json' || f.contentType === 'html') continue;
+    if (names.every(n => fileExportsName(f.content, n))) return f.filename;
+  }
+  for (const f of files) {
+    if (f.filename === excludeFile) continue;
+    if (f.contentType === 'css' || f.contentType === 'json' || f.contentType === 'html') continue;
+    if (names.some(n => fileExportsName(f.content, n))) return f.filename;
+  }
+  return null;
+}
+
+const IMPORT_RE = /import\s+(?:(type)\s+)?(?:(\{[\s\S]*?\})\s*from\s+|([\w$]+)\s*(?:,\s*(\{[\s\S]*?\}))?\s*from\s+|\*\s+as\s+([\w$]+)\s*from\s+)['"]([^'"]+)['"]\s*;?|import\s+['"]([^'"]+)['"]\s*;?/g;
+
+function computeRequiredExports(files: LibraryComponentFile[]): Map<string, Set<string>> {
+  const required = new Map<string, Set<string>>();
+
+  for (const file of files) {
+    if (file.contentType === 'css' || file.contentType === 'json' || file.contentType === 'html') continue;
+    IMPORT_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = IMPORT_RE.exec(file.content)) !== null) {
+      const typeKeyword = match[1];
+      const namedClause = match[2];
+      const fromSource = match[6];
+      if (!fromSource || typeKeyword) continue;
+      if (!fromSource.startsWith('.') && !fromSource.startsWith('@/')) continue;
+      const resolved = resolveInternalImport(fromSource, file.filename, files);
+      if (!resolved) continue;
+      const names = namedClause ? extractNamedImports(namedClause) : [];
+      if (names.length === 0) continue;
+      if (!required.has(resolved)) required.set(resolved, new Set());
+      for (const n of names) required.get(resolved)!.add(n);
+    }
+  }
+  return required;
+}
+
+function fileDeclaresName(content: string, name: string): boolean {
+  const patterns = [
+    new RegExp(`(?:const|let|var|function|class|async\\s+function)\\s+${name}\\b`),
+    new RegExp(`\\b${name}\\s*=`),
+  ];
+  return patterns.some(p => p.test(content));
+}
+
 function rewriteImports(content: string, filename: string, files: LibraryComponentFile[]): string {
   return content.replace(
     /import\s+(?:(type)\s+)?(?:(\{[\s\S]*?\})\s*from\s+|([\w$]+)\s*(?:,\s*(\{[\s\S]*?\}))?\s*from\s+|\*\s+as\s+([\w$]+)\s*from\s+)['"]([^'"]+)['"]\s*;?|import\s+['"]([^'"]+)['"]\s*;?/g,
@@ -73,6 +165,18 @@ function rewriteImports(content: string, filename: string, files: LibraryCompone
       if (source.startsWith('.') || source.startsWith('@/')) {
         const resolved = resolveInternalImport(source, filename, files);
         if (resolved) {
+          if (namedClause && !_typeKeyword) {
+            const names = extractNamedImports(namedClause);
+            if (names.length > 0) {
+              const targetFile = files.find(f => f.filename === resolved);
+              if (targetFile && !names.every(n => fileExportsName(targetFile.content, n))) {
+                const betterFile = findFileExportingNames(files, names, filename);
+                if (betterFile) {
+                  return match.replace(source, `./${betterFile}`);
+                }
+              }
+            }
+          }
           return match.replace(source, `./${resolved}`);
         }
       }
@@ -91,7 +195,7 @@ function rewriteCnImports(content: string): string {
   );
 }
 
-function createEntryPlugin(files: LibraryComponentFile[]): esbuild.Plugin {
+function createEntryPlugin(files: LibraryComponentFile[], requiredExports: Map<string, Set<string>>): esbuild.Plugin {
   const CN_MODULE = `
 import { clsx } from "https://esm.sh/clsx?external=react,react-dom";
 import { twMerge } from "https://esm.sh/tailwind-merge?external=react,react-dom";
@@ -122,7 +226,7 @@ export default cn;
 
       build.onResolve({ filter: /.*/ }, (args) => {
         if (args.path.startsWith('.') || args.path.startsWith('/') || args.path.startsWith('http')) return undefined;
-        if (EXTERNAL_PACKAGES.includes(args.path)) return undefined;
+        if (EXTERNAL_PACKAGES.includes(args.path) || EXTERNAL_PREFIXES.some(p => args.path.startsWith(p))) return undefined;
         const esmUrl = `https://esm.sh/${args.path}?external=react,react-dom`;
         return { path: esmUrl, namespace: 'esm-sh', external: false };
       });
@@ -151,7 +255,22 @@ export default cn;
           : filename.endsWith('.css') ? 'css' as const
           : 'js' as const;
 
-        return { contents: rewritten, loader, resolveDir: '/' };
+        const required = requiredExports.get(filename);
+        let finalContent = rewritten;
+        if (required && required.size > 0) {
+          const missing = [...required].filter(name => !fileExportsName(rewritten, name));
+          if (missing.length > 0) {
+            const stubs = missing.map(n => {
+              if (fileDeclaresName(rewritten, n)) {
+                return `export { ${n} };`;
+              }
+              return `const ${n} = () => null;\nexport { ${n} };`;
+            }).join('\n');
+            finalContent = rewritten + '\n' + stubs;
+          }
+        }
+
+        return { contents: finalContent, loader, resolveDir: '/' };
       });
 
       build.onLoad({ filter: /.*/, namespace: 'unresolved-stub' }, () => {
@@ -211,7 +330,7 @@ export async function compileComponent(files: LibraryComponentFile[]): Promise<s
     : entryFile.filename.endsWith('.jsx') ? 'jsx' as const
     : 'js' as const;
 
-  const plugin = createEntryPlugin(files);
+  const plugin = createEntryPlugin(files, computeRequiredExports(files));
 
   const result = await esbuild.build({
     stdin: {

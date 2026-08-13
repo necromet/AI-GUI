@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { streamText, tool, type CoreMessage } from 'ai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import { getProviderConfig, detectLanguage, buildLanguageInstruction } from '../services/mimoService';
+import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
 import * as library from '../services/libraryService';
 import { setVerifyResult } from '../services/verifyService';
 import { toolExecuteCode } from '../services/agentService';
+import { createProvider, convertToCoreMessages } from '../lib/aiSdk';
 
 const router = Router();
 
@@ -47,6 +47,13 @@ The preview engine parses import statements and resolves them automatically:
 - \`import { useState, useEffect } from "react"\` → destructured from React global
 - \`import { motion, AnimatePresence } from "motion/react"\` → from esm.sh bundle
 - \`import { ChatIcon, XIcon } from "@phosphor-icons/react"\` → from esm.sh bundle
+- \`import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@radix-ui/react-accordion"\` → from esm.sh bundle
+- \`import { ChevronDownIcon } from "@radix-ui/react-icons"\` → from esm.sh bundle
+- \`import { Dialog, DialogContent, DialogTrigger } from "@radix-ui/react-dialog"\` → from esm.sh bundle
+- \`import { Command } from "cmdk"\` → from esm.sh bundle
+- \`import { Drawer } from "vaul"\` → from esm.sh bundle
+- \`import { useForm } from "react-hook-form"\` → from esm.sh bundle
+- \`import { format } from "date-fns"\` → from esm.sh bundle
 - \`import { MyHelper } from "./components"\` → resolved to components.tsx in the same component
 - \`"use client"\` directives are automatically stripped
 
@@ -63,13 +70,20 @@ The preview engine parses import statements and resolves them automatically:
 - Tailwind CSS classes, responsive design, dark mode classes
 - motion/react animations (motion.div, AnimatePresence, useReducedMotion)
 - @phosphor-icons/react icons (ChatIcon, XIcon, MicrophoneIcon, etc.)
+- lucide-react icons (any icon from the library)
+- Radix UI primitives (Accordion, AlertDialog, Avatar, Checkbox, Collapsible, ContextMenu, Dialog, DropdownMenu, HoverCard, Label, Menubar, NavigationMenu, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Slider, Slot, Switch, Tabs, Toast, Toggle, ToggleGroup, Tooltip)
+- shadcn/ui component patterns built with Radix UI + Tailwind CSS + class-variance-authority
+- cmdk (command palette), vaul (drawer), embla-carousel-react (carousel), recharts (charts)
+- react-hook-form + @hookform/resolvers + zod for form validation
+- react-day-picker for date selection
+- date-fns for date formatting and manipulation
+- class-variance-authority (cva) for component variant patterns
 - Any simple npm package that doesn't require a build step or Node.js APIs
 
 ### What Does NOT Work
-- shadcn/ui, Radix UI, Headless UI — not available. Use raw HTML + Tailwind.
+- @headlessui/react, Headless UI — not available. Use Radix UI instead.
 - zustand, jotai, Redux, Recoil — no state management libraries. Use React hooks.
 - react-router, next/link, wouter — no routing. The sandbox is a single page.
-- react-hook-form, Formik — no form libraries. Use controlled inputs with useState.
 - axios, SWR, React Query — no data fetching. Use local state.
 - CSS modules, styled-components, emotion — use Tailwind only.
 - \`import "./styles.css"\` — CSS files are not loaded by the preview engine.
@@ -174,14 +188,6 @@ function buildComponentContext(comp: any): string {
 - Files: ${fileNames}
 
 The user is currently editing this component. When they ask to modify, update, or improve "this component" or "it", they are referring to the component above. Use read_component with ID "${comp.id}" to see the current file contents before making changes.`;
-}
-
-function createProvider(providerName?: string) {
-  const config = getProviderConfig(providerName);
-  return createOpenAICompatible({
-    apiKey: config.key,
-    baseURL: config.base,
-  });
 }
 
 function buildLibraryTools(componentId?: string) {
@@ -369,54 +375,6 @@ function buildLibraryTools(componentId?: string) {
       },
     }),
   };
-}
-
-function convertToCoreMessages(messages: any[]): CoreMessage[] {
-  const result: CoreMessage[] = [];
-
-  for (const msg of messages) {
-    const role = msg.role === 'model' ? 'assistant' : msg.role;
-
-    if (role === 'user') {
-      result.push({ role: 'user', content: msg.content || '' });
-    } else if (role === 'assistant') {
-      if (msg.tool_calls && msg.tool_calls.length > 0) {
-        const parts: any[] = [];
-        if (msg.content) {
-          parts.push({ type: 'text', text: msg.content });
-        }
-        for (const tc of msg.tool_calls) {
-          let input: any;
-          try {
-            input = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
-          } catch {
-            input = {};
-          }
-          parts.push({
-            type: 'tool-call',
-            toolCallId: tc.id || `tc_${Math.random().toString(36).slice(2)}`,
-            toolName: tc.function.name,
-            input,
-          });
-        }
-        result.push({ role: 'assistant', content: parts } as any);
-      } else {
-        result.push({ role: 'assistant', content: msg.content || '' });
-      }
-    } else if (role === 'tool') {
-      result.push({
-        role: 'tool',
-        content: [{
-          type: 'tool-result',
-          toolCallId: msg.tool_call_id || '',
-          toolName: msg.tool_name || msg.name || '',
-          output: { type: 'text', value: msg.content || '' },
-        }],
-      } as any);
-    }
-  }
-
-  return result;
 }
 
 router.post('/verify-result', (req, res) => {

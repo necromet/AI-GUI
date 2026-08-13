@@ -4,7 +4,7 @@ import { SkemaProject, SkemaBoard, SkemaLayout, SkemaProjectType, ModelConfig } 
 import * as db from '../services/apiDatabaseAdapter';
 import { createNewProject, createNewBoard, skemaProjectToDB, skemaDBToProject } from '../services/skemaService';
 import SkemaEditor, { SkemaControls } from './SkemaEditor';
-import { CanvasEditor, CanvasControls } from './canvas';
+import { CanvasEditor, CanvasControls, CanvasSidebarControls } from './canvas';
 import { RESOLUTIONS } from './canvas/constants';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ interface SkemaPanelProps {
   models?: ModelConfig[];
   onProjectChange?: (project: SkemaProject | null) => void;
   onControlsChange?: (controls: SkemaControls | CanvasControls | null) => void;
+  onSidebarControlsChange?: (controls: CanvasSidebarControls | null) => void;
   initialProjectId?: string;
 }
 
@@ -36,7 +37,7 @@ const PROJECT_TYPES: { value: SkemaProjectType; label: string; desc: string; ico
   { value: 'canvas', label: 'Canvas', desc: 'Freeform canvas for any visual design', icon: <Globe size={28} />, layout: '16:9', layoutLabel: 'Choose layout' },
 ];
 
-const SkemaPanel: React.FC<SkemaPanelProps> = ({ theme = 'dark', onNotification, modelConfig, models, onProjectChange, onControlsChange, initialProjectId }) => {
+const SkemaPanel: React.FC<SkemaPanelProps> = ({ theme = 'dark', onNotification, modelConfig, models, onProjectChange, onControlsChange, onSidebarControlsChange, initialProjectId }) => {
   const [projects, setProjects] = useState<SkemaProject[]>([]);
   const [activeProject, setActiveProject] = useState<SkemaProject | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -100,18 +101,23 @@ const SkemaPanel: React.FC<SkemaPanelProps> = ({ theme = 'dark', onNotification,
     }
   };
 
-  const handleSaveProject = async (updatedProject: SkemaProject) => {
+  const handleSaveProject = useCallback(async (updatedProject: SkemaProject) => {
     const projectToSave = { ...updatedProject, updatedAt: Date.now() };
-    await db.saveSkemaProject(skemaProjectToDB(projectToSave));
+    await db.saveSkemaProject(skemaDBToProject(projectToSave));
     setProjects(prev => prev.map(p => p.id === projectToSave.id ? projectToSave : p));
     setActiveProject(prev => prev?.id === projectToSave.id ? projectToSave : prev);
-  };
+  }, []);
 
   const resetCreation = () => {
     setIsCreating(false);
     setSelectedType(null);
     setProjectName('');
   };
+
+  const handleBack = useCallback(() => {
+    setActiveProject(null);
+    onProjectChange?.(null);
+  }, [onProjectChange]);
 
   if (activeProject) {
     if (activeProject.projectType === 'canvas') {
@@ -121,10 +127,11 @@ const SkemaPanel: React.FC<SkemaPanelProps> = ({ theme = 'dark', onNotification,
           theme={theme}
           onNotification={onNotification}
           onSave={handleSaveProject}
-          onBack={() => { setActiveProject(null); onProjectChange?.(null); }}
+          onBack={handleBack}
           modelConfig={modelConfig}
           models={models}
           onControlsChange={onControlsChange as any}
+          onSidebarControlsChange={onSidebarControlsChange}
         />
       );
     }
@@ -134,7 +141,7 @@ const SkemaPanel: React.FC<SkemaPanelProps> = ({ theme = 'dark', onNotification,
         theme={theme}
         onNotification={onNotification}
         onSave={handleSaveProject}
-        onBack={() => { setActiveProject(null); onProjectChange?.(null); }}
+        onBack={handleBack}
         modelConfig={modelConfig}
         models={models}
         onControlsChange={onControlsChange}

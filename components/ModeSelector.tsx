@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, FlaskConical, Lock, CheckCircle2, ArrowRight, Package } from 'lucide-react';
+import { MessageSquare, FlaskConical, Lock, CheckCircle2, ArrowRight, Package, Database } from 'lucide-react';
 import NeuralBackground from './NeuralBackground';
 import { TextGlitch } from './TextGlitch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 const CHAT_PASSWORD = 'thelordismyshepherd';
 const EXPERIMENTS_PASSWORD = 'ilacknothing';
 const LIBRARY_PASSWORD = 'psalm23';
+const DATABASE_PASSWORD = 'heleadsmebesidequietwater';
 
 interface InlinePasswordModalProps {
   isOpen: boolean;
@@ -96,29 +97,36 @@ interface ModeSelectorProps {
   isChatAuthenticated: boolean;
   isExperimentsAuthenticated: boolean;
   isLibraryAuthenticated: boolean;
+  isDatabaseAuthenticated: boolean;
   onSelectChat: () => void;
   onSelectExperiments: () => void;
   onSelectLibrary: () => void;
+  onSelectDatabase: () => void;
   onUnlockChat: () => void;
   onUnlockExperiments: () => void;
   onUnlockLibrary: () => void;
+  onUnlockDatabase: () => void;
 }
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({
   isChatAuthenticated,
   isExperimentsAuthenticated,
   isLibraryAuthenticated,
+  isDatabaseAuthenticated,
   onSelectChat,
   onSelectExperiments,
   onSelectLibrary,
+  onSelectDatabase,
   onUnlockChat,
   onUnlockExperiments,
   onUnlockLibrary,
+  onUnlockDatabase,
 }) => {
   const [neonColor, setNeonColor] = useState('#f87171');
   const [showChatPasswordModal, setShowChatPasswordModal] = useState(false);
   const [showExperimentsPasswordModal, setShowExperimentsPasswordModal] = useState(false);
   const [showLibraryPasswordModal, setShowLibraryPasswordModal] = useState(false);
+  const [showDatabasePasswordModal, setShowDatabasePasswordModal] = useState(false);
 
   useEffect(() => {
     const color = getComputedStyle(document.documentElement).getPropertyValue('--neon-color').trim();
@@ -149,6 +157,14 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
+  const handleDatabaseClick = () => {
+    if (isDatabaseAuthenticated) {
+      onSelectDatabase();
+    } else {
+      setShowDatabasePasswordModal(true);
+    }
+  };
+
   const handleChatPasswordSuccess = () => {
     onUnlockChat();
     onSelectChat();
@@ -165,6 +181,12 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     onUnlockLibrary();
     onSelectLibrary();
     setShowLibraryPasswordModal(false);
+  };
+
+  const handleDatabasePasswordSuccess = () => {
+    onUnlockDatabase();
+    onSelectDatabase();
+    setShowDatabasePasswordModal(false);
   };
 
   const cards = [
@@ -192,13 +214,21 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       locked: !isLibraryAuthenticated,
       onClick: handleLibraryClick,
     },
+    {
+      id: 'database' as const,
+      icon: Database,
+      title: 'Database',
+      description: 'Connect to PostgreSQL databases and explore with SQL',
+      locked: !isDatabaseAuthenticated,
+      onClick: handleDatabaseClick,
+    },
   ];
 
   return (
     <div className="relative flex min-h-screen items-center justify-center">
       <NeuralBackground className="absolute inset-0 z-0" color={neonColor} trailOpacity={0.12} particleCount={600} speed={0.8} />
 
-      <div className="relative z-10 w-full max-w-4xl mx-4 px-4">
+      <div className="relative z-10 w-full max-w-7xl mx-4 px-4">
         <div className="text-center mb-12">
           <TextGlitch text="EDWARD:LABS" />
           <p className="text-base mt-4" style={{ color: 'var(--text-500)' }}>
@@ -206,7 +236,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           {cards.map((card, index) => (
             <button
               key={card.id}
@@ -281,6 +311,15 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
         onSuccess={handleLibraryPasswordSuccess}
         onClose={() => setShowLibraryPasswordModal(false)}
         correctPassword={LIBRARY_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showDatabasePasswordModal}
+        title="Unlock Database"
+        subtitle="Enter your password to access the database explorer"
+        onSuccess={handleDatabasePasswordSuccess}
+        onClose={() => setShowDatabasePasswordModal(false)}
+        correctPassword={DATABASE_PASSWORD}
       />
     </div>
   );

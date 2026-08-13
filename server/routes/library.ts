@@ -11,11 +11,15 @@ router.get('/components', async (req: Request, res: Response) => {
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const folderId = typeof req.query.folderId === 'string' ? req.query.folderId : undefined;
     const unfoldered = req.query.unfoldered === 'true';
-    const components = await library.listComponents({
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 24;
+    const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) : 0;
+    const result = await library.listComponents({
       category,
       folderId: unfoldered ? null : folderId,
+      limit: isNaN(limit) ? 24 : limit,
+      offset: isNaN(offset) ? 0 : offset,
     });
-    res.json({ components });
+    res.json({ components: result.components, total: result.total, hasMore: result.hasMore });
   } catch (error: any) {
     console.error('[library/components GET] Error:', error.message);
     res.status(500).json({ error: error.message });
@@ -137,6 +141,7 @@ router.put('/components/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Component not found' });
       return;
     }
+    compiledCache.delete(req.params.id);
     res.json({ component: updated });
   } catch (error: any) {
     console.error('[library/components/:id PUT] Error:', error.message);
@@ -151,12 +156,15 @@ router.delete('/components/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Component not found' });
       return;
     }
+    compiledCache.delete(req.params.id);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[library/components/:id DELETE] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
+
+const compiledCache = new Map<string, { js: string; updatedAt: string }>();
 
 router.get('/components/:id/compiled', async (req: Request, res: Response) => {
   try {
@@ -166,15 +174,25 @@ router.get('/components/:id/compiled', async (req: Request, res: Response) => {
       return;
     }
 
-    const files = await library.getComponentFiles(req.params.id);
+    const files = comp.files;
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'Component has no files' });
       return;
     }
 
+    const cacheKey = comp.id;
+    const cached = compiledCache.get(cacheKey);
+    if (cached && cached.updatedAt === comp.updatedAt) {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.send(cached.js);
+      return;
+    }
+
     const js = await compileComponent(files);
+    compiledCache.set(cacheKey, { js, updatedAt: comp.updatedAt });
     res.setHeader('Content-Type', 'application/javascript');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(js);
   } catch (error: any) {
     console.error('[library/components/:id/compiled] Error:', error.message);
@@ -211,9 +229,9 @@ router.post('/components/reindex', async (req: Request, res: Response) => {
 
 router.post('/components/seed', async (req: Request, res: Response) => {
   try {
-    const existing = await library.listComponents();
-    if (existing.length > 0) {
-      res.json({ success: true, message: `Library already has ${existing.length} components. Skipped seeding.`, count: 0 });
+    const existing = await library.listComponents({ limit: 1 });
+    if (existing.total > 0) {
+      res.json({ success: true, message: `Library already has ${existing.total} components. Skipped seeding.`, count: 0 });
       return;
     }
 

@@ -78,6 +78,22 @@ export async function getComponentFiles(componentId: string): Promise<LibraryCom
   return rows.map(rowToFile);
 }
 
+async function getComponentFilesBatch(componentIds: string[]): Promise<Map<string, LibraryComponentFile[]>> {
+  const map = new Map<string, LibraryComponentFile[]>();
+  if (componentIds.length === 0) return map;
+  const rows = await getAll('SELECT * FROM library_component_files WHERE component_id = ANY($1) ORDER BY sort_order ASC', [componentIds]);
+  for (const row of rows) {
+    const file = rowToFile(row);
+    const list = map.get(file.componentId);
+    if (list) list.push(file);
+    else map.set(file.componentId, [file]);
+  }
+  for (const id of componentIds) {
+    if (!map.has(id)) map.set(id, []);
+  }
+  return map;
+}
+
 export async function addComponentFile(file: Omit<LibraryComponentFile, 'id' | 'createdAt' | 'updatedAt'>): Promise<LibraryComponentFile> {
   const id = generateId();
   const now = new Date().toISOString();
@@ -87,6 +103,7 @@ export async function addComponentFile(file: Omit<LibraryComponentFile, 'id' | '
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [id, file.componentId, file.filename, file.contentType, file.content, file.sortOrder, file.isEntry, now, now]
   );
+  await run(`UPDATE library_components SET updated_at = $1 WHERE id = $2`, [now, file.componentId]);
 
   return { ...file, id, createdAt: now, updatedAt: now };
 }
@@ -102,22 +119,36 @@ export async function updateComponentFile(id: string, updates: Partial<Omit<Libr
     `UPDATE library_component_files SET filename = $1, content_type = $2, content = $3, sort_order = $4, is_entry = $5, updated_at = $6 WHERE id = $7`,
     [merged.filename, merged.contentType, merged.content, merged.sortOrder, merged.isEntry, now, id]
   );
+  await run(`UPDATE library_components SET updated_at = $1 WHERE id = $2`, [now, existing.component_id]);
 
   return { ...merged, updatedAt: now };
 }
 
 export async function deleteComponentFile(id: string): Promise<boolean> {
+  const existing = await getOne('SELECT component_id FROM library_component_files WHERE id = $1', [id]);
   const result = await run('DELETE FROM library_component_files WHERE id = $1', [id]);
+  if (result.rowCount > 0 && existing) {
+    const now = new Date().toISOString();
+    await run(`UPDATE library_components SET updated_at = $1 WHERE id = $2`, [now, existing.component_id]);
+  }
   return result.rowCount > 0;
 }
 
 export async function replaceComponentFiles(componentId: string, files: Omit<LibraryComponentFile, 'id' | 'componentId' | 'createdAt' | 'updatedAt'>[]): Promise<LibraryComponentFile[]> {
   await run('DELETE FROM library_component_files WHERE component_id = $1', [componentId]);
   const results: LibraryComponentFile[] = [];
+  const now = new Date().toISOString();
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
-    results.push(await addComponentFile({ ...f, componentId, sortOrder: f.sortOrder ?? i }));
+    const id = generateId();
+    await run(
+      `INSERT INTO library_component_files (id, component_id, filename, content_type, content, sort_order, is_entry, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, componentId, f.filename, f.contentType, f.content, f.sortOrder ?? i, f.isEntry, now, now]
+    );
+    results.push({ ...f, id, componentId, createdAt: now, updatedAt: now });
   }
+  await run(`UPDATE library_components SET updated_at = $1 WHERE id = $2`, [now, componentId]);
   return results;
 }
 
@@ -207,37 +238,52 @@ export async function addComponent(component: Omit<LibraryComponent, 'id' | 'cre
   };
 }
 
-export async function listComponents(filters?: { category?: string; agentAccessibleOnly?: boolean; folderId?: string | null }): Promise<LibraryComponent[]> {
-  let sql = 'SELECT * FROM library_components WHERE 1=1';
+export interface ListComponentsResult {
+  components: LibraryComponent[];
+  total: number;
+  hasMore: boolean;
+}
+
+export async function listComponents(filters?: { category?: string; agentAccessibleOnly?: boolean; folderId?: string | null; limit?: number; offset?: number }): Promise<ListComponentsResult> {
+  let whereSql = 'WHERE 1=1';
   const params: any[] = [];
   let paramIdx = 1;
 
   if (filters?.category) {
-    sql += ` AND category = $${paramIdx++}`;
+    whereSql += ` AND category = $${paramIdx++}`;
     params.push(filters.category);
   }
   if (filters?.agentAccessibleOnly) {
-    sql += ' AND agent_accessible = TRUE';
+    whereSql += ' AND agent_accessible = TRUE';
   }
   if (filters?.folderId !== undefined) {
     if (filters.folderId === null) {
-      sql += ' AND folder_id IS NULL';
+      whereSql += ' AND folder_id IS NULL';
     } else {
-      sql += ` AND folder_id = $${paramIdx++}`;
+      whereSql += ` AND folder_id = $${paramIdx++}`;
       params.push(filters.folderId);
     }
   }
 
-  sql += ' ORDER BY updated_at DESC';
+  const countRow = await getOne(`SELECT COUNT(*) as c FROM library_components ${whereSql}`, params);
+  const total = Number(countRow?.c) || 0;
 
-  const rows = await getAll(sql, params);
-  const results: LibraryComponent[] = [];
+  const limit = filters?.limit ?? 24;
+  const offset = filters?.offset ?? 0;
+
+  const sql = `SELECT * FROM library_components ${whereSql} ORDER BY updated_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+  const rows = await getAll(sql, [...params, limit, offset]);
+
+  const components: LibraryComponent[] = [];
+  const componentIds = rows.map(r => r.id);
+  const filesMap = await getComponentFilesBatch(componentIds);
   for (const row of rows) {
     const comp = rowToComponent(row);
-    comp.files = await getComponentFiles(comp.id);
-    results.push(comp);
+    comp.files = filesMap.get(comp.id) || [];
+    components.push(comp);
   }
-  return results;
+
+  return { components, total, hasMore: offset + limit < total };
 }
 
 export async function getComponent(id: string): Promise<LibraryComponent | undefined> {
