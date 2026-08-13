@@ -210,6 +210,75 @@ CREATE TABLE IF NOT EXISTS database_connections (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Agent Builder: tools
+CREATE TABLE IF NOT EXISTS agent_builder_tools (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  parameters_schema JSONB NOT NULL DEFAULT '{}',
+  implementation TEXT,
+  icon TEXT DEFAULT 'wrench',
+  color TEXT DEFAULT '#66A0C8',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Agent Builder: agents
+CREATE TABLE IF NOT EXISTS agent_builder_agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  system_prompt TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT 'mimo-v2.5',
+  provider TEXT,
+  color TEXT DEFAULT '#5ABDAC',
+  icon TEXT DEFAULT 'bot',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Agent Builder: agent <-> tool junction
+CREATE TABLE IF NOT EXISTS agent_builder_agent_tools (
+  agent_id TEXT NOT NULL REFERENCES agent_builder_agents(id) ON DELETE CASCADE,
+  tool_id TEXT NOT NULL REFERENCES agent_builder_tools(id) ON DELETE CASCADE,
+  PRIMARY KEY (agent_id, tool_id)
+);
+
+-- Agent Builder: workflows (canvas graph)
+CREATE TABLE IF NOT EXISTS agent_builder_workflows (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT 'Untitled Workflow',
+  description TEXT,
+  graph_json JSONB NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Agent Builder: workflow <-> agent junction
+CREATE TABLE IF NOT EXISTS agent_builder_workflow_agents (
+  workflow_id TEXT NOT NULL REFERENCES agent_builder_workflows(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES agent_builder_agents(id) ON DELETE CASCADE,
+  PRIMARY KEY (workflow_id, agent_id)
+);
+
+-- Agent Builder: workflow <-> tool junction
+CREATE TABLE IF NOT EXISTS agent_builder_workflow_tools (
+  workflow_id TEXT NOT NULL REFERENCES agent_builder_workflows(id) ON DELETE CASCADE,
+  tool_id TEXT NOT NULL REFERENCES agent_builder_tools(id) ON DELETE CASCADE,
+  PRIMARY KEY (workflow_id, tool_id)
+);
+
+-- Agent Builder: chat sessions per agent
+CREATE TABLE IF NOT EXISTS agent_builder_sessions (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES agent_builder_agents(id) ON DELETE CASCADE,
+  title TEXT,
+  messages_json JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_abs_agent ON agent_builder_sessions(agent_id);
 `;
 
 export const SEED_SQL = `

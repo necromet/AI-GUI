@@ -1,0 +1,439 @@
+.ab-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* ─── Focus Ring (Accessibility) ─── */
+
+.ab-container *:focus-visible {
+  outline: 2px solid var(--neon-color, #5ABDAC);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Sidebar ─── */
+
+.ab-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  min-width: 220px;
+  background-color: var(--bg-100, #100f0f);
+  border-right: 1px solid var(--border-300, #403e3c);
+}
+
+.ab-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.ab-sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px 8px;
+}
+
+.ab-sidebar-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text-500, #6f6e69);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ab-sidebar-tab:hover {
+  background: var(--bg-200, #1c1b1a);
+  color: var(--text-300, #9f9d96);
+}
+
+.ab-sidebar-tab-active {
+  background: var(--bg-200, #1c1b1a);
+  color: var(--text-100, #e6e4d9);
+}
+
+.ab-sidebar-content {
+  flex: 1;
+  padding: 8px;
+}
+
+.ab-sidebar-section {
+  margin-bottom: 4px;
+}
+
+.ab-sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 8px;
+}
+
+.ab-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-100, #e6e4d9);
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+}
+
+.ab-sidebar-item:hover {
+  background: var(--bg-200, #1c1b1a);
+  border-color: var(--border-300, #403e3c);
+}
+
+.ab-sidebar-item-active {
+  background: rgba(90, 189, 172, 0.08);
+  border-color: rgba(90, 189, 172, 0.3);
+}
+
+.ab-sidebar-item-static {
+  cursor: default;
+}
+
+/* ─── Main Area ─── */
+
+.ab-main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── Canvas ─── */
+
+.ab-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ─── Nodes ─── */
+
+.ab-node {
+  width: 240px;
+  background: var(--bg-200, #1c1b1a);
+  border: 2px solid;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s;
+}
+
+.ab-node:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.ab-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-300, #403e3c);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ab-node-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ab-node-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.ab-node-info:hover {
+  opacity: 1;
+  background: var(--bg-100, #100f0f);
+}
+
+.ab-node-body {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-500, #6f6e69);
+  line-height: 1.4;
+  min-height: 32px;
+}
+
+.ab-node-meta {
+  padding: 6px 12px 8px;
+  font-size: 10px;
+  color: var(--text-500, #6f6e69);
+  border-top: 1px solid var(--border-300, #403e3c);
+}
+
+.ab-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--text-300, #9f9d96) !important;
+  border: 2px solid var(--bg-200, #1c1b1a) !important;
+}
+
+/* ─── Detail Panel ─── */
+
+.ab-detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100%;
+  background: var(--bg-100, #100f0f);
+  border-left: 1px solid var(--border-300, #403e3c);
+  z-index: 30;
+  animation: ab-slide-in 0.2s ease-out;
+}
+
+.ab-detail-closing {
+  animation: ab-slide-out 0.2s ease-in forwards;
+}
+
+@keyframes ab-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes ab-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+.ab-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-300, #403e3c);
+}
+
+.ab-detail-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ab-detail-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text-300, #9f9d96);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ab-detail-header button:hover {
+  background: var(--bg-200, #1c1b1a);
+  color: var(--text-100, #e6e4d9);
+}
+
+.ab-detail-body {
+  height: calc(100% - 52px);
+  padding: 16px;
+}
+
+.ab-detail-section {
+  margin-bottom: 12px;
+}
+
+.ab-detail-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-300, #9f9d96);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ab-editor-wrapper {
+  border: 1px solid var(--border-300, #403e3c);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ─── Chat View ─── */
+
+.ab-chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ab-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-300, #403e3c);
+}
+
+.ab-chat-messages {
+  flex: 1;
+  padding: 16px;
+}
+
+.ab-chat-messages-inner {
+  padding-bottom: 80px;
+}
+
+.ab-chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.ab-chat-tools {
+  margin: 12px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-200, #1c1b1a);
+  border: 1px solid var(--border-300, #403e3c);
+}
+
+.ab-chat-tool-call {
+  padding: 6px 0;
+}
+
+.ab-chat-tool-call + .ab-chat-tool-call {
+  border-top: 1px solid var(--border-300, #403e3c);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.ab-chat-input-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  background: linear-gradient(to top, var(--bg-100, #100f0f) 60%, transparent);
+}
+
+.ab-chat-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-200, #1c1b1a);
+  border: 1px solid var(--border-300, #403e3c);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.ab-chat-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-100, #e6e4d9);
+  font-size: 13px;
+  font-family: inherit;
+  min-height: 24px;
+}
+
+.ab-chat-input::placeholder {
+  color: var(--text-500, #6f6e69);
+}
+
+.ab-chat-send {
+  color: var(--neon-color, #5abdac);
+}
+
+.ab-chat-send:disabled {
+  opacity: 0.3;
+}
+
+/* ─── React Flow Overrides ─── */
+
+.ab-canvas .react-flow.dark {
+  --xy-background-color: var(--bg-100, #100f0f);
+  --xy-background-pattern-color: var(--bg-200, #1c1b1a);
+  --xy-controls-button-background-color: var(--bg-100, #100f0f);
+  --xy-controls-button-background-color-hover: var(--bg-200, #1c1b1a);
+  --xy-controls-button-color: var(--text-300, #9f9d96);
+  --xy-controls-button-color-hover: var(--text-100, #e6e4d9);
+  --xy-controls-button-border-color: var(--border-300, #403e3c);
+  --xy-node-background-color: transparent;
+  --xy-node-color: var(--text-100, #e6e4d9);
+  --xy-node-border: none;
+  --xy-node-border-radius: 8px;
+}
+
+.ab-canvas .react-flow__panel {
+  margin: 12px !important;
+}
+
+.ab-canvas .react-flow__controls {
+  border: 1px solid var(--border-300, #403e3c);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ab-canvas .react-flow__controls-button {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.ab-canvas .react-flow__controls-button svg {
+  max-width: 10px !important;
+  max-height: 10px !important;
+}
+
+.ab-canvas .react-flow__edge {
+  cursor: pointer;
+}
+
+/* ─── Button Animations ─── */
+
+.ab-container button:not(.ab-handle),
+.ab-container [role="button"]:not(.ab-handle) {
+  transition: transform 0.15s ease-out, background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.ab-container button:not(.ab-handle):hover,
+.ab-container [role="button"]:not(.ab-handle):hover {
+  transform: scale(1.05);
+}
+
+.ab-container button:not(.ab-handle):active,
+.ab-container [role="button"]:not(.ab-handle):active {
+  transform: scale(0.95);
+  transition-duration: 0.1s;
+  transition-timing-function: ease-in;
+}

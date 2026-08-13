@@ -24,6 +24,8 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
+import AgentBuilderPanel from './components/agent-builder/AgentBuilderPanel';
+import type { AgentBuilderSidebarControls } from './components/agent-builder/AgentBuilderPanel';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
@@ -269,6 +271,14 @@ const App: React.FC = () => {
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
+  const [agentBuilderControls, setAgentBuilderControls] = useState<AgentBuilderSidebarControls | null>(null);
+
+  useEffect(() => {
+    if (!isDatabaseMode) {
+      setDbHeaderControls(null);
+      setDbSidebarControls(null);
+    }
+  }, [isDatabaseMode]);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
     try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
   });
@@ -1005,7 +1015,7 @@ const App: React.FC = () => {
     return null;
   }, [modelType, theme, selectedModelConfig, handleNotification]);
 
-  const RAGRouteContent = () => (
+  const ragPanel = (
     <div className="h-full relative">
       <RAGChatPanel theme={theme} modelConfig={selectedModelConfig} models={models}
         onNotification={handleNotification} conversationId={experimentConversationId}
@@ -1013,11 +1023,13 @@ const App: React.FC = () => {
     </div>
   );
 
-  const AgentRouteContent = () => (
+  const agentBuilderPanel = (
     <div className="h-full relative">
-      <AgentChatPanel theme={theme} modelConfig={selectedModelConfig} models={models}
-        onNotification={handleNotification} conversationId={experimentConversationId}
-        onConversationChange={setExperimentConversationId} />
+      <AgentBuilderPanel
+        theme={theme}
+        onNotification={handleNotification}
+        onSidebarControls={setAgentBuilderControls}
+      />
     </div>
   );
 
@@ -1093,6 +1105,7 @@ const App: React.FC = () => {
         libraryControls={libraryControls}
         canvasControls={canvasSidebarControls}
         dbSidebarControls={dbSidebarControls}
+        agentBuilderControls={agentBuilderControls}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -1567,22 +1580,22 @@ const App: React.FC = () => {
                 <Route path="/experiments" element={<Navigate to="/experiments/rag" replace />} />
                 <Route path="/experiments/rag" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <RAGRouteContent />
+                    {ragPanel}
                   </RequireAuth>
                 } />
                 <Route path="/experiments/rag/:conversationId" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <RAGRouteContent />
+                    {ragPanel}
                   </RequireAuth>
                 } />
                 <Route path="/experiments/plugin-agent" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <AgentRouteContent />
+                    {agentBuilderPanel}
                   </RequireAuth>
                 } />
                 <Route path="/experiments/plugin-agent/:conversationId" element={
                   <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    <AgentRouteContent />
+                    {agentBuilderPanel}
                   </RequireAuth>
                 } />
                 <Route path="/experiments/skema" element={
@@ -1762,7 +1775,7 @@ const App: React.FC = () => {
         </>
         )}
 
-        <Toaster />
+        <Toaster position="bottom-center" />
       </main>
 
       {libraryControls && (

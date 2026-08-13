@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 const CHAT_PASSWORD = 'thelordismyshepherd';
 const EXPERIMENTS_PASSWORD = 'ilacknothing';
 const LIBRARY_PASSWORD = 'psalm23';
-const DATABASE_PASSWORD = 'heleadsmebesidestillwaters';
+const DATABASE_PASSWORD = 'heleadsmebesidequietwater';
 
 interface InlinePasswordModalProps {
   isOpen: boolean;

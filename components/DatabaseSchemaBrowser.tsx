@@ -49,7 +49,7 @@ const formatRowCount = (count: number | null | undefined): string => {
 };
 
 const ColumnRow: React.FC<{ col: ColumnInfo; searchQuery: string }> = ({ col, searchQuery }) => (
-  <div className="flex items-center gap-2 py-[4px] px-2.5 ml-6" style={{ color: 'var(--text-400)', fontSize: 'calc(var(--app-font-size, 18px) * 0.62)' }}>
+  <div className="flex flex-wrap items-center gap-2 py-[4px] px-2.5 ml-6" style={{ color: 'var(--text-400)', fontSize: 'calc(var(--app-font-size, 18px) * 0.62)' }}>
     {col.isPrimaryKey ? (
       <Key size={12} className="flex-shrink-0" style={{ color: '#f59e0b' }} />
     ) : col.foreignKey ? (
@@ -57,11 +57,11 @@ const ColumnRow: React.FC<{ col: ColumnInfo; searchQuery: string }> = ({ col, se
     ) : (
       <Hash size={12} className="flex-shrink-0 opacity-40" />
     )}
-    <span className="truncate font-mono" style={{ color: 'var(--text-200)' }}>
+    <span className="font-mono break-all" style={{ color: 'var(--text-200)' }}>
       {highlightMatch(col.name, searchQuery)}
     </span>
     {col.foreignKey && (
-      <span className="truncate flex-shrink-0 opacity-60" style={{ color: '#60a5fa', fontSize: 'calc(var(--app-font-size, 18px) * 0.55)' }} title={`FK → ${col.foreignKey.refTable}.${col.foreignKey.refColumn}`}>
+      <span className="flex-shrink-0 opacity-60 break-all" style={{ color: '#60a5fa', fontSize: 'calc(var(--app-font-size, 18px) * 0.55)' }} title={`FK → ${col.foreignKey.refTable}.${col.foreignKey.refColumn}`}>
         → {col.foreignKey.refTable.split('.').pop()}
       </span>
     )}
@@ -93,11 +93,11 @@ const TableNode: React.FC<{
 
   return (
     <div>
-      <div className="flex items-center group">
+      <div className="flex flex-wrap items-center group">
         <button
           onClick={() => setExpanded(!expanded)}
           onDoubleClick={() => onSelectTable(table.schema, table.name)}
-          className="flex items-center gap-2 flex-1 py-[6px] px-2.5 rounded-md hover:bg-[var(--bg-200)] transition-colors cursor-pointer min-w-0"
+          className="flex flex-wrap items-center gap-2 flex-1 py-[6px] px-2.5 rounded-md hover:bg-[var(--bg-200)] transition-colors cursor-pointer min-w-0"
           style={{ color: 'var(--text-200)', fontSize: 'calc(var(--app-font-size, 18px) * 0.67)' }}
         >
           {expanded ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
@@ -106,7 +106,7 @@ const TableNode: React.FC<{
           ) : (
             <Table2 size={14} className="flex-shrink-0" style={{ color: 'var(--neon-color)' }} />
           )}
-          <span className="truncate font-mono">{highlightMatch(table.name, searchQuery)}</span>
+          <span className="font-mono break-all">{highlightMatch(table.name, searchQuery)}</span>
           {table.rowCount !== null && table.rowCount !== undefined && (
             <span className="px-1 py-0.5 rounded flex-shrink-0" style={{ backgroundColor: 'var(--bg-300)', color: 'var(--text-500)', fontSize: 'calc(var(--app-font-size, 18px) * 0.52)' }}>
               {formatRowCount(table.rowCount)}
@@ -216,9 +216,9 @@ const DatabaseSchemaBrowser: React.FC<DatabaseSchemaBrowserProps> = ({
           />
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]]:block [&>[data-radix-scroll-area-viewport]>div]:min-w-0">
         <div className="p-2">
-          <div className="rounded-lg border" style={{ borderColor: 'var(--border-200)', backgroundColor: 'var(--bg-100)' }}>
+           <div className="rounded-lg border min-w-64" style={{ borderColor: 'var(--border-200)', backgroundColor: 'var(--bg-100)' }}>
             <div className="p-1">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -234,11 +234,11 @@ const DatabaseSchemaBrowser: React.FC<DatabaseSchemaBrowserProps> = ({
                     <div key={schema} className="mb-1">
                       <button
                         onClick={() => toggleSchema(schema)}
-                        className="flex items-center gap-2 w-full py-[6px] px-2 rounded-md hover:bg-[var(--bg-200)] transition-colors cursor-pointer font-semibold"
+                        className="flex flex-wrap items-center gap-2 w-full py-[6px] px-2 rounded-md hover:bg-[var(--bg-200)] transition-colors cursor-pointer font-semibold"
                         style={{ color: 'var(--text-300)', fontSize: 'calc(var(--app-font-size, 18px) * 0.7)' }}
                       >
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        <span className="truncate font-mono">{schema}</span>
+                        <span className="font-mono break-all">{schema}</span>
                         <span className="ml-auto font-normal opacity-40" style={{ fontSize: 'calc(var(--app-font-size, 18px) * 0.58)' }}>{schemaTables.length}t</span>
                       </button>
                       {isExpanded && schemaTables.map(table => (

@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp, Bot, Workflow, MessageSquare, Wrench } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile, LibraryFolder } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
 import type { DatabaseSidebarControls } from './DatabasePanel';
+import type { AgentBuilderSidebarControls } from './agent-builder/AgentBuilderPanel';
 import DatabaseSchemaBrowser from './DatabaseSchemaBrowser';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
 import { SECTION_TYPES, COLORS } from './canvas/constants';
 import { CatalogueModal } from './canvas/CatalogueModal';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +41,7 @@ interface SidebarProps {
   libraryControls?: LibraryControls | null;
   canvasControls?: CanvasSidebarControls | null;
   dbSidebarControls?: DatabaseSidebarControls | null;
+  agentBuilderControls?: AgentBuilderSidebarControls | null;
 }
 
 function getFileIcon(filename: string) {
@@ -401,9 +404,356 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
   );
 };
 
+const AgentBuilderSidebarContent: React.FC<{ controls: AgentBuilderSidebarControls; onBack: () => void }> = ({ controls, onBack }) => {
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newToolName, setNewToolName] = useState('');
+  const [newWorkflowName, setNewWorkflowName] = useState('');
+  const [agentPopoverOpen, setAgentPopoverOpen] = useState(false);
+  const [toolPopoverOpen, setToolPopoverOpen] = useState(false);
+  const [workflowPopoverOpen, setWorkflowPopoverOpen] = useState(false);
+
+  const handleCreateWorkflow = async () => {
+    if (!newWorkflowName.trim()) return;
+    const wf = await controls.onCreateWorkflow({ name: newWorkflowName.trim() });
+    setNewWorkflowName('');
+    setWorkflowPopoverOpen(false);
+    if (wf?.id) controls.onSelectWorkflow(wf.id);
+  };
+
+  const handleCreateAgent = async () => {
+    if (!newAgentName.trim()) return;
+    const agent = await controls.onCreateAgent({ name: newAgentName.trim() });
+    setNewAgentName('');
+    setAgentPopoverOpen(false);
+    if (agent && controls.selectedWorkflowId) {
+      await controls.onAddAgentToWorkflow(controls.selectedWorkflowId, agent.id);
+    }
+  };
+
+  const handleCreateTool = async () => {
+    if (!newToolName.trim()) return;
+    const tool = await controls.onCreateTool({ name: newToolName.trim(), description: '', parameters_schema: { type: 'object', properties: { input: { type: 'string', description: 'Input text' } }, required: ['input'] } });
+    setNewToolName('');
+    setToolPopoverOpen(false);
+    if (tool && controls.selectedWorkflowId) {
+      await controls.onAddToolToWorkflow(controls.selectedWorkflowId, tool.id);
+    }
+  };
+
+  const workflowAgentIds = new Set(controls.workflowDetail?.agents.map(a => a.id) ?? []);
+  const workflowToolIds = new Set(controls.workflowDetail?.tools.map(t => t.id) ?? []);
+  const availableAgents = controls.agents.filter(a => !workflowAgentIds.has(a.id));
+  const availableTools = controls.tools.filter(t => !workflowToolIds.has(t.id));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Back button */}
+      <div className="px-3 pt-3 pb-2">
+        <button
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer text-[var(--text-500)] hover:text-[var(--text-100)] hover:bg-[var(--bg-200)]"
+          onClick={onBack}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Tools</span>
+        </button>
+      </div>
+
+      {/* Workflow list — always visible */}
+      <div className="px-3 pb-2">
+        <div className="flex items-center justify-between px-1 pb-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Workflows</span>
+          <Popover open={workflowPopoverOpen} onOpenChange={setWorkflowPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)] text-[var(--text-500)] hover:text-[var(--text-100)]">
+                <Plus size={12} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="bottom"
+              align="end"
+              sideOffset={4}
+              className="w-56 p-3 rounded-xl"
+              style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
+            >
+              <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-100)' }}>New Workflow</div>
+              <Input
+                value={newWorkflowName}
+                onChange={e => setNewWorkflowName(e.target.value)}
+                placeholder="Workflow name"
+                className="h-8 text-xs mb-2"
+                style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                onKeyDown={e => e.key === 'Enter' && handleCreateWorkflow()}
+                autoFocus
+              />
+              <Button
+                size="sm"
+                className="w-full h-7 text-xs cursor-pointer"
+                style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
+                onClick={handleCreateWorkflow}
+                disabled={!newWorkflowName.trim()}
+              >
+                Create Workflow
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {controls.workflows.map(wf => (
+          <div
+            key={wf.id}
+            className={`group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-200 cursor-pointer mb-0.5 ${
+              controls.selectedWorkflowId === wf.id
+                ? 'border'
+                : 'border border-transparent hover:bg-[var(--bg-200)]'
+            }`}
+            style={
+              controls.selectedWorkflowId === wf.id
+                ? { backgroundColor: 'rgba(var(--neon-rgb), 0.08)', borderColor: 'rgba(var(--neon-rgb), 0.2)' }
+                : undefined
+            }
+            onClick={() => controls.onSelectWorkflow(wf.id)}
+          >
+            <Workflow size={14} style={{ color: 'var(--text-300)' }} />
+            <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--text-100)' }}>{wf.name}</span>
+            <button
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all duration-200 cursor-pointer hover:bg-red-500/10"
+              style={{ color: '#ef4444' }}
+              onClick={(e) => { e.stopPropagation(); controls.onDeleteWorkflow(wf.id); }}
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        ))}
+
+        {controls.workflows.length === 0 && (
+          <p className="text-[10px] px-1 py-3 text-center" style={{ color: 'var(--text-500)' }}>No workflows yet</p>
+        )}
+      </div>
+
+      <div className="mx-3 h-px" style={{ background: 'var(--border-300)' }} />
+
+      {/* Content below is only shown when a workflow is selected */}
+      {controls.selectedWorkflowId && controls.workflowDetail ? (
+        <ScrollArea className="flex-1 px-3 pt-3">
+          {/* View toggle */}
+          <div className="mb-3">
+            <SlidingGroup
+              direction="horizontal"
+              activeKey={controls.view}
+              onSelect={(key) => controls.onSwitchView(key as 'canvas' | 'chat')}
+              className="gap-1 p-1 rounded-xl"
+              style={{ backgroundColor: 'var(--bg-200)' }}
+              indicatorStyle={{ top: 2, bottom: 2 }}
+              items={[
+                { key: 'canvas' as const, label: 'Canvas', icon: <Workflow size={12} /> },
+                { key: 'chat' as const, label: 'Chat', icon: <MessageSquare size={12} /> },
+              ]}
+              renderItem={(item, isActive) => (
+                <button
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer"
+                  style={{ color: isActive ? 'var(--text-100)' : 'var(--text-500)' }}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              )}
+            />
+          </div>
+
+          <div className="mx-1 mb-3 h-px" style={{ background: 'var(--border-300)' }} />
+
+          {/* IN THIS WORKFLOW */}
+          {(controls.workflowDetail.agents.length > 0 || controls.workflowDetail.tools.length > 0) && (
+            <div className="mb-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)] px-1 pb-2 block">In This Workflow</span>
+              {controls.workflowDetail.agents.map(agent => (
+                <div key={agent.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5">
+                  <Bot size={14} style={{ color: agent.color }} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium truncate block" style={{ color: 'var(--text-100)' }}>{agent.name}</span>
+                    <span className="text-[10px] truncate block" style={{ color: 'var(--text-500)' }}>{agent.model}</span>
+                  </div>
+                  <button
+                    className="p-0.5 rounded transition-all duration-200 cursor-pointer hover:bg-red-500/10"
+                    style={{ color: '#ef4444' }}
+                    onClick={async () => {
+                      await controls.onRemoveAgentFromWorkflow(controls.selectedWorkflowId!, agent.id);
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+              {controls.workflowDetail.tools.map(t => (
+                <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5">
+                  <Wrench size={14} style={{ color: t.color }} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium truncate block" style={{ color: 'var(--text-100)' }}>{t.name}</span>
+                  </div>
+                  <button
+                    className="p-0.5 rounded transition-all duration-200 cursor-pointer hover:bg-red-500/10"
+                    style={{ color: '#ef4444' }}
+                    onClick={async () => {
+                      await controls.onRemoveToolFromWorkflow(controls.selectedWorkflowId!, t.id);
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mx-1 my-2 h-px" style={{ background: 'var(--border-300)' }} />
+
+          {/* AVAILABLE AGENTS */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Available Agents</span>
+              <Popover open={agentPopoverOpen} onOpenChange={setAgentPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)] text-[var(--text-500)] hover:text-[var(--text-100)]">
+                    <Plus size={12} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="bottom"
+                  align="end"
+                  sideOffset={4}
+                  className="w-56 p-3 rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
+                >
+                  <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-100)' }}>New Agent</div>
+                  <Input
+                    value={newAgentName}
+                    onChange={e => setNewAgentName(e.target.value)}
+                    placeholder="Agent name"
+                    className="h-8 text-xs mb-2"
+                    style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateAgent()}
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-xs cursor-pointer"
+                    style={{ backgroundColor: '#5ABDAC', color: '#000' }}
+                    onClick={handleCreateAgent}
+                    disabled={!newAgentName.trim()}
+                  >
+                    Create Agent
+                  </Button>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {availableAgents.map(agent => (
+              <button
+                key={agent.id}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-200 cursor-pointer mb-0.5 border border-transparent hover:bg-[var(--bg-200)]"
+                onClick={async () => {
+                  await controls.onAddAgentToWorkflow(controls.selectedWorkflowId!, agent.id);
+                }}
+              >
+                <Bot size={14} style={{ color: agent.color }} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium truncate block" style={{ color: 'var(--text-100)' }}>{agent.name}</span>
+                  <span className="text-[10px] truncate block" style={{ color: 'var(--text-500)' }}>{agent.model}</span>
+                </div>
+                <Plus size={12} style={{ color: 'var(--text-400)' }} />
+              </button>
+            ))}
+
+            {availableAgents.length === 0 && (
+              <p className="text-[10px] px-1 py-2 text-center" style={{ color: 'var(--text-500)' }}>
+                {controls.agents.length === 0 ? 'No agents yet — create one above' : 'All agents are in this workflow'}
+              </p>
+            )}
+          </div>
+
+          <div className="mx-1 my-2 h-px" style={{ background: 'var(--border-300)' }} />
+
+          {/* AVAILABLE TOOLS */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Available Tools</span>
+              <Popover open={toolPopoverOpen} onOpenChange={setToolPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)] text-[var(--text-500)] hover:text-[var(--text-100)]">
+                    <Plus size={12} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="bottom"
+                  align="end"
+                  sideOffset={4}
+                  className="w-56 p-3 rounded-xl"
+                  style={{ backgroundColor: 'var(--bg-100)', border: '1px solid var(--border-300)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
+                >
+                  <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-100)' }}>New Tool</div>
+                  <Input
+                    value={newToolName}
+                    onChange={e => setNewToolName(e.target.value)}
+                    placeholder="Tool name"
+                    className="h-8 text-xs mb-2"
+                    style={{ backgroundColor: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateTool()}
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-xs cursor-pointer"
+                    style={{ backgroundColor: '#66A0C8', color: '#000' }}
+                    onClick={handleCreateTool}
+                    disabled={!newToolName.trim()}
+                  >
+                    Create Tool
+                  </Button>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {availableTools.map(t => (
+              <button
+                key={t.id}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-200 cursor-pointer mb-0.5 border border-transparent hover:bg-[var(--bg-200)]"
+                onClick={async () => {
+                  await controls.onAddToolToWorkflow(controls.selectedWorkflowId!, t.id);
+                }}
+              >
+                <Wrench size={14} style={{ color: t.color }} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium truncate block" style={{ color: 'var(--text-100)' }}>{t.name}</span>
+                  <span className="text-[10px] truncate block" style={{ color: 'var(--text-500)' }}>
+                    {Object.keys(t.parameters_schema?.properties || {}).length} params
+                  </span>
+                </div>
+                <Plus size={12} style={{ color: 'var(--text-400)' }} />
+              </button>
+            ))}
+
+            {availableTools.length === 0 && (
+              <p className="text-[10px] px-1 py-2 text-center" style={{ color: 'var(--text-500)' }}>
+                {controls.tools.length === 0 ? 'No tools yet — create one above' : 'All tools are in this workflow'}
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.08)' }}>
+            <Workflow size={18} style={{ color: 'var(--neon-color)' }} />
+          </div>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-100)' }}>Select a workflow</p>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-500)' }}>Pick or create a workflow above to start building</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TOOL_ITEMS = [
   { key: 'rag' as const, icon: Database, label: 'RAG' },
-  { key: 'plugin-agent' as const, icon: Puzzle, label: 'Plug-in Agent' },
+  { key: 'plugin-agent' as const, icon: Bot, label: 'Agent Builder' },
   { key: 'skema' as const, icon: Layers, label: 'Skema' },
   { key: 'python' as const, icon: Terminal, label: 'Python' },
 ];
@@ -463,6 +813,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   libraryControls,
   canvasControls,
   dbSidebarControls,
+  agentBuilderControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -588,14 +939,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         flex-shrink-0 h-full flex flex-col
         transition-all duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)]
         fixed md:relative z-50 md:z-auto
-        ${isOpen ? 'w-[288px] translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 overflow-hidden'}
+        ${isOpen ? `${isDatabaseMode ? 'w-[360px]' : 'w-[288px]'} translate-x-0` : 'w-0 -translate-x-full md:translate-x-0 overflow-hidden'}
       `}
       style={{
         backgroundColor: 'var(--bg-100)',
         borderRight: '1px solid var(--border-300)',
       }}
     >
-      <div className={`flex flex-col h-full w-[288px] transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`flex flex-col h-full ${isDatabaseMode ? 'w-[360px]' : 'w-[288px]'} transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
 
         {/* Header */}
         <div className="relative flex w-full items-center px-3 pt-4 pb-2">
@@ -703,6 +1054,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : currentMode === 'experiments' && activeView === 'skema' && canvasControls ? (
           <CanvasSidebarContent controls={canvasControls} />
+        ) : currentMode === 'experiments' && activeView === 'plugin-agent' && agentBuilderControls ? (
+          <AgentBuilderSidebarContent controls={agentBuilderControls} onBack={() => navigate('/experiments')} />
         ) : currentMode === 'experiments' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-3">

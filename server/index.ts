@@ -33,9 +33,8 @@ const { default: messageRoutes } = await import('./routes/messages');
 const { default: statsRoutes } = await import('./routes/stats');
 const { default: pythonRoutes } = await import('./routes/python');
 const { default: databaseRoutes } = await import('./routes/database');
-const { initializeDatabase } = await import('./db');
-
-await initializeDatabase();
+const { default: agentBuilderRoutes } = await import('./routes/agentBuilder');
+const { initializeDatabaseWithRetry } = await import('./db');
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -80,6 +79,10 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.use('/api/chat', chatRoutes);
 app.use('/api/skema', skemaRoutes);
 app.use('/api/rag', ragRoutes);
@@ -93,10 +96,7 @@ app.use('/api/db', messageRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/python', pythonRoutes);
 app.use('/api/database', databaseRoutes);
-
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+app.use('/api/agent-builder', agentBuilderRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[server] Unhandled error:', err);
@@ -106,5 +106,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 app.listen(PORT, () => {
   console.log(`[server] API server running on http://localhost:${PORT}`);
 });
+
+initializeDatabaseWithRetry();
 
 export default app;
