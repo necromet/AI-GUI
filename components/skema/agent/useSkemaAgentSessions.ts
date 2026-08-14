@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentMessage } from './types';
-import type { SkemaProject } from '../../types';
+import type { SkemaProject } from '../../../types';
 
 export function useSkemaAgentSessions({
   project,

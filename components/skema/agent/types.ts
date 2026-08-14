@@ -1,6 +1,4 @@
 import type { AgentTask } from '@/components/ui/agent-plan';
-import type { SkemaProject, ModelConfig } from '../../types';
-import type { GridComponent, GridState } from '../../canvas/types';
 
 export type MessageBlock =
   | { type: 'text'; content: string }
@@ -19,17 +17,17 @@ export interface AgentMessage {
 export interface SkemaAgentSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
-  project: SkemaProject;
+  project: any;
   activeBoardIdx: number;
   currentHtml: string;
-  modelConfig?: ModelConfig;
+  currentFiles?: Array<{ path: string; content: string; language: string; isEntry?: boolean }>;
+  modelConfig?: any;
   onNotification?: (msg: string, type: 'success' | 'error') => void;
-  onHtmlGenerated?: (html: string) => void;
+  onFileCreated?: (file: { path: string; content: string; language: string; isEntry?: boolean }) => void;
+  onFileUpdated?: (path: string, content: string) => void;
+  onFileDeleted?: (path: string) => void;
+  onPreviewSet?: (path: string) => void;
   models?: Array<{ id: string; name: string }>;
   selectedModelId?: string;
-  onModelChange?: (modelId: string) => void;
-  gridState?: GridState;
-  onComponentPlaced?: (component: GridComponent) => void;
-  onComponentRemoved?: (componentId: string) => void;
-  onComponentUpdated?: (component: GridComponent) => void;
+  onModelChange?: (id: string) => void;
 }

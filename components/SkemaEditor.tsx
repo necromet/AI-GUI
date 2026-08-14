@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Brain, Loader2, Eye, Check, Undo2, Redo2, X, Copy, RefreshCw, Sparkles, Maximize2, Minimize2, Download, Code, PanelRight, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
-import { SkemaProject, SkemaBoard, SkemaLayout, ModelConfig } from '../types';
+import { SkemaProject, SkemaBoard, SkemaLayout, ModelConfig, ProjectFile } from '../types';
 import { getLayoutDimensions } from '../lib/layoutUtils';
 import { sendAgentMessage, ToolResult } from '../services/agentService';
 import * as db from '../services/apiDatabaseAdapter';
@@ -12,6 +12,8 @@ import { CodeEditor } from '@/components/ui/code-editor-sheet';
 import { MathCurveLoader } from '@/components/ui/math-curve-loader';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import type { SkemaComponent } from '../types/skemaSpec';
+import InteractivePreview, { InteractivePreviewRef, SelectedElement } from './skema/InteractivePreview';
+import { ElementToolbar } from './skema/ElementToolbar';
 
 export interface SkemaControls {
   onExport: () => void;
@@ -82,6 +84,23 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
   const [showAgentSidebar, setShowAgentSidebar] = useState(true);
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
 
+  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
+  const [elementToolbarPos, setElementToolbarPos] = useState<{ top: number; left: number } | null>(null);
+  const previewRef = useRef<InteractivePreviewRef>(null);
+
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>(() => {
+    const boardFiles = board?.files;
+    if (boardFiles && boardFiles.length > 0) return boardFiles;
+    if (generatedHtml && /<!doctype/i.test(generatedHtml)) {
+      return [{ path: 'index.html', content: generatedHtml, language: 'html', isEntry: true }];
+    }
+    return [];
+  });
+  const [activeFilePath, setActiveFilePath] = useState<string>(() => {
+    const entry = projectFiles.find(f => f.isEntry);
+    return entry?.path || projectFiles[0]?.path || '';
+  });
+
   const dims = getLayoutDimensions(layout);
   const activeModel = models?.find(m => m.id === selectedModelId) || modelConfig;
 
@@ -93,6 +112,8 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
     setGeneratedHtml(currentBoard?.generatedHtml || '');
     setStreamingHtml('');
     setThinkingText('');
+    setSelectedElement(null);
+    setElementToolbarPos(null);
   }, [activeBoardIdx]);
 
   const stripHtmlFromText = (text: string): string => {
@@ -202,6 +223,8 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
     setEditSummary('');
     setEditedHtml('');
     setToolProgressText('');
+    setSelectedElement(null);
+    setElementToolbarPos(null);
 
     const activeModel = models?.find(m => m.id === selectedModelId) || modelConfig;
 
@@ -469,13 +492,140 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
 
   const handleAgentHtmlGenerated = useCallback((html: string) => {
     const cleanHtml = html.replace(/^```(?:html)?\n?/i, '').replace(/\n?```$/i, '').trim();
-    if (!cleanHtml || !/<!doctype/i.test(cleanHtml)) return;
+    if (!cleanHtml || /<!doctype/i.test(cleanHtml)) return;
     setGeneratedHtml(cleanHtml);
     setStreamingHtml(cleanHtml);
     setViewMode('preview');
     updateBoard({ generatedHtml: cleanHtml });
+    setSelectedElement(null);
+    setElementToolbarPos(null);
     onNotification?.('HTML generated successfully', 'success');
   }, [updateBoard, onNotification]);
+
+  const handleFileCreated = useCallback((file: { path: string; content: string; language: string; isEntry?: boolean }) => {
+    setProjectFiles(prev => {
+      const exists = prev.some(f => f.path === file.path);
+      if (exists) return prev.map(f => f.path === file.path ? file : f);
+      const newFiles = file.isEntry ? prev.map(f => ({ ...f, isEntry: false })).concat(file) : [...prev, file];
+      updateBoard({ files: newFiles, generatedHtml: file.isEntry && file.language === 'html' ? file.content : generatedHtml });
+      return newFiles;
+    });
+    if (file.isEntry && file.language === 'html') {
+      setGeneratedHtml(file.content);
+      setActiveFilePath(file.path);
+    }
+  }, [updateBoard, generatedHtml]);
+
+  const handleFileUpdated = useCallback((path: string, content: string) => {
+    setProjectFiles(prev => {
+      const newFiles = prev.map(f => f.path === path ? { ...f, content } : f);
+      const entry = newFiles.find(f => f.isEntry);
+      if (entry?.path === path && entry.language === 'html') {
+        setGeneratedHtml(content);
+      }
+      updateBoard({ files: newFiles, generatedHtml: entry?.language === 'html' ? entry.content : generatedHtml });
+      return newFiles;
+    });
+  }, [updateBoard, generatedHtml]);
+
+  const handleFileDeleted = useCallback((path: string) => {
+    setProjectFiles(prev => {
+      const newFiles = prev.filter(f => f.path !== path);
+      updateBoard({ files: newFiles });
+      return newFiles;
+    });
+    if (activeFilePath === path) {
+      setActiveFilePath(projectFiles[0]?.path || '');
+    }
+  }, [updateBoard, activeFilePath, projectFiles]);
+
+  const handlePreviewSet = useCallback((path: string) => {
+    setActiveFilePath(path);
+    setProjectFiles(prev => {
+      const newFiles = prev.map(f => ({ ...f, isEntry: f.path === path }));
+      const entry = newFiles.find(f => f.path === path);
+      if (entry?.language === 'html') {
+        setGeneratedHtml(entry.content);
+        updateBoard({ files: newFiles, generatedHtml: entry.content, activeFile: path });
+      } else {
+        updateBoard({ files: newFiles, activeFile: path });
+      }
+      return newFiles;
+    });
+  }, [updateBoard]);
+
+  const handleElementSelect = useCallback((element: SelectedElement | null) => {
+    setSelectedElement(element);
+    if (!element || !containerRef.current) {
+      setElementToolbarPos(null);
+      return;
+    }
+    const iframe = containerRef.current.querySelector('iframe');
+    if (!iframe) return;
+    const iframeRect = iframe.getBoundingClientRect();
+    const scale = iframeRect.width / dims.width;
+    const elRect = element.rect;
+    const top = iframeRect.top + elRect.top * scale - 8;
+    const left = iframeRect.left + elRect.left * scale;
+    setElementToolbarPos({ top, left });
+  }, [dims.width]);
+
+  const handleInspectorHtmlChange = useCallback((html: string) => {
+    setGeneratedHtml(html);
+    updateBoard({ generatedHtml: html });
+  }, [updateBoard]);
+
+  const handleStyleChange = useCallback((property: string, value: string) => {
+    if (!selectedElement) return;
+    previewRef.current?.sendToInspector('update-style', {
+      path: selectedElement.path,
+      property,
+      value,
+    });
+  }, [selectedElement]);
+
+  const handleTextChange = useCallback((text: string) => {
+    if (!selectedElement) return;
+    previewRef.current?.sendToInspector('update-text', {
+      path: selectedElement.path,
+      text,
+    });
+  }, [selectedElement]);
+
+  const handleDeleteElement = useCallback(() => {
+    if (!selectedElement) return;
+    previewRef.current?.sendToInspector('delete-element', { path: selectedElement.path });
+    setSelectedElement(null);
+    setElementToolbarPos(null);
+  }, [selectedElement]);
+
+  const handleDuplicateElement = useCallback(() => {
+    if (!selectedElement) return;
+    previewRef.current?.sendToInspector('duplicate-element', { path: selectedElement.path });
+  }, [selectedElement]);
+
+  const handleMoveElement = useCallback((direction: 'up' | 'down') => {
+    if (!selectedElement) return;
+    previewRef.current?.sendToInspector('move-element', { path: selectedElement.path, direction });
+  }, [selectedElement]);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('skema-dot-grid')) {
+      setSelectedElement(null);
+      setElementToolbarPos(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedElement && !isFullscreen) {
+        setSelectedElement(null);
+        setElementToolbarPos(null);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [selectedElement, isFullscreen]);
 
   React.useEffect(() => {
     if (!onControlsChange) return;
@@ -614,21 +764,20 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
           <div className="absolute inset-0 opacity-10 pointer-events-none skema-dot-grid" />
 
           {/* Canvas Content */}
-          <div ref={containerRef} className="relative w-full h-full flex items-center justify-center p-10 z-10">
+          <div ref={containerRef} className="relative w-full h-full flex items-center justify-center p-10 z-10" onClick={handleCanvasClick}>
             {displayHtml ? (
               viewMode === 'preview' || !generatedHtml ? (
-                <div style={{
-                  width: `${dims.width}px`,
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'center center',
-                }}>
-                  <iframe
-                    style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.4)', borderRadius: '12px' }}
-                    sandbox="allow-scripts"
-                    srcDoc={displayHtml}
-                    title="HTML Preview"
-                  />
-                </div>
+                <InteractivePreview
+                  ref={previewRef}
+                  html={streamingHtml || displayHtml}
+                  width={dims.width}
+                  height={dims.height}
+                  zoom={zoom}
+                  theme={theme}
+                  onElementSelect={handleElementSelect}
+                  onHtmlChange={handleInspectorHtmlChange}
+                  isStreaming={isGenerating && !!streamingHtml}
+                />
               ) : (
                 <div className="w-full h-full relative">
                   <div className="flex items-center justify-between px-4 py-2 rounded-t-xl" style={{ backgroundColor: '#1c1b1b', border: '1px solid #4d4354', borderBottom: 'none' }}>
@@ -654,14 +803,15 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
               )
             ) : isGenerating ? (
               streamingHtml ? (
-                <div style={{ width: `${dims.width}px`, transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
-                  <iframe
-                    style={{ width: `${dims.width}px`, height: `${dims.height}px`, border: '0', backgroundColor: theme === 'dark' ? '#1a1a1a' : '#ffffff', boxShadow: '0 4px 30px rgba(0,0,0,0.4)', borderRadius: '12px' }}
-                    sandbox="allow-scripts"
-                    srcDoc={streamingHtml}
-                    title="Streaming Preview"
-                  />
-                </div>
+                <InteractivePreview
+                  ref={previewRef}
+                  html={streamingHtml}
+                  width={dims.width}
+                  height={dims.height}
+                  zoom={zoom}
+                  theme={theme}
+                  isStreaming={true}
+                />
               ) : (
                 <div className="text-center py-20">
                   <div className="mx-auto mb-4 flex items-center justify-center">
@@ -738,9 +888,13 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
           project={project}
           activeBoardIdx={activeBoardIdx}
           currentHtml={generatedHtml}
+          currentFiles={projectFiles}
           modelConfig={activeModel}
           onNotification={onNotification}
-          onHtmlGenerated={handleAgentHtmlGenerated}
+          onFileCreated={handleFileCreated}
+          onFileUpdated={handleFileUpdated}
+          onFileDeleted={handleFileDeleted}
+          onPreviewSet={handlePreviewSet}
           models={chatModels.map(m => ({ id: m.id, name: m.name }))}
           selectedModelId={selectedModelId}
           onModelChange={setSelectedModelId}
@@ -770,6 +924,21 @@ const SkemaEditor: React.FC<SkemaEditorProps> = ({ project, theme = 'dark', onNo
         onClose={() => setShowExportModal(false)}
         onNotification={onNotification}
       />
+
+      {/* Element Toolbar */}
+      {selectedElement && elementToolbarPos && (
+        <ElementToolbar
+          element={selectedElement}
+          position={elementToolbarPos}
+          onStyleChange={handleStyleChange}
+          onTextChange={handleTextChange}
+          onDelete={handleDeleteElement}
+          onDuplicate={handleDuplicateElement}
+          onMoveUp={() => handleMoveElement('up')}
+          onMoveDown={() => handleMoveElement('down')}
+          onClose={() => { setSelectedElement(null); setElementToolbarPos(null); }}
+        />
+      )}
 
       {/* Fullscreen modal */}
       <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>

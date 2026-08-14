@@ -11,16 +11,16 @@ export const SkemaAgentSidebar: React.FC<SkemaAgentSidebarProps> = ({
   project,
   activeBoardIdx,
   currentHtml,
+  currentFiles,
   modelConfig,
   onNotification,
-  onHtmlGenerated,
+  onFileCreated,
+  onFileUpdated,
+  onFileDeleted,
+  onPreviewSet,
   models,
   selectedModelId,
   onModelChange,
-  gridState,
-  onComponentPlaced,
-  onComponentRemoved,
-  onComponentUpdated,
 }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
@@ -45,12 +45,12 @@ export const SkemaAgentSidebar: React.FC<SkemaAgentSidebarProps> = ({
     project,
     activeBoardIdx,
     currentHtml,
+    currentFiles,
     onNotification,
-    onHtmlGenerated,
-    gridState,
-    onComponentPlaced,
-    onComponentRemoved,
-    onComponentUpdated,
+    onFileCreated,
+    onFileUpdated,
+    onFileDeleted,
+    onPreviewSet,
   });
 
   const {
@@ -100,7 +100,7 @@ export const SkemaAgentSidebar: React.FC<SkemaAgentSidebarProps> = ({
         <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-300)' }}>
           <Sparkles size={18} style={{ color: 'var(--neon-color)', flexShrink: 0 }} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>Canvas Agent</p>
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-100)' }}>Skema Agent</p>
             <p className="truncate text-xs" style={{ color: 'var(--text-500)' }}>{isStreaming ? 'Working...' : 'Ready to assist'}</p>
           </div>
           <button onClick={onToggle} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-80" style={{ color: 'var(--text-500)' }} title="Close panel">

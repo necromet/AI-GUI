@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import type { AgentMessage } from './types';
-import type { LibraryComponent, ModelConfig } from '../../types';
+import type { LibraryComponent, ModelConfig } from '../../../types';
 import type { AgentTask } from '@/components/ui/agent-plan';
 import { getSystemPromptAppend } from '../../../lib/agentConfig';
 

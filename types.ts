@@ -137,13 +137,20 @@ export interface ModelConfig {
 
 export type SkemaLayout = '16:9' | '1:1' | '9:16' | '4:5' | '1.91:1' | '4:3' | '3:4' | '32:9';
 
-export type SkemaProjectType = 'canvas';
+export type SkemaProjectType = 'canvas' | 'html';
 
 export interface SkemaImageRef {
   id: string;
   label: string;
   url: string;
   mimeType?: string;
+}
+
+export interface ProjectFile {
+  path: string;      // e.g. "index.html", "src/App.tsx"
+  content: string;
+  language: string;   // 'html' | 'tsx' | 'ts' | 'css' | 'js'
+  isEntry?: boolean;
 }
 
 export interface SkemaBoard {
@@ -155,6 +162,8 @@ export interface SkemaBoard {
   designSpec?: import('./types/skemaSpec').SkemaSlideSpec;
   bgImage?: string;
   bgColor?: string;
+  files?: ProjectFile[];
+  activeFile?: string;  // path of the file currently shown in preview
   createdAt: number;
   updatedAt: number;
 }

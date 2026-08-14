@@ -78,20 +78,22 @@ interface CanvasEditorProps {
   onSidebarControlsChange?: (controls: CanvasSidebarControls | null) => void;
 }
 
-function deserializeGridState(board?: SkemaBoard): GridState {
+function deserializeGridState(board?: SkemaBoard, projectTitle?: string): GridState {
   if (board?.generatedHtml?.startsWith('__canvas__:')) {
     try {
       const parsed = JSON.parse(board.generatedHtml.slice('__canvas__:'.length));
+      console.log('[CanvasEditor] deserializeGridState — parsed components:', parsed.components?.length);
       return { ...parsed, selectedId: parsed.selectedId ?? null };
     } catch {
       // fall through
     }
   }
+  console.log('[CanvasEditor] deserializeGridState — fallback (no generatedHtml), board.generatedHtml:', board?.generatedHtml?.substring(0, 100));
   return {
     version: '1.0',
     template: DEFAULT_TEMPLATE,
     components: [],
-    pageTitle: board?.title || 'Untitled',
+    pageTitle: projectTitle || board?.title || 'Untitled',
     selectedId: null,
     projectFiles: [],
   };
@@ -249,7 +251,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
 }) => {
   const board = project.boards[0];
   const idCounterRef = useRef(0);
-  const [gridState, setGridState] = useState<GridState>(() => deserializeGridState(board));
+  const [gridState, setGridState] = useState<GridState>(() => deserializeGridState(board, project.title));
   const [showExport, setShowExport] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ col: number; row: number } | null>(null);
@@ -259,6 +261,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const [showAgentSidebar, setShowAgentSidebar] = useState(true);
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
 
   const selectedId = gridState.selectedId ?? null;
   const setSelectedId = useCallback((id: string | null) => {
@@ -329,15 +332,33 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   boardRef.current = board;
   projectRef.current = project;
 
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    const serialized = serializeGridState(gridState);
+    const updatedBoard: SkemaBoard = {
+      ...boardRef.current,
+      generatedHtml: serialized,
+      updatedAt: Date.now(),
+    };
+    onSave({ ...projectRef.current, boards: [updatedBoard], updatedAt: Date.now() });
+  }, [gridState, onSave]);
+
   const saveState = useCallback(
     (newState: GridState) => {
       setGridState(newState);
+      const serialized = serializeGridState(newState);
       const updatedBoard: SkemaBoard = {
         ...boardRef.current,
-        generatedHtml: serializeGridState(newState),
+        generatedHtml: serialized,
         updatedAt: Date.now(),
       };
-      onSave({ ...projectRef.current, boards: [updatedBoard], updatedAt: Date.now() });
+      const projectToSave = { ...projectRef.current, boards: [updatedBoard], updatedAt: Date.now() };
+      console.log('[CanvasEditor] saveState — components:', newState.components.length, 'serialized length:', serialized.length);
+      onSave(projectToSave);
     },
     [onSave]
   );

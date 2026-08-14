@@ -1,11 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import type { AgentMessage } from './types';
-import type { SkemaProject, ModelConfig } from '../../types';
+import type { SkemaProject, ModelConfig } from '../../../types';
 import type { AgentTask } from '@/components/ui/agent-plan';
-import { getSystemPromptAppend, getEnabledTools } from '../../../lib/agentConfig';
-
-import type { GridComponent, GridState } from '../../canvas/types';
+import { getSystemPromptAppend } from '../../../lib/agentConfig';
 
 interface UseSkemaAgentStreamOptions {
   messages: AgentMessage[];
@@ -15,12 +13,12 @@ interface UseSkemaAgentStreamOptions {
   project: SkemaProject;
   activeBoardIdx: number;
   currentHtml: string;
+  currentFiles?: Array<{ path: string; content: string; language: string; isEntry?: boolean }>;
   onNotification?: (msg: string, type: 'success' | 'error') => void;
-  onHtmlGenerated?: (html: string) => void;
-  gridState?: GridState;
-  onComponentPlaced?: (component: GridComponent) => void;
-  onComponentRemoved?: (componentId: string) => void;
-  onComponentUpdated?: (component: GridComponent) => void;
+  onFileCreated?: (file: { path: string; content: string; language: string; isEntry?: boolean }) => void;
+  onFileUpdated?: (path: string, content: string) => void;
+  onFileDeleted?: (path: string) => void;
+  onPreviewSet?: (path: string) => void;
 }
 
 export function useSkemaAgentStream({
@@ -31,12 +29,12 @@ export function useSkemaAgentStream({
   project,
   activeBoardIdx,
   currentHtml,
+  currentFiles,
   onNotification,
-  onHtmlGenerated,
-  gridState,
-  onComponentPlaced,
-  onComponentRemoved,
-  onComponentUpdated,
+  onFileCreated,
+  onFileUpdated,
+  onFileDeleted,
+  onPreviewSet,
 }: UseSkemaAgentStreamOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingAskUser, setPendingAskUser] = useState<string | null>(null);
@@ -59,20 +57,14 @@ export function useSkemaAgentStream({
   const buildContext = useCallback(() => {
     const board = project.boards[activeBoardIdx];
     const layout = board?.layout || '16:9';
-
-    const context: Record<string, any> = {
+    return {
       layout,
-      boardDescription: project.title,
+      projectTitle: project.title,
       model: selectedModelId || modelConfig?.apiModelId || modelConfig?.id || 'mimo-v2.5',
       provider: modelConfig?.provider,
-      projectType: project.projectType,
+      files: currentFiles || [],
     };
-
-    if (currentHtml) context.currentHtml = currentHtml;
-    if (gridState) context.gridState = gridState;
-
-    return context;
-  }, [project, activeBoardIdx, currentHtml, gridState, modelConfig, selectedModelId]);
+  }, [project, activeBoardIdx, currentFiles, modelConfig, selectedModelId]);
 
   const buildServerMessages = useCallback((msgs: AgentMessage[], newText: string) => {
     const serverMessages: any[] = [];
@@ -113,12 +105,12 @@ export function useSkemaAgentStream({
     if (tasks.length === 0) return null;
     return tasks.find(t =>
       toolName.includes(t.title.toLowerCase().split(' ')[0]) ||
-      (toolName === 'place_component' && t.title.toLowerCase().includes('place')) ||
-      (toolName === 'remove_component' && t.title.toLowerCase().includes('remove')) ||
-      (toolName === 'move_component' && t.title.toLowerCase().includes('move')) ||
-      (toolName === 'resize_component' && t.title.toLowerCase().includes('resize')) ||
-      (toolName === 'update_component' && t.title.toLowerCase().includes('update')) ||
-      (toolName === 'regenerate_component' && t.title.toLowerCase().includes('regenerat'))
+      (toolName === 'generate_html' && t.title.toLowerCase().includes('generat')) ||
+      (toolName === 'edit_html' && t.title.toLowerCase().includes('edit')) ||
+      (toolName === 'generate_spec' && t.title.toLowerCase().includes('spec')) ||
+      (toolName === 'search_library' && t.title.toLowerCase().includes('search')) ||
+      (toolName === 'web_browse' && t.title.toLowerCase().includes('browse')) ||
+      (toolName === 'execute_code' && t.title.toLowerCase().includes('execut'))
     );
   }, []);
 
@@ -207,18 +199,20 @@ export function useSkemaAgentStream({
       }));
     }
 
-    if (parsed.html_generated) {
-      onHtmlGenerated?.(parsed.html_generated);
+    if (parsed.file_created) {
+      onFileCreated?.(parsed.file_created);
+      onNotification?.(`Created: ${parsed.file_created.path}`, 'success');
     }
-
-    if (parsed.component_placed) {
-      onComponentPlaced?.(parsed.component_placed);
+    if (parsed.file_updated) {
+      onFileUpdated?.(parsed.file_updated.path, parsed.file_updated.content);
+      onNotification?.(`Updated: ${parsed.file_updated.path}`, 'success');
     }
-    if (parsed.component_removed) {
-      onComponentRemoved?.(parsed.component_removed.componentId);
+    if (parsed.file_deleted) {
+      onFileDeleted?.(parsed.file_deleted.path);
+      onNotification?.(`Deleted: ${parsed.file_deleted.path}`, 'success');
     }
-    if (parsed.component_updated) {
-      onComponentUpdated?.(parsed.component_updated);
+    if (parsed.preview_set) {
+      onPreviewSet?.(parsed.preview_set.path);
     }
 
     if (parsed.todo_list && Array.isArray(parsed.todo_list)) {
@@ -239,7 +233,7 @@ export function useSkemaAgentStream({
         return { ...m, blocks, isThinking: false };
       }));
     }
-  }, [matchToolToTask, onHtmlGenerated, onComponentPlaced, onComponentRemoved, onComponentUpdated, setMessages]);
+  }, [matchToolToTask, onFileCreated, onFileUpdated, onFileDeleted, onPreviewSet, onNotification, setMessages]);
 
   const handleSend = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? '').trim();
@@ -265,10 +259,6 @@ export function useSkemaAgentStream({
       const serverMessages = buildServerMessages(messages, text);
       const context = buildContext();
 
-      const skemaEnabledTools = getEnabledTools('skema');
-      const defaultTools = ['place_component', 'remove_component', 'move_component', 'resize_component', 'update_component', 'regenerate_component', 'search_library'];
-      const tools = defaultTools.filter(t => skemaEnabledTools.includes(t));
-
       while (round < MAX_AGENT_ROUNDS) {
         round++;
 
@@ -280,7 +270,6 @@ export function useSkemaAgentStream({
             model: selectedModelId || modelConfig?.apiModelId || modelConfig?.id || 'mimo-v2.5',
             provider: modelConfig?.provider,
             stream: true,
-            tools,
             context,
             systemPromptAppend: getSystemPromptAppend('skema'),
           }),
@@ -376,7 +365,7 @@ export function useSkemaAgentStream({
       isStreamingRef.current = false;
       setIsStreaming(false);
     }
-  }, [messages, setMessages, modelConfig, selectedModelId, project, activeBoardIdx, buildServerMessages, buildContext, handleSSEChunk]);
+  }, [messages, setMessages, modelConfig, selectedModelId, project, activeBoardIdx, currentFiles, buildServerMessages, buildContext, handleSSEChunk]);
 
   const handleAbort = useCallback(() => {
     abortControllerRef.current?.abort();

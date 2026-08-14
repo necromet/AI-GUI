@@ -1,5 +1,5 @@
 import type { AgentTask } from '@/components/ui/agent-plan';
-import type { LibraryComponent, ModelConfig } from '../../types';
+import type { LibraryComponent, ModelConfig } from '../../../types';
 
 export type MessageBlock =
   | { type: 'text'; content: string }

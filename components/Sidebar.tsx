@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp, Bot, Workflow, MessageSquare, Wrench } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp, Bot, Workflow, MessageSquare, Wrench, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile, LibraryFolder } from '../types';
 import type { LibraryControls } from './LibraryPanel';
@@ -145,8 +145,8 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
   }, [component, localPrompt, controls.onUpdatePrompt]);
 
   const tabs = [
-    { key: 'components' as const, label: 'Components' },
-    { key: 'properties' as const, label: 'Properties' },
+    { key: 'components' as const, label: 'Components', icon: <LayoutGrid size={12} /> },
+    { key: 'properties' as const, label: 'Properties', icon: <SlidersHorizontal size={12} /> },
   ];
 
   return (
@@ -159,13 +159,25 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
         style={{ borderColor: 'var(--border-200)' }}
         indicatorClassName="!rounded-none"
         indicatorStyle={{ top: 'auto', bottom: 0, height: 2, backgroundColor: 'var(--neon-color)', boxShadow: 'none' }}
-        items={tabs.map((t) => ({ key: t.key, label: t.label }))}
+        items={tabs.map((t) => ({ key: t.key, label: t.label, icon: t.icon }))}
         renderItem={(item, isActive) => (
           <button
-            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-400)' }}
           >
+            {item.icon}
             {item.label}
+            {item.key === 'components' && controls.components.length > 0 && (
+              <span
+                className="text-[9px] font-mono px-1 py-0 rounded-full ml-0.5"
+                style={{
+                  background: isActive ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
+                  color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                }}
+              >
+                {controls.components.length}
+              </span>
+            )}
           </button>
         )}
       />

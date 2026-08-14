@@ -56,6 +56,8 @@ export async function saveSkemaProject(project: {
       project.updated_at,
     ]
   );
+  const verify = await getOne<{ boards_json: string }>('SELECT boards_json FROM skema_projects WHERE id = $1', [project.id]);
+  console.log('[db saveSkemaProject] VERIFY after save — id:', project.id, 'boards_json length:', verify?.boards_json?.length, 'matches input:', verify?.boards_json?.length === project.boards_json.length);
 }
 
 export async function deleteSkemaProject(id: string): Promise<void> {

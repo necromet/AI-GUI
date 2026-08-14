@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRight, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Code2, Eye, Monitor, Tablet, Smartphone, Laptop, MousePointer2, FileCode, LayoutGrid, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { SlidingGroup } from '@/components/ui/sliding-group';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, SkemaProject, ConversationType } from './types';
@@ -17,7 +16,6 @@ import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Splitter } from '@ark-ui/react/splitter';
 import TTSPanel from './components/TTSPanel';
 import VoiceDesignPanel from './components/VoiceDesignPanel';
@@ -30,10 +28,7 @@ import type { AgentBuilderSidebarControls } from './components/agent-builder/Age
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
-import SkemaAgentSidebar from './components/skema/SkemaAgentSidebar';
 import { SkemaControls } from './components/SkemaEditor';
-import type { CanvasControls, CanvasSidebarControls } from './components/canvas';
-import { RESOLUTIONS } from './components/canvas/constants';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 import DatabasePanel from './components/DatabasePanel';
@@ -268,7 +263,7 @@ const App: React.FC = () => {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [skemaActiveProject, setSkemaActiveProject] = useState<SkemaProject | null>(null);
   const [skemaControls, setSkemaControls] = useState<SkemaControls | null>(null);
-  const [canvasSidebarControls, setCanvasSidebarControls] = useState<CanvasSidebarControls | null>(null);
+  const [canvasSidebarControls, setCanvasSidebarControls] = useState(null);
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
@@ -1189,118 +1184,8 @@ const App: React.FC = () => {
                 </Badge>
               </div>
 
-              {/* Center: Canvas/Preview toggle + status */}
-              {'viewMode' in skemaControls && (
-                <div className="flex items-center gap-3 ml-4">
-                  <SlidingGroup
-                    direction="horizontal"
-                    activeKey={(skemaControls as CanvasControls).viewMode}
-                    onSelect={(key) => (skemaControls as CanvasControls).onViewModeChange(key as 'canvas' | 'preview')}
-                    className="gap-1 p-0.5 rounded-md"
-                    style={{ backgroundColor: 'var(--bg-200)' }}
-                    indicatorStyle={{ top: 2, bottom: 2, borderRadius: 6 }}
-                    items={[
-                      { key: 'canvas', label: 'Canvas', icon: <Code2 size={14} /> },
-                      { key: 'preview', label: 'Preview', icon: <Eye size={14} /> },
-                    ]}
-                    renderItem={(item, isActive) => (
-                      <button
-                        title={item.label}
-                        className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
-                        style={{
-                          color: isActive ? 'var(--neon-color)' : 'var(--text-400)',
-                        }}
-                      >
-                        {item.icon}
-                      </button>
-                    )}
-                  />
-                  <div className="text-[11px] font-mono flex gap-3.5" style={{ color: 'var(--text-400)' }}>
-                    {(skemaControls as CanvasControls).viewMode === 'canvas' ? (
-                      <>
-                        <span className="flex items-center gap-1" title="Draw to place component">
-                          <MousePointer2 size={12} style={{ color: 'var(--neon-color)' }} />
-                        </span>
-                        <span style={{ color: 'var(--neon-color)' }}>
-                          {(skemaControls as CanvasControls).cursorPos
-                            ? `col ${(skemaControls as CanvasControls).cursorPos!.col} / row ${(skemaControls as CanvasControls).cursorPos!.row}`
-                            : '—'}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <span className="flex items-center gap-1"><FileCode size={12} /> {(skemaControls as CanvasControls).fileCount}</span>
-                        <span className="flex items-center gap-1"><LayoutGrid size={12} /> {(skemaControls as CanvasControls).componentCount}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Right: template + actions */}
+              {/* Right: actions */}
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-                {'template' in skemaControls && (
-                  <>
-                    <Select
-                      value={(skemaControls as CanvasControls).template}
-                      onValueChange={(v) => (skemaControls as CanvasControls).onTemplateChange(v)}
-                    >
-                      <SelectTrigger
-                        className="h-7 text-[11px] font-mono rounded-md w-[160px] cursor-pointer"
-                        style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent style={{ background: 'var(--bg-100)', borderColor: 'var(--border-300)' }}>
-                        {Object.entries(RESOLUTIONS).map(([key, res]) => (
-                          <SelectItem key={key} value={key} className="text-[11px] font-mono cursor-pointer">
-                            <span className="flex items-center gap-1.5">
-                              {key.includes('mobile') ? (
-                                <Smartphone size={12} />
-                              ) : key.includes('tablet') ? (
-                                <Tablet size={12} />
-                              ) : key.includes('macbook') ? (
-                                <Laptop size={12} />
-                              ) : (
-                                <Monitor size={12} />
-                              )}
-                              {res.label} ({res.width}×{res.height})
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-mono"
-                      style={{ borderColor: 'var(--border-300)', color: 'var(--text-400)' }}
-                    >
-                      {(skemaControls as CanvasControls).cols}-col
-                    </Badge>
-                  </>
-                )}
-                {'onToggleProperties' in skemaControls && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(skemaControls as CanvasControls).onToggleProperties}
-                    className="h-8 w-8 text-[var(--text-500)] hover:text-[var(--text-100)]"
-                    title="Toggle properties panel"
-                  >
-                    <PanelRight size={16} style={{ opacity: (skemaControls as CanvasControls).showProperties ? 1 : 0.5 }} />
-                  </Button>
-                )}
-                {'onToggleAgent' in skemaControls && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(skemaControls as CanvasControls).onToggleAgent}
-                    className="h-8 w-8 text-[var(--text-500)] hover:text-[var(--text-100)]"
-                    title={(skemaControls as CanvasControls).isAgentOpen ? 'Hide Agent' : 'Show Agent'}
-                  >
-                    {(skemaControls as CanvasControls).isAgentOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-                  </Button>
-                )}
                 {!skemaControls.isGenerating && skemaControls.hasLastPrompt && (
                   <Button
                     variant="ghost"
@@ -1621,7 +1506,6 @@ const App: React.FC = () => {
                         models={models}
                         onProjectChange={handleSkemaProjectChange}
                         onControlsChange={setSkemaControls}
-                        onSidebarControlsChange={setCanvasSidebarControls}
                       />
                     </div>
                   </RequireAuth>
@@ -1638,7 +1522,6 @@ const App: React.FC = () => {
                         initialProjectId={skemaProjectId}
                         onProjectChange={handleSkemaProjectChangeWithReset}
                         onControlsChange={setSkemaControls}
-                        onSidebarControlsChange={setCanvasSidebarControls}
                       />
                     </div>
                   </RequireAuth>
@@ -1790,25 +1673,6 @@ const App: React.FC = () => {
         <Toaster position="bottom-center" />
       </main>
 
-      {skemaControls && 'showAgentSidebar' in skemaControls && skemaActiveProject && (
-        <SkemaAgentSidebar
-          isOpen={(skemaControls as CanvasControls).showAgentSidebar}
-          onToggle={(skemaControls as CanvasControls).onToggleAgentSidebar}
-          project={skemaActiveProject}
-          activeBoardIdx={0}
-          currentHtml=""
-          modelConfig={selectedModelConfig}
-          onNotification={handleNotification}
-          models={models.filter(m => (m.modelType || 'chat') === 'chat').map(m => ({ id: m.id, name: m.name }))}
-          selectedModelId={(skemaControls as CanvasControls).selectedModelId}
-          onModelChange={(skemaControls as CanvasControls).onModelChange}
-          gridState={(skemaControls as CanvasControls).gridState}
-          onComponentPlaced={(skemaControls as CanvasControls).onComponentPlaced}
-          onComponentRemoved={(skemaControls as CanvasControls).onComponentRemoved}
-          onComponentUpdated={(skemaControls as CanvasControls).onComponentUpdated}
-        />
-      )}
-
       {libraryControls && (
         <AgentSidebar
           isOpen={agentDockOpen}
@@ -1844,22 +1708,7 @@ const App: React.FC = () => {
         />
       )}
 
-      {skemaControls && 'onComponentPlaced' in skemaControls && skemaActiveProject && (
-        <SkemaAgentSidebar
-          isOpen={(skemaControls as CanvasControls).isAgentOpen}
-          onToggle={(skemaControls as CanvasControls).onToggleAgent}
-          project={skemaActiveProject}
-          activeBoardIdx={0}
-          currentHtml=""
-          modelConfig={selectedModelConfig}
-          onNotification={handleNotification}
-          models={models.filter(m => (m.modelType || 'chat') === 'chat').map(m => ({ id: m.id, name: m.name }))}
-          gridState={(skemaControls as CanvasControls).agentGridState}
-          onComponentPlaced={(skemaControls as CanvasControls).onComponentPlaced}
-          onComponentRemoved={(skemaControls as CanvasControls).onComponentRemoved}
-          onComponentUpdated={(skemaControls as CanvasControls).onComponentUpdated}
-        />
-      )}
+
     </div>
   );
 };

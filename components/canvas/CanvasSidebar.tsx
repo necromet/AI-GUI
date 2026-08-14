@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { FileCode2, FileJson, FileText, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, Trash2, Eye, Package } from 'lucide-react';
+import { FileCode2, FileJson, FileText, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, Trash2, Eye, Package, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { SlidingGroup } from '@/components/ui/sliding-group';
@@ -167,8 +167,8 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
   }, [component, localPrompt, onUpdatePrompt]);
 
   const tabs = [
-    { key: 'components' as const, label: 'Components' },
-    { key: 'properties' as const, label: 'Properties' },
+    { key: 'components' as const, label: 'Components', icon: <LayoutGrid size={12} /> },
+    { key: 'properties' as const, label: 'Properties', icon: <SlidersHorizontal size={12} /> },
   ];
 
   return (
@@ -187,15 +187,28 @@ export const CanvasSidebar: React.FC<CanvasSidebarProps> = ({
         items={tabs.map((t) => ({
           key: t.key,
           label: t.label,
+          icon: t.icon,
         }))}
         renderItem={(item, isActive) => (
           <button
-            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+            className="flex-1 py-2.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             style={{
               color: isActive ? 'var(--neon-color)' : 'var(--text-400)',
             }}
           >
+            {item.icon}
             {item.label}
+            {item.key === 'components' && components.length > 0 && (
+              <span
+                className="text-[9px] font-mono px-1 py-0 rounded-full ml-0.5"
+                style={{
+                  background: isActive ? 'rgba(var(--neon-rgb), 0.15)' : 'var(--bg-200)',
+                  color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                }}
+              >
+                {components.length}
+              </span>
+            )}
           </button>
         )}
       />
