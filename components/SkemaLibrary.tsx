@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Trash2, X, Package, Layers, Image as ImageIcon, Code, LayoutGrid, RefreshCw, Check, Palette, Layout, Upload, Link as LinkIcon } from 'lucide-react';
 import type { SkemaComponent } from '../types/skemaSpec';
 import type { SkemaProjectType } from '../types';
+import * as db from '../services/apiDatabaseAdapter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -76,10 +77,8 @@ const SkemaLibrary: React.FC<SkemaLibraryProps> = ({
       if (activeCategory !== 'all') params.set('category', activeCategory);
       if (projectType) params.set('projectType', projectType);
 
-      const response = await fetch(`/api/skema/components?${params}`);
-      if (!response.ok) throw new Error('Failed to load components');
-      const data = await response.json();
-      setComponents(data.components || []);
+      const components = await db.getSkemaComponents(params);
+      setComponents(components);
     } catch (err: any) {
       onNotification?.(err.message, 'error');
     } finally {
@@ -115,6 +114,7 @@ const SkemaLibrary: React.FC<SkemaLibraryProps> = ({
     try {
       const response = await fetch(`/api/skema/components/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
+      db.invalidateSkemaComponentsCache();
       setComponents(prev => prev.filter(c => c.id !== id));
       setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
       onNotification?.('Component deleted', 'success');
@@ -159,6 +159,7 @@ const SkemaLibrary: React.FC<SkemaLibraryProps> = ({
       });
       if (!response.ok) throw new Error('Failed to add component');
       const data = await response.json();
+      db.invalidateSkemaComponentsCache();
       setComponents(prev => [data.component, ...prev]);
       setIsAdding(false);
       resetAddForm();

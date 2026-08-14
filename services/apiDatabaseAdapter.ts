@@ -1,3 +1,5 @@
+import { cacheFetch, cacheInvalidate, cacheInvalidatePrefix } from './cacheService';
+
 const API_BASE = '/api';
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -17,18 +19,24 @@ export const getDatabase = async () => {
 };
 
 export const getModels = async () => {
-  const data = await apiFetch<{ models: any[] }>('/models');
-  return data.models;
+  return cacheFetch('models', async () => {
+    const data = await apiFetch<{ models: any[] }>('/models');
+    return data.models;
+  });
 };
 
 export const getAllModels = async () => {
-  const data = await apiFetch<{ models: any[] }>('/models/all');
-  return data.models;
+  return cacheFetch('models:all', async () => {
+    const data = await apiFetch<{ models: any[] }>('/models/all');
+    return data.models;
+  });
 };
 
 export const getModelById = async (modelId: number) => {
-  const data = await apiFetch<{ model: any }>(`/models/${modelId}`);
-  return data.model;
+  return cacheFetch(`model:${modelId}`, async () => {
+    const data = await apiFetch<{ model: any }>(`/models/${modelId}`);
+    return data.model;
+  });
 };
 
 export const getModelByName = async (name: string) => {
@@ -57,6 +65,8 @@ export const addModel = async (
       is_custom: isCustom,
     }),
   });
+  cacheInvalidatePrefix('models');
+  cacheInvalidatePrefix('model:');
   return data.id;
 };
 
@@ -76,6 +86,8 @@ export const updateModel = async (
     method: 'PUT',
     body: JSON.stringify(updates),
   });
+  cacheInvalidatePrefix('models');
+  cacheInvalidate(`model:${modelId}`);
 };
 
 export const deleteModel = async (modelId: number) => {
@@ -84,21 +96,29 @@ export const deleteModel = async (modelId: number) => {
 
 export const deactivateModel = async (modelId: number) => {
   await apiFetch<any>(`/models/${modelId}`, { method: 'DELETE' });
+  cacheInvalidatePrefix('models');
+  cacheInvalidate(`model:${modelId}`);
 };
 
 export const getConversations = async () => {
-  const data = await apiFetch<{ conversations: any[] }>('/conversations');
-  return data.conversations;
+  return cacheFetch('conversations', async () => {
+    const data = await apiFetch<{ conversations: any[] }>('/conversations');
+    return data.conversations;
+  });
 };
 
 export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
-  const data = await apiFetch<{ conversations: any[] }>(`/conversations?type=${type}`);
-  return data.conversations;
+  return cacheFetch(`conversations:${type}`, async () => {
+    const data = await apiFetch<{ conversations: any[] }>(`/conversations?type=${type}`);
+    return data.conversations;
+  });
 };
 
 export const getConversationById = async (conversationId: number) => {
-  const data = await apiFetch<{ conversation: any }>(`/conversations/${conversationId}`);
-  return data.conversation;
+  return cacheFetch(`conversation:${conversationId}`, async () => {
+    const data = await apiFetch<{ conversation: any }>(`/conversations/${conversationId}`);
+    return data.conversation;
+  });
 };
 
 export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
@@ -106,6 +126,8 @@ export const createConversation = async (modelId: number, title?: string | null,
     method: 'POST',
     body: JSON.stringify({ model_id: modelId, title: title || null, type: type || 'chat' }),
   });
+  cacheInvalidate('conversations');
+  cacheInvalidatePrefix('conversations:');
   return data.id;
 };
 
@@ -118,15 +140,24 @@ export const updateConversationTitle = async (conversationId: number, title: str
     method: 'PUT',
     body: JSON.stringify({ title }),
   });
+  cacheInvalidate('conversations');
+  cacheInvalidatePrefix('conversations:');
+  cacheInvalidate(`conversation:${conversationId}`);
 };
 
 export const deleteConversation = async (conversationId: number) => {
   await apiFetch<any>(`/conversations/${conversationId}`, { method: 'DELETE' });
+  cacheInvalidate('conversations');
+  cacheInvalidatePrefix('conversations:');
+  cacheInvalidate(`conversation:${conversationId}`);
+  cacheInvalidate(`messages:${conversationId}`);
 };
 
 export const getMessagesByConversation = async (conversationId: number) => {
-  const data = await apiFetch<{ messages: any[] }>(`/db/conversations/${conversationId}/messages`);
-  return data.messages;
+  return cacheFetch(`messages:${conversationId}`, async () => {
+    const data = await apiFetch<{ messages: any[] }>(`/db/conversations/${conversationId}/messages`);
+    return data.messages;
+  });
 };
 
 export const addMessage = async (
@@ -155,11 +186,17 @@ export const addMessage = async (
       attachments,
     }),
   });
+  cacheInvalidate(`messages:${conversationId}`);
+  cacheInvalidate('conversations');
+  cacheInvalidatePrefix('conversations:');
+  cacheInvalidatePrefix('stats:');
   return data.id;
 };
 
 export const deleteMessage = async (messageId: number) => {
   await apiFetch<any>(`/db/messages/${messageId}`, { method: 'DELETE' });
+  cacheInvalidatePrefix('messages:');
+  cacheInvalidatePrefix('stats:');
 };
 
 export const clearConversationMessages = async (conversationId: number) => {
@@ -169,6 +206,7 @@ export const clearConversationMessages = async (conversationId: number) => {
       await deleteMessage(msg.id);
     }
   }
+  cacheInvalidate(`messages:${conversationId}`);
 };
 
 export const getNextMessageOrder = async (conversationId: number): Promise<number> => {
@@ -177,32 +215,44 @@ export const getNextMessageOrder = async (conversationId: number): Promise<numbe
 };
 
 export const getOverallTokenStats = async () => {
-  return await apiFetch<any>('/stats/overall');
+  return cacheFetch('stats:overall', async () => {
+    return await apiFetch<any>('/stats/overall');
+  });
 };
 
 export const getTokenStatsByModel = async () => {
-  const data = await apiFetch<{ stats: any[] }>('/stats/by-model');
-  return data.stats;
+  return cacheFetch('stats:models', async () => {
+    const data = await apiFetch<{ stats: any[] }>('/stats/by-model');
+    return data.stats;
+  });
 };
 
 export const getTokenStatsByDate = async (days: number = 30) => {
-  const data = await apiFetch<{ stats: any[] }>(`/stats/by-date?days=${days}`);
-  return data.stats;
+  return cacheFetch(`stats:dates:${days}`, async () => {
+    const data = await apiFetch<{ stats: any[] }>(`/stats/by-date?days=${days}`);
+    return data.stats;
+  });
 };
 
 export const getTokenStatsByConversation = async (limit: number = 20) => {
-  const data = await apiFetch<{ stats: any[] }>(`/stats/by-conversation?limit=${limit}`);
-  return data.stats;
+  return cacheFetch(`stats:conversations:${limit}`, async () => {
+    const data = await apiFetch<{ stats: any[] }>(`/stats/by-conversation?limit=${limit}`);
+    return data.stats;
+  });
 };
 
 export const getSkemaProjects = async () => {
-  const data = await apiFetch<{ projects: any[] }>('/skema/projects');
-  return data.projects;
+  return cacheFetch('skema:projects', async () => {
+    const data = await apiFetch<{ projects: any[] }>('/skema/projects');
+    return data.projects;
+  });
 };
 
 export const getSkemaProject = async (id: string) => {
-  const data = await apiFetch<{ project: any }>(`/skema/projects/${id}`);
-  return data.project;
+  return cacheFetch(`skema:project:${id}`, async () => {
+    const data = await apiFetch<{ project: any }>(`/skema/projects/${id}`);
+    return data.project;
+  });
 };
 
 export const saveSkemaProject = async (project: {
@@ -229,10 +279,14 @@ export const saveSkemaProject = async (project: {
       updated_at: new Date(project.updatedAt).toISOString(),
     }),
   });
+  cacheInvalidate('skema:projects');
+  cacheInvalidate(`skema:project:${project.id}`);
 };
 
 export const deleteSkemaProject = async (id: string) => {
   await apiFetch<any>(`/skema/projects/${id}`, { method: 'DELETE' });
+  cacheInvalidate('skema:projects');
+  cacheInvalidate(`skema:project:${id}`);
 };
 
 // ===== Python Projects =====
@@ -254,13 +308,17 @@ export interface PythonProject {
 }
 
 export const getPythonProjects = async (): Promise<PythonProject[]> => {
-  const data = await apiFetch<{ projects: PythonProject[] }>('/python/projects');
-  return data.projects;
+  return cacheFetch('python:projects', async () => {
+    const data = await apiFetch<{ projects: PythonProject[] }>('/python/projects');
+    return data.projects;
+  });
 };
 
 export const getPythonProject = async (id: string): Promise<PythonProject> => {
-  const data = await apiFetch<{ project: PythonProject }>(`/python/projects/${id}`);
-  return data.project;
+  return cacheFetch(`python:project:${id}`, async () => {
+    const data = await apiFetch<{ project: PythonProject }>(`/python/projects/${id}`);
+    return data.project;
+  });
 };
 
 export const createPythonProject = async (title: string, files?: PythonProjectFile[]): Promise<PythonProject> => {
@@ -268,6 +326,7 @@ export const createPythonProject = async (title: string, files?: PythonProjectFi
     method: 'POST',
     body: JSON.stringify({ title, files: files || [{ filename: 'main.py', content: '', isEntry: true }] }),
   });
+  cacheInvalidate('python:projects');
   return data.project;
 };
 
@@ -287,11 +346,69 @@ export const savePythonProject = async (project: {
       settings: project.settings,
     }),
   });
+  cacheInvalidate('python:projects');
+  cacheInvalidate(`python:project:${project.id}`);
   return data.project;
 };
 
 export const deletePythonProject = async (id: string) => {
   await apiFetch<any>(`/python/projects/${id}`, { method: 'DELETE' });
+  cacheInvalidate('python:projects');
+  cacheInvalidate(`python:project:${id}`);
+};
+
+// ===== Library Components =====
+
+export const getLibraryComponents = async (params?: URLSearchParams) => {
+  const key = `library:components:${params?.toString() || ''}`;
+  return cacheFetch(key, async () => {
+    const qs = params ? `?${params}` : '';
+    const response = await fetch(`${API_BASE}/library/components${qs}`);
+    if (!response.ok) throw new Error('Failed to load components');
+    const data = await response.json();
+    return data.components || [];
+  });
+};
+
+export const getLibraryFolders = async () => {
+  return cacheFetch('library:folders', async () => {
+    const response = await fetch(`${API_BASE}/library/folders`);
+    if (!response.ok) throw new Error('Failed to load folders');
+    const data = await response.json();
+    return data.folders || [];
+  });
+};
+
+export const invalidateLibraryCache = () => {
+  cacheInvalidatePrefix('library:');
+};
+
+// ===== Skema Components =====
+
+export const getSkemaComponents = async (params?: URLSearchParams) => {
+  const key = `skema:components:${params?.toString() || ''}`;
+  return cacheFetch(key, async () => {
+    const qs = params ? `?${params}` : '';
+    const response = await fetch(`${API_BASE}/skema/components${qs}`);
+    if (!response.ok) throw new Error('Failed to load components');
+    const data = await response.json();
+    return data.components || [];
+  });
+};
+
+export const invalidateSkemaComponentsCache = () => {
+  cacheInvalidatePrefix('skema:components:');
+};
+
+// ===== Agent Tools =====
+
+export const getAvailableToolsCached = async () => {
+  return cacheFetch('agent:tools', async () => {
+    const response = await fetch(`${API_BASE}/skema-agent/tools`);
+    if (!response.ok) throw new Error(`Tools error ${response.status}`);
+    const data = await response.json();
+    return data.tools || [];
+  }, 300_000);
 };
 
 // ===== Database Explorer =====

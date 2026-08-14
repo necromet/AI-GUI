@@ -65,6 +65,7 @@ export default function AgentBuilderPanel({ theme, onNotification, onSidebarCont
   }, [fetchWorkflowDetail]);
 
   useEffect(() => {
+    setSelectedAgentId(null);
     if (selectedWorkflowId) {
       loadWorkflowDetail(selectedWorkflowId);
     } else {
@@ -119,7 +120,12 @@ export default function AgentBuilderPanel({ theme, onNotification, onSidebarCont
     };
   }, []);
 
-  const selectedAgent = agents.find(a => a.id === selectedAgentId) || null;
+  const selectedAgent = (() => {
+    if (!selectedAgentId) return null;
+    const wfAgent = workflowDetail?.agents.find(a => a.id === selectedAgentId);
+    if (wfAgent) return wfAgent;
+    return agents.find(a => a.id === selectedAgentId) || null;
+  })();
 
   useEffect(() => {
     if (selectedAgentId) {
@@ -256,6 +262,7 @@ export default function AgentBuilderPanel({ theme, onNotification, onSidebarCont
             />
           ) : (
             <AgentChatView
+              key={selectedWorkflowId}
               agent={fullAgent || selectedAgent}
               workflowAgents={workflowDetail?.agents}
               onSelectAgent={(id) => setSelectedAgentId(id || null)}

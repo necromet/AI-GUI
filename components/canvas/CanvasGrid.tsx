@@ -169,10 +169,11 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       <div className="p-6 flex justify-center items-start min-h-full">
       <div
         ref={canvasRef}
-        className="relative rounded-xl border flex-shrink-0 cursor-crosshair select-none"
+        className="relative rounded-xl border cursor-crosshair select-none"
         style={{
           width: canvasWidth,
-          minHeight: canvasHeight,
+          minHeight: canvasHeight + 26,
+          margin: '0 auto',
           background: 'var(--bg-0)',
           borderColor: 'var(--border-200)',
           boxShadow: '0 0 80px rgba(0,0,0,0.3)',

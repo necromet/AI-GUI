@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
+import * as path from 'path';
 import { chatCompletion, streamChatCompletion, ChatMessage } from '../services/mimoService';
 import { analyzeImages } from '../services/agentService';
 import { buildSpecSystemPrompt } from '../services/skemaSpecPrompt';
+import { compileComponent } from '../services/tsxCompiler';
+import type { LibraryComponentFile } from '../services/libraryService';
 import * as skemaDb from '../db/skemaProjects';
 import * as library from '../services/skemaLibraryService';
 import { SEED_COMPONENTS } from '../data/seedComponents';
@@ -475,6 +478,69 @@ router.post('/components/seed', async (req: Request, res: Response) => {
     console.error('[skema/components/seed POST] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
+});
+
+const CONTENT_TYPE_MAP: Record<string, LibraryComponentFile['contentType']> = {
+  tsx: 'tsx', ts: 'tsx', jsx: 'tsx',
+  html: 'html', htm: 'html',
+  css: 'css', scss: 'css', less: 'css',
+  js: 'js', mjs: 'js', cjs: 'js',
+  json: 'json', md: 'markdown', py: 'python',
+};
+
+const PREVIEW_MODULE_TTL = 5 * 60 * 1000;
+const previewModuleCache = new Map<string, { js: string; ts: number }>();
+
+function cleanPreviewCache() {
+  const now = Date.now();
+  for (const [k, v] of previewModuleCache) {
+    if (now - v.ts > PREVIEW_MODULE_TTL) previewModuleCache.delete(k);
+  }
+}
+
+router.post('/compile', async (req: Request, res: Response) => {
+  try {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      res.status(400).json({ error: 'Missing files array' });
+      return;
+    }
+
+    const mapped: LibraryComponentFile[] = files.map((f: any, i: number) => {
+      const ext = (f.language || path.extname(f.path).slice(1)).toLowerCase();
+      return {
+        id: `preview_${i}`,
+        componentId: 'preview',
+        filename: path.basename(f.path),
+        contentType: CONTENT_TYPE_MAP[ext] || 'tsx',
+        content: f.content,
+        sortOrder: i,
+        isEntry: !!f.isEntry,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    const js = await compileComponent(mapped);
+    const key = Math.random().toString(36).slice(2, 10);
+    previewModuleCache.set(key, { js, ts: Date.now() });
+    cleanPreviewCache();
+    res.json({ key });
+  } catch (error: any) {
+    console.error('[skema/compile] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/preview-module/:key', (req: Request, res: Response) => {
+  const entry = previewModuleCache.get(req.params.key);
+  if (!entry) {
+    res.status(404).send('export default null;');
+    return;
+  }
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(entry.js);
 });
 
 export default router;

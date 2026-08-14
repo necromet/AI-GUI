@@ -54,6 +54,7 @@
     "@tailwindcss/vite": "^4.3.2",
     "@xyflow/react": "^12.11.2",
     "ai": "^7.0.28",
+    "better-sqlite3": "^13.0.2",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

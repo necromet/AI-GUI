@@ -1,3 +1,5 @@
+import { cacheFetch } from './cacheService';
+
 const API_BASE = '/api';
 
 export interface ToolDefinition {
@@ -23,10 +25,12 @@ export interface AgentStreamChunk {
 }
 
 export async function getAvailableTools(): Promise<ToolDefinition[]> {
-  const response = await fetch(`${API_BASE}/skema-agent/tools`);
-  if (!response.ok) throw new Error(`Tools error ${response.status}`);
-  const data = await response.json();
-  return data.tools || [];
+  return cacheFetch('agent:tools', async () => {
+    const response = await fetch(`${API_BASE}/skema-agent/tools`);
+    if (!response.ok) throw new Error(`Tools error ${response.status}`);
+    const data = await response.json();
+    return data.tools || [];
+  }, 300_000);
 }
 
 export async function* sendAgentMessage(

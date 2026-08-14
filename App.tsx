@@ -8,6 +8,7 @@ import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PR
 import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, SkemaProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle, parseDocument } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
+import { listDocuments } from './services/ragService';
 import Sidebar, { type SidebarPanel } from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ModeSelector from './components/ModeSelector';
@@ -331,11 +332,22 @@ const App: React.FC = () => {
     const initDb = async () => {
       try {
         await db.getDatabase();
-        await loadConversations();
-        await loadModels();
+        await Promise.all([loadConversations(), loadModels()]);
       } catch (error) {
         console.error('Database initialization error:', error);
       }
+
+      Promise.allSettled([
+        db.getSkemaProjects(),
+        db.getPythonProjects(),
+        db.getLibraryFolders(),
+        db.getLibraryComponents(),
+        db.getOverallTokenStats(),
+        db.getTokenStatsByModel(),
+        db.getTokenStatsByConversation(20),
+        db.getAvailableToolsCached(),
+        listDocuments(),
+      ]).catch(() => {});
     };
     initDb();
 
@@ -1777,6 +1789,25 @@ const App: React.FC = () => {
 
         <Toaster position="bottom-center" />
       </main>
+
+      {skemaControls && 'showAgentSidebar' in skemaControls && skemaActiveProject && (
+        <SkemaAgentSidebar
+          isOpen={(skemaControls as CanvasControls).showAgentSidebar}
+          onToggle={(skemaControls as CanvasControls).onToggleAgentSidebar}
+          project={skemaActiveProject}
+          activeBoardIdx={0}
+          currentHtml=""
+          modelConfig={selectedModelConfig}
+          onNotification={handleNotification}
+          models={models.filter(m => (m.modelType || 'chat') === 'chat').map(m => ({ id: m.id, name: m.name }))}
+          selectedModelId={(skemaControls as CanvasControls).selectedModelId}
+          onModelChange={(skemaControls as CanvasControls).onModelChange}
+          gridState={(skemaControls as CanvasControls).gridState}
+          onComponentPlaced={(skemaControls as CanvasControls).onComponentPlaced}
+          onComponentRemoved={(skemaControls as CanvasControls).onComponentRemoved}
+          onComponentUpdated={(skemaControls as CanvasControls).onComponentUpdated}
+        />
+      )}
 
       {libraryControls && (
         <AgentSidebar

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, LayoutGrid, Folder, ChevronRight, Loader2 } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, ModelConfig } from '../types';
+import * as db from '../services/apiDatabaseAdapter';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -106,10 +107,8 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
   const loadFolders = useCallback(async () => {
     try {
-      const response = await fetch('/api/library/folders');
-      if (!response.ok) throw new Error('Failed to load folders');
-      const data = await response.json();
-      setFolders(data.folders || []);
+      const folders = await db.getLibraryFolders();
+      setFolders(folders);
     } catch (err: any) {
       onNotification?.(err.message, 'error');
     }
@@ -119,7 +118,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   useEffect(() => { loadFolders(); }, [loadFolders]);
 
   useEffect(() => {
-    const handler = () => { loadComponents(); loadFolders(); };
+    const handler = () => { db.invalidateLibraryCache(); loadComponents(); loadFolders(); };
     window.addEventListener('library-reload', handler);
     return () => window.removeEventListener('library-reload', handler);
   }, [loadComponents, loadFolders]);
@@ -164,6 +163,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       const response = await fetch('/api/library/components/seed', { method: 'POST' });
       if (!response.ok) throw new Error('Seed failed');
       const data = await response.json();
+      db.invalidateLibraryCache();
       onNotification?.(data.message, 'success');
       await loadComponents();
     } catch (err: any) {
@@ -178,6 +178,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     try {
       const response = await fetch(`/api/library/components/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
+      db.invalidateLibraryCache();
       setComponents(prev => prev.filter(c => c.id !== id));
       if (selectedComponent?.id === id) {
         setSelectedComponent(null);
@@ -208,6 +209,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       const response = await fetch(`/api/library/components/${component.id}/duplicate`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to duplicate');
       const data = await response.json();
+      db.invalidateLibraryCache();
       setComponents(prev => [data.component, ...prev]);
       onNotification?.('Component duplicated', 'success');
     } catch (err: any) {
@@ -222,6 +224,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   };
 
   const handleEditSaved = (updated: LibraryComponent) => {
+    db.invalidateLibraryCache();
     setComponents(prev => prev.map(c => c.id === updated.id ? updated : c));
     if (selectedComponent?.id === updated.id) {
       setSelectedComponent(updated);
@@ -229,6 +232,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   };
 
   const handleCreated = (component: LibraryComponent) => {
+    db.invalidateLibraryCache();
     setComponents(prev => [component, ...prev]);
     loadFolders();
   };
@@ -251,10 +255,12 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   };
 
   const handleFolderCreated = (folder: LibraryFolder) => {
+    db.invalidateLibraryCache();
     setFolders(prev => [...prev, { ...folder, componentCount: 0 }]);
   };
 
   const handleFolderSaved = (updated: LibraryFolder) => {
+    db.invalidateLibraryCache();
     setFolders(prev => prev.map(f => f.id === updated.id ? updated : f));
   };
 
@@ -263,6 +269,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     try {
       const response = await fetch(`/api/library/folders/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete folder failed');
+      db.invalidateLibraryCache();
       setFolders(prev => prev.filter(f => f.id !== id));
       if (activeFolder?.id === id) {
         navigate('/library', { replace: true });
@@ -288,6 +295,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
         body: JSON.stringify({ folderId }),
       });
       if (!response.ok) throw new Error('Move failed');
+      db.invalidateLibraryCache();
       onNotification?.(folderId ? 'Moved to folder' : 'Removed from folder', 'success');
       await loadComponents();
       await loadFolders();

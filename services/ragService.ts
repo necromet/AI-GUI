@@ -1,3 +1,5 @@
+import { cacheFetch, cacheInvalidate } from './cacheService';
+
 const API_BASE = '/api';
 
 export interface RAGDocument {
@@ -34,16 +36,19 @@ export async function uploadDocument(file: File): Promise<RAGDocument> {
   }
 
   const data = await response.json();
+  cacheInvalidate('rag:documents');
   return data.document;
 }
 
 export async function listDocuments(): Promise<RAGDocument[]> {
-  const response = await fetch(`${API_BASE}/rag/documents`);
-  if (!response.ok) {
-    throw new Error(`List error ${response.status}`);
-  }
-  const data = await response.json();
-  return data.documents || [];
+  return cacheFetch('rag:documents', async () => {
+    const response = await fetch(`${API_BASE}/rag/documents`);
+    if (!response.ok) {
+      throw new Error(`List error ${response.status}`);
+    }
+    const data = await response.json();
+    return data.documents || [];
+  });
 }
 
 export async function deleteDocument(id: string): Promise<void> {
@@ -53,6 +58,7 @@ export async function deleteDocument(id: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`Delete error ${response.status}`);
   }
+  cacheInvalidate('rag:documents');
 }
 
 export interface RAGStreamChunk {

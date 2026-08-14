@@ -6,6 +6,11 @@ import { RESOLUTIONS, SECTION_TYPES, DEFAULT_TEMPLATE, ROWS } from './constants'
 import { CanvasGrid } from './CanvasGrid';
 import { CanvasExportModal } from './CanvasExportModal';
 import { compileProject, generateComponentTsx, generateAppTsx, generateMainTsx, generateGlobalsCss } from '../../lib/tsxCompiler';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { CodeEditor } from '@/components/ui/code-editor-sheet';
+import { ACE_LANG_MAP } from '@/components/library/constants';
+import { Monitor, Tablet, Smartphone, Laptop, Eye, Code2, CodeXml } from 'lucide-react';
 
 export interface CanvasControls {
   onExport: () => void;
@@ -37,6 +42,10 @@ export interface CanvasControls {
   onComponentPlaced: (component: GridComponent) => void;
   onComponentRemoved: (componentId: string) => void;
   onComponentUpdated: (component: GridComponent) => void;
+  showAgentSidebar: boolean;
+  onToggleAgentSidebar: () => void;
+  selectedModelId: string;
+  onModelChange: (modelId: string) => void;
 }
 
 export interface CanvasSidebarControls {
@@ -110,6 +119,78 @@ function toPascalCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function buildCanvasPreviewHtml(moduleKey: string): string {
+  return `<!DOCTYPE html>
+<html class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script type="importmap">${JSON.stringify({
+    imports: {
+      'react': 'https://esm.sh/react@19',
+      'react/jsx-runtime': 'https://esm.sh/react@19/jsx-runtime',
+      'react-dom': 'https://esm.sh/react-dom@19',
+      'react-dom/client': 'https://esm.sh/react-dom@19/client',
+      'motion/react': 'https://esm.sh/motion@11/react?external=react,react-dom',
+      'framer-motion': 'https://esm.sh/framer-motion@11?external=react,react-dom',
+      '@phosphor-icons/react': 'https://esm.sh/@phosphor-icons/react?external=react,react-dom',
+      'lucide-react': 'https://esm.sh/lucide-react@0.554.0?external=react,react-dom',
+    },
+  })}<\/script>
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #1a1a1a; color: #ececec; font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; }
+#root { min-height: 100vh; }
+#error-overlay { position: fixed; inset: 0; background: rgba(10,10,26,0.95); color: #f87171; padding: 24px; font-size: 13px; font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; overflow: auto; z-index: 9999; display: none; }
+#error-overlay .err-title { color: #fca5a5; font-weight: 700; font-size: 14px; margin-bottom: 12px; }
+#error-overlay .err-msg { color: #f87171; line-height: 1.6; }
+#error-overlay .err-stack { color: #888; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="error-overlay"><div class="err-title">Preview Error</div><div class="err-msg" id="err-msg"></div><div class="err-stack" id="err-stack"></div></div>
+<script type="module">
+function showError(msg, stack) {
+  var overlay = document.getElementById('error-overlay');
+  var msgEl = document.getElementById('err-msg');
+  var stackEl = document.getElementById('err-stack');
+  overlay.style.display = 'block';
+  msgEl.textContent = msg;
+  stackEl.textContent = stack || '';
+  try { window.parent.postMessage({ type: 'preview-errors', errors: [msg] }, '*'); } catch(e) {}
+}
+window.addEventListener('error', function(e) { showError(e.message, e.filename + ':' + e.lineno); });
+window.addEventListener('unhandledrejection', function(e) { showError('Unhandled: ' + (e.reason?.message || e.reason || 'unknown'), e.reason?.stack); });
+try {
+  const [React, ReactDOM, ReactDOMClient] = await Promise.all([
+    import('react'), import('react-dom'), import('react-dom/client'),
+  ]);
+  if (!window.React) window.React = React;
+  if (!window.ReactDOM) window.ReactDOM = { ...ReactDOM };
+  if (!window.ReactDOM.createRoot) window.ReactDOM.createRoot = ReactDOMClient.createRoot;
+  var mod = await import('/api/skema/preview-module/${moduleKey}');
+  var root = document.getElementById('root');
+  if (root && !root.hasChildNodes()) {
+    var Component = mod.default;
+    if (Component == null) {
+      var named = Object.entries(mod).find(function(e) { return e[0] !== 'default' && e[0][0] !== '_' && typeof e[1] === 'function'; });
+      if (named) Component = named[1];
+    }
+    if (Component != null) {
+      ReactDOMClient.createRoot(root).render(React.createElement(Component));
+    } else {
+      showError('No component found. Export a React component from your file.');
+    }
+  }
+  try { window.parent.postMessage({ type: 'preview-errors', errors: [] }, '*'); } catch(e) {}
+} catch(e) { showError(e.message, e.stack); }
+<\/script>
+</body>
+</html>`;
+}
+
 function buildProjectFiles(components: GridComponent[], pageTitle: string): ProjectFile[] {
   const files: ProjectFile[] = [];
 
@@ -172,7 +253,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   const [showExport, setShowExport] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ col: number; row: number } | null>(null);
-  const [viewMode, setViewMode] = useState<'canvas' | 'preview'>('canvas');
+  const [viewMode, setViewMode] = useState<'canvas' | 'preview' | 'source'>('canvas');
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [compileErrors, setCompileErrors] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -191,23 +272,57 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     [gridState.components, gridState.pageTitle]
   );
 
-  const compilePreview = useCallback(() => {
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+
     if (projectFiles.length === 0) {
       setPreviewHtml('');
       setCompileErrors([]);
       return;
     }
-    const result = compileProject(projectFiles);
-    setPreviewHtml(result.html);
-    setCompileErrors(result.errors);
-    if (result.errors.length > 0) {
-      console.warn('[TSX Compiler] Errors:', result.errors);
-    }
+
+    previewTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/skema/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: projectFiles }),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(errBody.error || 'Compilation failed');
+        }
+        const { key } = await res.json();
+        setPreviewHtml(buildCanvasPreviewHtml(key));
+        setCompileErrors([]);
+      } catch (err: any) {
+        setPreviewHtml('');
+        setCompileErrors([err.message]);
+      }
+    }, 400);
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
   }, [projectFiles]);
 
   useEffect(() => {
-    compilePreview();
-  }, [compilePreview]);
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'preview-errors') {
+        setCompileErrors(e.data.errors || []);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  useEffect(() => {
+    if (viewMode === 'source' && !activeFile && projectFiles.length > 0) {
+      setActiveFile(projectFiles[0].path);
+    }
+  }, [viewMode, activeFile, projectFiles]);
 
   const boardRef = useRef(board);
   const projectRef = useRef(project);
@@ -654,9 +769,13 @@ export default defineConfig({
       onComponentPlaced: handleComponentPlaced,
       onComponentRemoved: handleComponentRemoved,
       onComponentUpdated: handleComponentUpdated,
+      showAgentSidebar,
+      onToggleAgentSidebar: () => setShowAgentSidebar(prev => !prev),
+      selectedModelId,
+      onModelChange: setSelectedModelId,
     });
     return () => onControlsChange?.(null);
-  }, [isGenerating, gridState, resolution, viewMode, showAgentSidebar, onControlsChange, handleExportZip, cursorPos, projectFiles, updateTemplate, handleComponentPlaced, handleComponentRemoved, handleComponentUpdated]);
+  }, [isGenerating, gridState, resolution, viewMode, showAgentSidebar, onControlsChange, handleExportZip, cursorPos, projectFiles, updateTemplate, handleComponentPlaced, handleComponentRemoved, handleComponentUpdated, selectedModelId]);
 
   useEffect(() => {
     onSidebarControlsChange?.({
@@ -700,6 +819,61 @@ export default defineConfig({
             onPlace={handlePlace}
             onCursorChange={setCursorPos}
           />
+        ) : viewMode === 'source' ? (
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--bg-0)' }}>
+            {projectFiles.length > 0 ? (
+              <>
+                <div className="flex items-center gap-0.5 px-2 py-1.5 overflow-x-auto flex-shrink-0 border-b" style={{ background: 'var(--bg-100)', borderColor: 'var(--border-200)' }}>
+                  {projectFiles.map((f) => {
+                    const name = f.path.split('/').pop()!;
+                    const isActive = activeFile === f.path;
+                    return (
+                      <button
+                        key={f.path}
+                        onClick={() => setActiveFile(f.path)}
+                        className="px-2.5 py-1 rounded-md text-[11px] font-mono transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                        style={{
+                          background: isActive ? 'var(--bg-200)' : 'transparent',
+                          color: isActive ? 'var(--text-100)' : 'var(--text-400)',
+                          border: isActive ? '1px solid var(--border-300)' : '1px solid transparent',
+                        }}
+                      >
+                        {name}
+                        {f.isEntry && (
+                          <Badge
+                            className="text-[8px] px-1 py-0 ml-1"
+                            style={{ background: 'rgba(var(--neon-rgb), 0.15)', color: 'var(--neon-color)' }}
+                          >
+                            entry
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex-1 relative min-h-0">
+                  <CodeEditor
+                    language={(() => {
+                      const ext = (activeFile || projectFiles[0]?.path || '').split('.').pop()?.toLowerCase() || '';
+                      return (ACE_LANG_MAP as Record<string, any>)[ext] || 'typescript';
+                    })()}
+                    value={projectFiles.find(f => f.path === activeFile)?.content || projectFiles[0]?.content || ''}
+                    className="absolute inset-0"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center h-full">
+                <div className="text-center">
+                  <CodeXml size={48} className="mx-auto mb-4" style={{ color: 'var(--text-500)' }} />
+                  <p className="text-sm mb-1" style={{ color: 'var(--text-300)' }}>No TSX files yet</p>
+                  <p className="text-xs" style={{ color: 'var(--text-500)' }}>
+                    Place components on the canvas to generate a TSX codebase
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex-1 overflow-hidden relative">
             {previewHtml ? (
