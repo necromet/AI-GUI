@@ -63,8 +63,9 @@ export function useSkemaAgentStream({
       model: selectedModelId || modelConfig?.apiModelId || modelConfig?.id || 'mimo-v2.5',
       provider: modelConfig?.provider,
       files: currentFiles || [],
+      currentHtml,
     };
-  }, [project, activeBoardIdx, currentFiles, modelConfig, selectedModelId]);
+  }, [project, activeBoardIdx, currentFiles, modelConfig, selectedModelId, currentHtml]);
 
   const buildServerMessages = useCallback((msgs: AgentMessage[], newText: string) => {
     const serverMessages: any[] = [];

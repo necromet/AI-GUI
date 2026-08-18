@@ -23,8 +23,8 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
-import AgentBuilderPanel from './components/agent-builder/AgentBuilderPanel';
 import type { AgentBuilderSidebarControls } from './components/agent-builder/AgentBuilderPanel';
+import AgentBuilderMode from './components/agent-builder/AgentBuilderMode';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
@@ -185,40 +185,45 @@ const App: React.FC = () => {
 
   const isSelector = location.pathname === '/';
   const isChatMode = location.pathname.startsWith('/chat');
-  const isExperimentsMode = location.pathname.startsWith('/experiments');
+  const isRagMode = location.pathname.startsWith('/rag');
+  const isSkemaMode = location.pathname.startsWith('/skema');
+  const isPythonMode = location.pathname.startsWith('/python');
   const isLibraryMode = location.pathname.startsWith('/library');
   const isDatabaseMode = location.pathname.startsWith('/database');
+  const isAgentBuilderMode = location.pathname.startsWith('/agent-builder');
   const isSettingsPage = location.pathname === '/settings';
-  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isExperimentsMode ? 'experiments' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'library';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
-    if (isChatMode) return 'chat';
-    if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
-    if (location.pathname.includes('/skema')) return 'skema';
-    if (location.pathname.includes('/python')) return 'python';
-    return 'rag';
-  })();
+  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isAgentBuilderMode ? 'agent-builder' : 'library';
 
   const skemaProjectId = (() => {
-    const match = location.pathname.match(/^\/experiments\/skema\/([^/]+)$/);
+    const match = location.pathname.match(/^\/skema\/([^/]+)$/);
     return match ? match[1] : undefined;
   })();
 
   const pythonProjectId = (() => {
-    const match = location.pathname.match(/^\/experiments\/python\/([^/]+)$/);
+    const match = location.pathname.match(/^\/python\/([^/]+)$/);
     return match ? match[1] : undefined;
   })();
 
   const [isChatAuthenticated, setIsChatAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_chat_session');
   });
-  const [isExperimentsAuthenticated, setIsExperimentsAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_experiments_session');
+  const [isRagAuthenticated, setIsRagAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_rag_session');
+  });
+  const [isSkemaAuthenticated, setIsSkemaAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_skema_session');
+  });
+  const [isPythonAuthenticated, setIsPythonAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_python_session');
   });
   const [isLibraryAuthenticated, setIsLibraryAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_library_session');
   });
   const [isDatabaseAuthenticated, setIsDatabaseAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_database_session');
+  });
+  const [isAgentBuilderAuthenticated, setIsAgentBuilderAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_agent-builder_session');
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [htmlFullscreenCode, setHtmlFullscreenCode] = useState<string | null>(null);
@@ -294,18 +299,18 @@ const App: React.FC = () => {
   const handleSkemaProjectChange = useCallback((project: SkemaProject | null) => {
     setSkemaActiveProject(project);
     if (project) {
-      navigate(`/experiments/skema/${project.id}`, { replace: true });
+      navigate(`/skema/${project.id}`, { replace: true });
     } else {
-      navigate('/experiments/skema', { replace: true });
+      navigate('/skema', { replace: true });
     }
   }, [navigate]);
 
   const handleSkemaProjectChangeWithReset = useCallback((project: SkemaProject | null) => {
     setSkemaActiveProject(project);
     if (project) {
-      navigate(`/experiments/skema/${project.id}`, { replace: true });
+      navigate(`/skema/${project.id}`, { replace: true });
     } else {
-      navigate('/experiments/skema', { replace: true });
+      navigate('/skema', { replace: true });
       setSkemaControls(null);
       setCanvasSidebarControls(null);
     }
@@ -319,9 +324,13 @@ const App: React.FC = () => {
 
   const filteredConversations = isChatMode
     ? conversations.filter(c => !c.type || c.type === 'chat')
-    : isExperimentsMode
-      ? conversations.filter(c => c.type === activeView)
-      : conversations;
+    : isRagMode
+      ? conversations.filter(c => c.type === 'rag')
+      : isSkemaMode
+        ? conversations.filter(c => c.type === 'skema')
+        : isPythonMode
+          ? conversations.filter(c => c.type === 'python')
+          : conversations;
 
   useEffect(() => {
     const initDb = async () => {
@@ -468,9 +477,13 @@ const App: React.FC = () => {
     setInput('');
     setIsStreaming(false);
     setCurrentConversationId(null);
-    if (isExperimentsMode) {
+    if (isRagMode) {
       setExperimentConversationId(null);
-      navigate(`/experiments/${activeView}`);
+      navigate('/rag');
+    } else if (isSkemaMode) {
+      navigate('/skema');
+    } else if (isPythonMode) {
+      navigate('/python');
     } else {
       navigate('/chat');
     }
@@ -980,7 +993,7 @@ const App: React.FC = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    const ragMatch = location.pathname.match(/^\/experiments\/rag\/(\d+)$/);
+    const ragMatch = location.pathname.match(/^\/rag\/(\d+)$/);
     if (ragMatch) {
       const convId = parseInt(ragMatch[1], 10);
       if (convId !== experimentConversationId) {
@@ -989,19 +1002,7 @@ const App: React.FC = () => {
       return;
     }
 
-    const agentMatch = location.pathname.match(/^\/experiments\/plugin-agent\/(\d+)$/);
-    if (agentMatch) {
-      const convId = parseInt(agentMatch[1], 10);
-      if (convId !== experimentConversationId) {
-        setExperimentConversationId(convId);
-      }
-      return;
-    }
-
-    if (
-      location.pathname === '/experiments/rag' ||
-      location.pathname === '/experiments/plugin-agent'
-    ) {
+    if (location.pathname === '/rag') {
       if (experimentConversationId !== null) {
         setExperimentConversationId(null);
       }
@@ -1030,34 +1031,38 @@ const App: React.FC = () => {
     </div>
   );
 
-  const agentBuilderPanel = (
-    <div className="h-full relative">
-      <AgentBuilderPanel
-        theme={theme}
-        onNotification={handleNotification}
-        onSidebarControls={setAgentBuilderControls}
-      />
-    </div>
-  );
-
   if (isSelector) {
     return (
       <ModeSelector
         isChatAuthenticated={isChatAuthenticated}
-        isExperimentsAuthenticated={isExperimentsAuthenticated}
+        isRagAuthenticated={isRagAuthenticated}
+        isSkemaAuthenticated={isSkemaAuthenticated}
+        isPythonAuthenticated={isPythonAuthenticated}
         isLibraryAuthenticated={isLibraryAuthenticated}
         isDatabaseAuthenticated={isDatabaseAuthenticated}
+        isAgentBuilderAuthenticated={isAgentBuilderAuthenticated}
         onSelectChat={() => navigate('/chat')}
-        onSelectExperiments={() => navigate('/experiments')}
+        onSelectRag={() => navigate('/rag')}
+        onSelectSkema={() => navigate('/skema')}
+        onSelectPython={() => navigate('/python')}
         onSelectLibrary={() => navigate('/library')}
         onSelectDatabase={() => navigate('/database')}
+        onSelectAgentBuilder={() => navigate('/agent-builder')}
         onUnlockChat={() => {
           setIsChatAuthenticated(true);
           sessionStorage.setItem('edward:labs_chat_session', 'true');
         }}
-        onUnlockExperiments={() => {
-          setIsExperimentsAuthenticated(true);
-          sessionStorage.setItem('edward:labs_experiments_session', 'true');
+        onUnlockRag={() => {
+          setIsRagAuthenticated(true);
+          sessionStorage.setItem('edward:labs_rag_session', 'true');
+        }}
+        onUnlockSkema={() => {
+          setIsSkemaAuthenticated(true);
+          sessionStorage.setItem('edward:labs_skema_session', 'true');
+        }}
+        onUnlockPython={() => {
+          setIsPythonAuthenticated(true);
+          sessionStorage.setItem('edward:labs_python_session', 'true');
         }}
         onUnlockLibrary={() => {
           setIsLibraryAuthenticated(true);
@@ -1066,6 +1071,10 @@ const App: React.FC = () => {
         onUnlockDatabase={() => {
           setIsDatabaseAuthenticated(true);
           sessionStorage.setItem('edward:labs_database_session', 'true');
+        }}
+        onUnlockAgentBuilder={() => {
+          setIsAgentBuilderAuthenticated(true);
+          sessionStorage.setItem('edward:labs_agent-builder_session', 'true');
         }}
       />
     );
@@ -1090,9 +1099,13 @@ const App: React.FC = () => {
         currentConversationId={currentConversationId}
         onSelectConversation={async (id) => {
           const conv = conversations.find(c => c.dbConversationId === id);
-          if (conv?.type && conv.type !== 'chat') {
+          if (conv?.type === 'rag') {
             setExperimentConversationId(id);
-            navigate(`/experiments/${conv.type}/${id}`);
+            navigate(`/rag/${id}`);
+          } else if (conv?.type === 'skema') {
+            navigate(`/skema/${id}`);
+          } else if (conv?.type === 'python') {
+            navigate(`/python/${id}`);
           } else {
             await loadConversation(id);
             navigate(`/chat/${id}`);
@@ -1130,7 +1143,7 @@ const App: React.FC = () => {
 
         {/* Top bar — hidden on settings page */}
         {isSettingsPage ? (
-          <RequireAuth isAuth={isChatAuthenticated || isExperimentsAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated}>
+          <RequireAuth isAuth={isChatAuthenticated || isRagAuthenticated || isSkemaAuthenticated || isPythonAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated}>
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -1153,7 +1166,7 @@ const App: React.FC = () => {
           </RequireAuth>
         ) : (
         <>
-        {(!isLibraryMode || libraryControls) && activeView !== 'python' && (
+        {(!isLibraryMode || libraryControls) && !isPythonMode && (
         <div className="flex items-center px-2 py-1.5 md:px-3 md:py-1.5 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
             <Button
@@ -1165,7 +1178,7 @@ const App: React.FC = () => {
               <PanelLeft size={18} />
             </Button>
           )}
-          {location.pathname.startsWith('/experiments/skema') && skemaControls ? (
+          {location.pathname.startsWith('/skema') && skemaControls ? (
             <>
               {/* Left: project info */}
               <div className="flex items-center gap-2 min-w-0">
@@ -1474,29 +1487,18 @@ const App: React.FC = () => {
                     ))}
                   </RequireAuth>
                 } />
-                <Route path="/experiments" element={<Navigate to="/experiments/rag" replace />} />
-                <Route path="/experiments/rag" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/rag" element={
+                  <RequireAuth isAuth={isRagAuthenticated}>
                     {ragPanel}
                   </RequireAuth>
                 } />
-                <Route path="/experiments/rag/:conversationId" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/rag/:conversationId" element={
+                  <RequireAuth isAuth={isRagAuthenticated}>
                     {ragPanel}
                   </RequireAuth>
                 } />
-                <Route path="/experiments/plugin-agent" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    {agentBuilderPanel}
-                  </RequireAuth>
-                } />
-                <Route path="/experiments/plugin-agent/:conversationId" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
-                    {agentBuilderPanel}
-                  </RequireAuth>
-                } />
-                <Route path="/experiments/skema" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/skema" element={
+                  <RequireAuth isAuth={isSkemaAuthenticated}>
                     <div className={`h-full overflow-auto ${skemaActiveProject ? 'p-0' : 'p-6'}`}>
                       <SkemaPanel
                         key={skemaResetKey}
@@ -1510,8 +1512,8 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="/experiments/skema/:projectId" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/skema/:projectId" element={
+                  <RequireAuth isAuth={isSkemaAuthenticated}>
                     <div className="h-full overflow-auto p-0">
                       <SkemaPanel
                         key={skemaResetKey}
@@ -1526,8 +1528,8 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="/experiments/python" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/python" element={
+                  <RequireAuth isAuth={isPythonAuthenticated}>
                     <div className="h-full overflow-auto p-0">
                       <PythonExecutorPanel
                         theme={theme}
@@ -1539,8 +1541,8 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="/experiments/python/:projectId" element={
-                  <RequireAuth isAuth={isExperimentsAuthenticated}>
+                <Route path="/python/:projectId" element={
+                  <RequireAuth isAuth={isPythonAuthenticated}>
                     <div className="h-full overflow-auto p-0">
                       <PythonExecutorPanel
                         theme={theme}
@@ -1626,6 +1628,13 @@ const App: React.FC = () => {
                         onSidebarControls={setDbSidebarControls}
                         onHeaderControls={setDbHeaderControls}
                       />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/agent-builder" element={
+                  <RequireAuth isAuth={isAgentBuilderAuthenticated}>
+                    <div className="h-full">
+                      <AgentBuilderMode />
                     </div>
                   </RequireAuth>
                 } />

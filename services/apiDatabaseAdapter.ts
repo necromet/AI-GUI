@@ -107,7 +107,7 @@ export const getConversations = async () => {
   });
 };
 
-export const getConversationsByType = async (type: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
+export const getConversationsByType = async (type: 'chat' | 'rag' | 'skema' | 'python') => {
   return cacheFetch(`conversations:${type}`, async () => {
     const data = await apiFetch<{ conversations: any[] }>(`/conversations?type=${type}`);
     return data.conversations;
@@ -121,7 +121,7 @@ export const getConversationById = async (conversationId: number) => {
   });
 };
 
-export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'plugin-agent' | 'skema') => {
+export const createConversation = async (modelId: number, title?: string | null, type?: 'chat' | 'rag' | 'skema' | 'python') => {
   const data = await apiFetch<{ id: number }>('/conversations', {
     method: 'POST',
     body: JSON.stringify({ model_id: modelId, title: title || null, type: type || 'chat' }),

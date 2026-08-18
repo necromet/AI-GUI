@@ -258,7 +258,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       );
     }
-    return null;
+    return (
+      <div className="flex justify-start animate-message-in">
+        <div className="max-w-[92%] rounded-lg px-3.5 py-2 text-xs" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)', color: 'var(--text-500)' }}>
+          No response generated.
+        </div>
+      </div>
+    );
   }
 
   return (
