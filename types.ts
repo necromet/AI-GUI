@@ -49,14 +49,14 @@ export interface ChatSession {
   updatedAt: number;
   dbConversationId?: number; // Database conversation ID
   modelId?: number; // Database model ID
-  type?: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'library';
+  type?: 'chat' | 'rag' | 'skema' | 'python' | 'library';
 }
 
 export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 'asr';
 
-export type ConversationType = 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'library';
+export type ConversationType = 'chat' | 'rag' | 'skema' | 'python' | 'library';
 
-export type Mode = 'selector' | 'chat' | 'experiments' | 'library' | 'database';
+export type Mode = 'selector' | 'chat' | 'rag' | 'skema' | 'python' | 'library' | 'database' | 'agent-builder';
 
 export interface LibraryComponent {
   id: string;

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { detectLanguage, buildLanguageInstruction, streamChatCompletion, readSSEStream, ChatMessage } from '../services/mimoService';
-import { analyzeImages, buildSkemaFileToolPrompt, executeSkemaFileTool, parseToolCalls } from '../services/agentService';
+import { analyzeImages, buildSkemaFileToolPrompt, executeSkemaFileTool, parseToolCalls, convertMessagesForPromptBased } from '../services/agentService';
 import * as sessionService from '../services/skemaAgentService';
 import type { ProjectFile } from '../../types';
 
@@ -162,9 +162,18 @@ router.post('/chat', async (req, res) => {
     const fileContext = buildFileContext(workingFiles);
     const toolPrompt = buildSkemaFileToolPrompt();
 
-    console.log('[skema-agent] system prompt parts: base=', SKEMA_AGENT_BASE_PROMPT.length, 'fileContext=', fileContext.length, 'toolPrompt=', toolPrompt.length, 'langInstruction=', langInstruction.length);
+    let htmlContext = '';
+    if (context.currentHtml) {
+      const MAX_HTML_CHARS = 8000;
+      const truncated = context.currentHtml.length > MAX_HTML_CHARS
+        ? context.currentHtml.substring(0, MAX_HTML_CHARS) + '\n... [truncated]'
+        : context.currentHtml;
+      htmlContext = `CURRENT HTML IN PREVIEW:\n\`\`\`html\n${truncated}\n\`\`\`\n\nWhen the user asks to modify "this" or "the current design", edit the HTML above using update_file on the entry file.`;
+    }
 
-    const fullSystem = [SKEMA_AGENT_BASE_PROMPT, fileContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
+    console.log('[skema-agent] system prompt parts: base=', SKEMA_AGENT_BASE_PROMPT.length, 'fileContext=', fileContext.length, 'htmlContext=', htmlContext.length, 'toolPrompt=', toolPrompt.length, 'langInstruction=', langInstruction.length);
+
+    const fullSystem = [SKEMA_AGENT_BASE_PROMPT, fileContext, htmlContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
 
     console.log('[skema-agent] total system:', fullSystem.length, 'chars');
 
@@ -174,18 +183,27 @@ router.post('/chat', async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     const emitEvent = (event: any) => {
-      if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+      if (!res.writableEnded) {
+        try {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        } catch (e: any) {
+          console.log('[skema-agent] emitEvent write failed:', e.message);
+        }
+      } else {
+        console.log('[skema-agent] emitEvent skipped — res.writableEnded=true');
+      }
     };
 
     let reqClosed = false;
-    req.on('close', () => { reqClosed = true; });
+    req.on('close', () => {
+      reqClosed = true;
+      console.log('[skema-agent] req CLOSED — client disconnected');
+    });
 
     const apiMessages: ChatMessage[] = [];
     apiMessages.push({ role: 'system', content: fullSystem });
-    for (const msg of messages) {
-      const role = msg.role === 'model' ? 'assistant' : msg.role;
-      apiMessages.push({ role, content: msg.content || '' });
-    }
+    apiMessages.push(...convertMessagesForPromptBased(messages));
+    console.log('[skema-agent] apiMessages count:', apiMessages.length, 'roles:', apiMessages.map(m => m.role).join(','));
 
     let iteration = 0;
     const MAX_ROUNDS = 6;
@@ -204,6 +222,7 @@ router.post('/chat', async (req, res) => {
       }, provider);
 
       debugInfo.push(`upstream ${response.status}`);
+      console.log('[skema-agent] before readSSEStream, reqClosed=', reqClosed);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -213,9 +232,10 @@ router.post('/chat', async (req, res) => {
       }
 
       let fullResponse = '';
+      let chunkCount = 0;
       await readSSEStream(response, (chunk) => {
-        if (reqClosed) return;
         if (chunk.content) {
+          chunkCount++;
           fullResponse += chunk.content;
           emitEvent({ content: chunk.content });
         }
@@ -224,9 +244,15 @@ router.post('/chat', async (req, res) => {
         }
       });
 
-      if (reqClosed) break;
+      if (reqClosed) {
+        console.log('[skema-agent] reqClosed=true after readSSEStream, breaking');
+        break;
+      }
 
-      debugInfo.push(`got ${fullResponse.length} chars`);
+      debugInfo.push(`got ${fullResponse.length} chars, ${chunkCount} chunks`);
+      if (fullResponse.length > 0) {
+        debugInfo.push(`preview: ${fullResponse.substring(0, 150).replace(/\n/g, '\\n')}`);
+      }
 
       const toolCalls = parseToolCalls(fullResponse);
       if (toolCalls.length === 0) break;
@@ -243,6 +269,7 @@ router.post('/chat', async (req, res) => {
     }
 
     emitEvent({ done: true, _debug: debugInfo });
+    console.log('[skema-agent] done, debug:', debugInfo.join(' | '));
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
@@ -261,7 +288,7 @@ router.post('/chat', async (req, res) => {
 });
 
 router.get('/tools', (_req, res) => {
-  const skemaFileToolNames = ['create_file', 'update_file', 'delete_file', 'read_file', 'list_files', 'set_preview', 'search_library', 'ask_user', 'create_todo_list'];
+  const skemaFileToolNames = ['create_file', 'update_file', 'delete_file', 'read_file', 'list_files', 'set_preview', 'search_library', 'ask_user', 'create_todo_list', 'execute_code', 'web_browse', 'search_web'];
   res.json({ tools: skemaFileToolNames });
 });
 

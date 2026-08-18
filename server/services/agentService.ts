@@ -1029,6 +1029,27 @@ export const SKEMA_FILE_TOOLS: ToolDefinition[] = [
       tasks: { type: 'string', description: 'JSON array of task objects, each with "title" (string), optional "id", "description", and "priority" ("high"|"medium"|"low")' },
     },
   },
+  {
+    name: 'execute_code',
+    description: 'Execute JavaScript code in a sandboxed environment and return the output. Use console.log() to see results.',
+    parameters: {
+      code: { type: 'string', description: 'JavaScript code to execute' },
+    },
+  },
+  {
+    name: 'web_browse',
+    description: 'Fetch and extract text content from a URL. Returns the readable text of the webpage.',
+    parameters: {
+      url: { type: 'string', description: 'The URL to fetch' },
+    },
+  },
+  {
+    name: 'search_web',
+    description: 'Search the web for information on a topic. Returns relevant search results.',
+    parameters: {
+      query: { type: 'string', description: 'Search query' },
+    },
+  },
 ];
 
 export function buildSkemaFileToolPrompt(): string {
@@ -1189,6 +1210,27 @@ export async function executeSkemaFileTool(
         }));
         result.output = JSON.stringify({ todo_list: true, tasks: validTasks });
         emitEvent({ todo_list: validTasks });
+        break;
+      }
+
+      case 'execute_code': {
+        const code = call.arguments.code;
+        if (!code) { result.output = 'Error: No code provided.'; result.error = 'No code'; break; }
+        result.output = await toolExecuteCode(code);
+        break;
+      }
+
+      case 'web_browse': {
+        const url = call.arguments.url;
+        if (!url) { result.output = 'Error: No URL provided.'; result.error = 'No URL'; break; }
+        result.output = await toolWebBrowse(url);
+        break;
+      }
+
+      case 'search_web': {
+        const query = call.arguments.query;
+        if (!query) { result.output = 'Error: No search query provided.'; result.error = 'No query'; break; }
+        result.output = await toolSearchWeb(query);
         break;
       }
 

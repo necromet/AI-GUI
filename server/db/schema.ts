@@ -279,6 +279,83 @@ CREATE TABLE IF NOT EXISTS agent_builder_sessions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_abs_agent ON agent_builder_sessions(agent_id);
+
+-- Agent Builder: visual workflow execution engine
+CREATE TABLE IF NOT EXISTS workflows (
+  id TEXT PRIMARY KEY,
+  custom_id TEXT UNIQUE,
+  name TEXT NOT NULL DEFAULT 'Untitled Workflow',
+  description TEXT,
+  category TEXT DEFAULT 'custom',
+  tags TEXT DEFAULT '[]',
+  nodes JSONB NOT NULL DEFAULT '[]',
+  edges JSONB NOT NULL DEFAULT '[]',
+  is_template BOOLEAN NOT NULL DEFAULT FALSE,
+  is_public BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS executions (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'running',
+  current_node_id TEXT,
+  node_results JSONB NOT NULL DEFAULT '{}',
+  variables JSONB NOT NULL DEFAULT '{}',
+  input JSONB,
+  output JSONB,
+  error TEXT,
+  thread_id TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  description TEXT,
+  category TEXT DEFAULT 'custom',
+  auth_type TEXT DEFAULT 'none',
+  access_token TEXT,
+  tools JSONB DEFAULT '[]',
+  connection_status TEXT DEFAULT 'untested',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  is_official BOOLEAN NOT NULL DEFAULT FALSE,
+  headers JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  approval_id TEXT UNIQUE NOT NULL,
+  workflow_id TEXT REFERENCES workflows(id) ON DELETE CASCADE,
+  execution_id TEXT,
+  node_id TEXT,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  responded_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS user_llm_keys (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_prefix TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflows_custom_id ON workflows(custom_id);
+CREATE INDEX IF NOT EXISTS idx_executions_workflow ON executions(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+CREATE INDEX IF NOT EXISTS idx_approvals_approval_id ON approvals(approval_id);
 `;
 
 export const SEED_SQL = `

@@ -89,7 +89,7 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       const modelId = await db.addModel(modelConfig.id, modelConfig.description || null, modelConfig.contextWindowSize || null);
       dbModel = await db.getModelById(modelId);
     }
-    const newId = await db.createConversation(dbModel!.id!, null, 'plugin-agent');
+    const newId = await db.createConversation(dbModel!.id!, null, 'rag');
     onConversationChange(newId);
     return newId;
   };

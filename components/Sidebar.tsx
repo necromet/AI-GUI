@@ -763,51 +763,6 @@ const AgentBuilderSidebarContent: React.FC<{ controls: AgentBuilderSidebarContro
   );
 };
 
-const TOOL_ITEMS = [
-  { key: 'rag' as const, icon: Database, label: 'RAG' },
-  { key: 'plugin-agent' as const, icon: Bot, label: 'Agent Builder' },
-  { key: 'skema' as const, icon: Layers, label: 'Skema' },
-  { key: 'python' as const, icon: Terminal, label: 'Python' },
-];
-
-type ToolView = 'rag' | 'plugin-agent' | 'skema' | 'python';
-
-const ToolGroup: React.FC<{ activeView: ToolView; onNavigate: (path: string) => void }> = ({ activeView, onNavigate }) => {
-  return (
-    <SlidingGroup
-      direction="vertical"
-      activeKey={activeView}
-      onSelect={(key) => onNavigate(`/experiments/${key}`)}
-      className="sidebar-tool-group gap-0.5 p-1 rounded-xl"
-      style={{ backgroundColor: 'var(--bg-200)' }}
-      indicatorStyle={{ left: 4, right: 4 }}
-      items={TOOL_ITEMS.map((item) => ({
-        key: item.key,
-        label: item.label,
-        icon: item.icon,
-      }))}
-      renderItem={(item, isActive) => {
-        const Icon = TOOL_ITEMS.find((t) => t.key === item.key)!.icon;
-        return (
-          <button
-            className={`group/tool w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200 cursor-pointer ${
-              isActive ? 'text-[var(--text-100)]' : 'text-[var(--text-500)] hover:text-[var(--text-100)]'
-            }`}
-          >
-            <div
-              className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200"
-              style={isActive ? { backgroundColor: 'rgba(var(--neon-rgb), 0.12)' } : undefined}
-            >
-              <Icon size={14} style={isActive ? { color: 'var(--neon-color)' } : undefined} />
-            </div>
-            <span className="truncate text-[13px]">{item.label}</span>
-          </button>
-        );
-      }}
-    />
-  );
-};
-
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
@@ -848,6 +803,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const isChatMode = location.pathname.startsWith('/chat');
+  const isRagMode = location.pathname.startsWith('/rag');
+  const isSkemaMode = location.pathname.startsWith('/skema');
+  const isPythonMode = location.pathname.startsWith('/python');
   const isLibraryMode = location.pathname.startsWith('/library');
   const isDatabaseMode = location.pathname.startsWith('/database');
   const isSettingsPage = location.pathname === '/settings';
@@ -871,14 +829,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('library-reload', handler);
   }, [isLibraryMode, fetchLibraryFolders]);
 
-  const currentMode: Mode = isChatMode ? 'chat' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'experiments';
-  const activeView: 'chat' | 'rag' | 'plugin-agent' | 'skema' | 'python' = (() => {
-    if (isChatMode) return 'chat';
-    if (location.pathname.includes('/plugin-agent')) return 'plugin-agent';
-    if (location.pathname.includes('/skema')) return 'skema';
-    if (location.pathname.includes('/python')) return 'python';
-    return 'rag';
-  })();
+  const currentMode: Mode = isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'chat';
 
   const prevPathRef = useRef<string>('/chat');
   useEffect(() => {
@@ -990,7 +941,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 color: 'var(--neon-color)',
               }}
             >
-              {currentMode === 'chat' ? 'Chat' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : isSettingsPage ? 'Settings' : 'Lab'}
+              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : isSettingsPage ? 'Settings' : ''}
             </Badge>
           </div>
           <div className="absolute flex items-center right-3 top-4">
@@ -1064,89 +1015,96 @@ const Sidebar: React.FC<SidebarProps> = ({
               )}
             />
           </div>
-        ) : currentMode === 'experiments' && activeView === 'skema' && canvasControls ? (
+        ) : currentMode === 'skema' && canvasControls ? (
           <CanvasSidebarContent controls={canvasControls} />
-        ) : currentMode === 'experiments' && activeView === 'plugin-agent' && agentBuilderControls ? (
-          <AgentBuilderSidebarContent controls={agentBuilderControls} onBack={() => navigate('/experiments')} />
-        ) : currentMode === 'experiments' ? (
+        ) : currentMode === 'skema' ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.12), rgba(var(--neon-rgb), 0.04))' }}>
+              <Layers size={22} style={{ color: 'var(--neon-color)' }} />
+            </div>
+            <p className="text-sm font-semibold mb-1.5 text-[var(--text-300)]">Skema</p>
+            <p className="text-xs leading-relaxed text-[var(--text-500)]">
+              AI-powered visual design editor. Open a project to get started.
+            </p>
+          </div>
+        ) : currentMode === 'python' ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.12), rgba(var(--neon-rgb), 0.04))' }}>
+              <Terminal size={22} style={{ color: 'var(--neon-color)' }} />
+            </div>
+            <p className="text-sm font-semibold mb-1.5 text-[var(--text-300)]">Python</p>
+            <p className="text-xs leading-relaxed text-[var(--text-500)]">
+              Python code executor with project management and file uploads.
+            </p>
+          </div>
+        ) : currentMode === 'rag' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-3">
-              <div className="px-2 pb-2">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Tools</span>
-              </div>
-              <ToolGroup activeView={activeView} onNavigate={(path) => navigate(path)} />
+              <button
+                className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
+                  border: '1px solid rgba(var(--neon-rgb), 0.12)',
+                  color: 'var(--text-100)',
+                }}
+                onClick={onNewChat}
+              >
+                <div
+                  className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
+                  style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)' }}
+                >
+                  <Plus size={13} style={{ color: 'var(--neon-color)' }} />
+                </div>
+                <span>New chat</span>
+              </button>
             </div>
 
-            {activeView !== 'skema' && activeView !== 'python' && (
-              <>
-                <div className="px-3 pt-3">
-                  <button
-                    className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
-                      border: '1px solid rgba(var(--neon-rgb), 0.12)',
-                      color: 'var(--text-100)',
-                    }}
-                    onClick={onNewChat}
-                  >
-                    <div
-                      className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
-                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)' }}
-                    >
-                      <Plus size={13} style={{ color: 'var(--neon-color)' }} />
-                    </div>
-                    <span>New chat</span>
-                  </button>
+            <ScrollArea className="flex-1 px-3 pt-3">
+              {todayConvos.length > 0 && (
+                <>
+                  {sectionLabel('Today')}
+                  <ul className="space-y-0.5">
+                    {todayConvos.map(renderConversation)}
+                  </ul>
+                </>
+              )}
+
+              {yesterdayConvos.length > 0 && (
+                <>
+                  {sectionLabel('Yesterday')}
+                  <ul className="space-y-0.5">
+                    {yesterdayConvos.map(renderConversation)}
+                  </ul>
+                </>
+              )}
+
+              {lastWeekConvos.length > 0 && (
+                <>
+                  {sectionLabel('Last 7 Days')}
+                  <ul className="space-y-0.5">
+                    {lastWeekConvos.map(renderConversation)}
+                  </ul>
+                </>
+              )}
+
+              {olderConvos.length > 0 && (
+                <>
+                  {sectionLabel('Older')}
+                  <ul className="space-y-0.5">
+                    {olderConvos.map(renderConversation)}
+                  </ul>
+                </>
+              )}
+
+              {conversations.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
+                    <Plus size={18} className="text-[var(--text-500)]" />
+                  </div>
+                  <p className="text-xs font-medium text-[var(--text-500)]">No conversations yet</p>
                 </div>
-
-                <ScrollArea className="flex-1 px-3 pt-3">
-                  {todayConvos.length > 0 && (
-                    <>
-                      {sectionLabel('Today')}
-                      <ul className="space-y-0.5">
-                        {todayConvos.map(renderConversation)}
-                      </ul>
-                    </>
-                  )}
-
-                  {yesterdayConvos.length > 0 && (
-                    <>
-                      {sectionLabel('Yesterday')}
-                      <ul className="space-y-0.5">
-                        {yesterdayConvos.map(renderConversation)}
-                      </ul>
-                    </>
-                  )}
-
-                  {lastWeekConvos.length > 0 && (
-                    <>
-                      {sectionLabel('Last 7 Days')}
-                      <ul className="space-y-0.5">
-                        {lastWeekConvos.map(renderConversation)}
-                      </ul>
-                    </>
-                  )}
-
-                  {olderConvos.length > 0 && (
-                    <>
-                      {sectionLabel('Older')}
-                      <ul className="space-y-0.5">
-                        {olderConvos.map(renderConversation)}
-                      </ul>
-                    </>
-                  )}
-
-                  {conversations.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
-                        <Plus size={18} className="text-[var(--text-500)]" />
-                      </div>
-                      <p className="text-xs font-medium text-[var(--text-500)]">No conversations yet</p>
-                    </div>
-                  )}
-                </ScrollArea>
-              </>
-            )}
+              )}
+            </ScrollArea>
           </div>
         ) : currentMode === 'library' ? (
           <div className="flex-1 flex flex-col overflow-hidden">

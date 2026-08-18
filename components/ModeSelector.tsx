@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, FlaskConical, Lock, CheckCircle2, ArrowRight, Package, Database } from 'lucide-react';
+import { MessageSquare, Lock, CheckCircle2, ArrowRight, Package, Database, Workflow, Layers, Terminal, FileSearch } from 'lucide-react';
 import NeuralBackground from './NeuralBackground';
 import { TextGlitch } from './TextGlitch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -7,9 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 const CHAT_PASSWORD = 'thelordismyshepherd';
-const EXPERIMENTS_PASSWORD = 'ilacknothing';
+const RAG_PASSWORD = 'herestoresmysoul';
+const SKEMA_PASSWORD = 'pathsofrighteousness';
+const PYTHON_PASSWORD = 'mycuprunnethover';
 const LIBRARY_PASSWORD = 'psalm23';
 const DATABASE_PASSWORD = 'heleadsmebesidequietwater';
+const AGENT_BUILDER_PASSWORD = 'shepherdofmysoul';
 
 interface InlinePasswordModalProps {
   isOpen: boolean;
@@ -95,38 +98,59 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
 
 interface ModeSelectorProps {
   isChatAuthenticated: boolean;
-  isExperimentsAuthenticated: boolean;
+  isRagAuthenticated: boolean;
+  isSkemaAuthenticated: boolean;
+  isPythonAuthenticated: boolean;
   isLibraryAuthenticated: boolean;
   isDatabaseAuthenticated: boolean;
+  isAgentBuilderAuthenticated: boolean;
   onSelectChat: () => void;
-  onSelectExperiments: () => void;
+  onSelectRag: () => void;
+  onSelectSkema: () => void;
+  onSelectPython: () => void;
   onSelectLibrary: () => void;
   onSelectDatabase: () => void;
+  onSelectAgentBuilder: () => void;
   onUnlockChat: () => void;
-  onUnlockExperiments: () => void;
+  onUnlockRag: () => void;
+  onUnlockSkema: () => void;
+  onUnlockPython: () => void;
   onUnlockLibrary: () => void;
   onUnlockDatabase: () => void;
+  onUnlockAgentBuilder: () => void;
 }
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({
   isChatAuthenticated,
-  isExperimentsAuthenticated,
+  isRagAuthenticated,
+  isSkemaAuthenticated,
+  isPythonAuthenticated,
   isLibraryAuthenticated,
   isDatabaseAuthenticated,
+  isAgentBuilderAuthenticated,
   onSelectChat,
-  onSelectExperiments,
+  onSelectRag,
+  onSelectSkema,
+  onSelectPython,
   onSelectLibrary,
   onSelectDatabase,
+  onSelectAgentBuilder,
   onUnlockChat,
-  onUnlockExperiments,
+  onUnlockRag,
+  onUnlockSkema,
+  onUnlockPython,
   onUnlockLibrary,
   onUnlockDatabase,
+  onUnlockAgentBuilder,
 }) => {
   const [neonColor, setNeonColor] = useState('#f87171');
   const [showChatPasswordModal, setShowChatPasswordModal] = useState(false);
-  const [showExperimentsPasswordModal, setShowExperimentsPasswordModal] = useState(false);
+  const [showRagPasswordModal, setShowRagPasswordModal] = useState(false);
+  const [showSkemaPasswordModal, setShowSkemaPasswordModal] = useState(false);
+  const [showPythonPasswordModal, setShowPythonPasswordModal] = useState(false);
   const [showLibraryPasswordModal, setShowLibraryPasswordModal] = useState(false);
   const [showDatabasePasswordModal, setShowDatabasePasswordModal] = useState(false);
+  const [showAgentBuilderPasswordModal, setShowAgentBuilderPasswordModal] = useState(false);
 
   useEffect(() => {
     const color = getComputedStyle(document.documentElement).getPropertyValue('--neon-color').trim();
@@ -141,11 +165,27 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
-  const handleExperimentsClick = () => {
-    if (isExperimentsAuthenticated) {
-      onSelectExperiments();
+  const handleRagClick = () => {
+    if (isRagAuthenticated) {
+      onSelectRag();
     } else {
-      setShowExperimentsPasswordModal(true);
+      setShowRagPasswordModal(true);
+    }
+  };
+
+  const handleSkemaClick = () => {
+    if (isSkemaAuthenticated) {
+      onSelectSkema();
+    } else {
+      setShowSkemaPasswordModal(true);
+    }
+  };
+
+  const handlePythonClick = () => {
+    if (isPythonAuthenticated) {
+      onSelectPython();
+    } else {
+      setShowPythonPasswordModal(true);
     }
   };
 
@@ -165,16 +205,36 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
+  const handleAgentBuilderClick = () => {
+    if (isAgentBuilderAuthenticated) {
+      onSelectAgentBuilder();
+    } else {
+      setShowAgentBuilderPasswordModal(true);
+    }
+  };
+
   const handleChatPasswordSuccess = () => {
     onUnlockChat();
     onSelectChat();
     setShowChatPasswordModal(false);
   };
 
-  const handleExperimentsPasswordSuccess = () => {
-    onUnlockExperiments();
-    onSelectExperiments();
-    setShowExperimentsPasswordModal(false);
+  const handleRagPasswordSuccess = () => {
+    onUnlockRag();
+    onSelectRag();
+    setShowRagPasswordModal(false);
+  };
+
+  const handleSkemaPasswordSuccess = () => {
+    onUnlockSkema();
+    onSelectSkema();
+    setShowSkemaPasswordModal(false);
+  };
+
+  const handlePythonPasswordSuccess = () => {
+    onUnlockPython();
+    onSelectPython();
+    setShowPythonPasswordModal(false);
   };
 
   const handleLibraryPasswordSuccess = () => {
@@ -189,6 +249,12 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     setShowDatabasePasswordModal(false);
   };
 
+  const handleAgentBuilderPasswordSuccess = () => {
+    onUnlockAgentBuilder();
+    onSelectAgentBuilder();
+    setShowAgentBuilderPasswordModal(false);
+  };
+
   const cards = [
     {
       id: 'chat' as const,
@@ -199,12 +265,28 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       onClick: handleChatClick,
     },
     {
-      id: 'experiments' as const,
-      icon: FlaskConical,
-      title: 'Experiments',
-      description: 'RAG, Plugin Agent, Skema, Python, and experimental tools',
-      locked: !isExperimentsAuthenticated,
-      onClick: handleExperimentsClick,
+      id: 'rag' as const,
+      icon: FileSearch,
+      title: 'RAG',
+      description: 'Retrieval-augmented generation with document upload',
+      locked: !isRagAuthenticated,
+      onClick: handleRagClick,
+    },
+    {
+      id: 'skema' as const,
+      icon: Layers,
+      title: 'Skema',
+      description: 'AI-powered visual design and HTML generator',
+      locked: !isSkemaAuthenticated,
+      onClick: handleSkemaClick,
+    },
+    {
+      id: 'python' as const,
+      icon: Terminal,
+      title: 'Python',
+      description: 'Python code executor with project management',
+      locked: !isPythonAuthenticated,
+      onClick: handlePythonClick,
     },
     {
       id: 'library' as const,
@@ -222,6 +304,14 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       locked: !isDatabaseAuthenticated,
       onClick: handleDatabaseClick,
     },
+    {
+      id: 'agent-builder' as const,
+      icon: Workflow,
+      title: 'Agent Builder',
+      description: 'Visual workflow builder for AI agent pipelines',
+      locked: !isAgentBuilderAuthenticated,
+      onClick: handleAgentBuilderClick,
+    },
   ];
 
   return (
@@ -236,7 +326,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
           {cards.map((card, index) => (
             <button
               key={card.id}
@@ -296,12 +386,30 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       />
 
       <InlinePasswordModal
-        isOpen={showExperimentsPasswordModal}
-        title="Unlock Experiments"
-        subtitle="Enter your password to access experimental tools"
-        onSuccess={handleExperimentsPasswordSuccess}
-        onClose={() => setShowExperimentsPasswordModal(false)}
-        correctPassword={EXPERIMENTS_PASSWORD}
+        isOpen={showRagPasswordModal}
+        title="Unlock RAG"
+        subtitle="Enter your password to access RAG chat"
+        onSuccess={handleRagPasswordSuccess}
+        onClose={() => setShowRagPasswordModal(false)}
+        correctPassword={RAG_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showSkemaPasswordModal}
+        title="Unlock Skema"
+        subtitle="Enter your password to access the visual design editor"
+        onSuccess={handleSkemaPasswordSuccess}
+        onClose={() => setShowSkemaPasswordModal(false)}
+        correctPassword={SKEMA_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showPythonPasswordModal}
+        title="Unlock Python"
+        subtitle="Enter your password to access the Python executor"
+        onSuccess={handlePythonPasswordSuccess}
+        onClose={() => setShowPythonPasswordModal(false)}
+        correctPassword={PYTHON_PASSWORD}
       />
 
       <InlinePasswordModal
@@ -320,6 +428,15 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
         onSuccess={handleDatabasePasswordSuccess}
         onClose={() => setShowDatabasePasswordModal(false)}
         correctPassword={DATABASE_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showAgentBuilderPasswordModal}
+        title="Unlock Agent Builder"
+        subtitle="Enter your password to access the visual workflow builder"
+        onSuccess={handleAgentBuilderPasswordSuccess}
+        onClose={() => setShowAgentBuilderPasswordModal(false)}
+        correctPassword={AGENT_BUILDER_PASSWORD}
       />
     </div>
   );

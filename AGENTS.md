@@ -103,9 +103,12 @@ Each mode has its own password and `sessionStorage` key, checked in `components/
 | Mode | Password | Session key |
 |------|----------|-------------|
 | Chat | `thelordismyshepherd` | `edward:labs_chat_session` |
-| Experiments | `ilacknothing` | `edward:labs_experiments_session` |
+| RAG | `herestoresmysoul` | `edward:labs_rag_session` |
+| Skema | `pathsofrighteousness` | `edward:labs_skema_session` |
+| Python | `mycuprunnethover` | `edward:labs_python_session` |
 | Library | `psalm23` | `edward:labs_library_session` |
-| Database | `heleadsmebesidestillwaters` | `edward:labs_database_session` |
+| Database | `heleadsmebesidequietwater` | `edward:labs_database_session` |
+| Agent Builder | `shepherdofmysoul` | `edward:labs_agent-builder_session` |
 
 ### Notifications via sonner
 
@@ -127,7 +130,7 @@ The Express server auto-detects the user's language from the last message and pr
 
 ### Skema agent (visual design boards)
 
-The Skema feature is a Google Skema-inspired visual design editor accessible from Experiments mode. Key architecture:
+The Skema feature is a Google Skema-inspired visual design editor accessible as a top-level mode. Key architecture:
 
 - **Canvas**: Uses iframe `srcDoc` for HTML preview (not Fabric.js)
 - **Layouts**: Supports `16:9`, `1:1`, `9:16`, `4:5`, `1.91:1`, `4:3`, `3:4`, `32:9`
@@ -171,7 +174,7 @@ Frontend agent components live in `components/library/agent/` — `useAgentStrea
 
 ### Database explorer
 
-The Database mode is a top-level mode (alongside Chat, Experiments, Library) that lets developers connect to external PostgreSQL databases and explore them with SQL.
+The Database mode is a top-level mode (alongside Chat, RAG, Skema, Python, Library) that lets developers connect to external PostgreSQL databases and explore them with SQL.
 
 - **Frontend**: `components/DatabasePanel.tsx` (main), `DatabaseConnectForm.tsx` (connection dialog), `DatabaseSchemaBrowser.tsx` (schema tree), `DatabaseResultsTable.tsx` (results grid)
 - **Backend**: `server/routes/database.ts` — connection CRUD, test, schema introspection, query execution
@@ -185,7 +188,7 @@ The Database mode is a top-level mode (alongside Chat, Experiments, Library) tha
 
 The Database mode does NOT create its own left sidebar. It reuses the **main sidebar** and **main header** in `App.tsx` via callback props:
 
-- `onSidebarControls` — `DatabasePanel` passes a `DatabaseSidebarControls` object to `App.tsx`, which renders the schema browser inside the main sidebar (the same sidebar used by Chat/Experiments/Library).
+- `onSidebarControls` — `DatabasePanel` passes a `DatabaseSidebarControls` object to `App.tsx`, which renders the schema browser inside the main sidebar (the same sidebar used by Chat/RAG/Library).
 - `onHeaderControls` — `DatabasePanel` passes a `DatabaseHeaderControls` object to `App.tsx`, which renders toolbar actions (connection picker, run query, format, history, word wrap, font size, shortcuts) in the main header area.
 
 Both interfaces are exported from `components/DatabasePanel.tsx`. When implementing database UI features, add controls to these callback objects rather than creating new sidebar or header elements inside `DatabasePanel` itself.
