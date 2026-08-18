@@ -1,11 +1,7 @@
 import { Router } from 'express';
-import { streamText, tool } from 'ai';
-import { z } from 'zod';
-import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
-import { analyzeImages } from '../services/agentService';
-import { createProvider, convertToCoreMessages } from '../lib/aiSdk';
+import { detectLanguage, buildLanguageInstruction, streamChatCompletion, readSSEStream, ChatMessage } from '../services/mimoService';
+import { analyzeImages, buildSkemaFileToolPrompt, executeSkemaFileTool, parseToolCalls } from '../services/agentService';
 import * as sessionService from '../services/skemaAgentService';
-import * as skemaLibrary from '../services/skemaLibraryService';
 import type { ProjectFile } from '../../types';
 
 const router = Router();
@@ -32,18 +28,6 @@ After EVERY tool call result, output reasoning text (1-3 sentences) explaining:
 - What you plan to do next and why
 
 NEVER chain tool calls without text between them. The user needs to understand your thought process.
-
-## Available Tools
-
-- **create_file(path, content)** — Create a new HTML, TSX, TS, CSS, or JS file in the project.
-- **update_file(path, content)** — Update an existing file with new complete content.
-- **delete_file(path)** — Delete a file from the project.
-- **read_file(path)** — Read a file's current content.
-- **list_files()** — List all files in the project with paths, languages, sizes, and entry status.
-- **set_preview(path)** — Set which file to show in the preview pane.
-- **search_library(query, category?)** — Search the skema component library for reference designs.
-- **ask_user(question)** — Ask the user a clarifying question.
-- **create_todo_list(tasks)** — Create a structured task checklist for complex workflows.
 
 ## File Guidelines
 
@@ -136,168 +120,6 @@ Provide a concise summary of files modified and issues fixed.
 - NEVER change visual design choices (colors, themes, layout) unless explicitly requested.
 - Total response under 500 words for review/analysis tasks.`;
 
-function buildSkemaFileTools(workingFiles: ProjectFile[], emitEvent: (event: any) => void) {
-  return {
-    create_file: tool({
-      description: 'Create a new file in the project. Specify the path and full content. The language is auto-detected from the file extension.',
-      parameters: z.object({
-        path: z.string().describe('File path, e.g. "index.html" or "src/App.tsx"'),
-        content: z.string().describe('Complete file content. Must be valid, complete code.'),
-      }),
-      execute: async ({ path, content }) => {
-        if (!path) return 'Error: Missing file path.';
-        if (content === undefined || content === null) return 'Error: Missing file content.';
-        const existing = workingFiles.find(f => f.path === path);
-        if (existing) return `Error: File already exists: ${path}. Use update_file instead.`;
-        const language = path.endsWith('.html') ? 'html'
-          : path.endsWith('.tsx') ? 'tsx'
-          : path.endsWith('.ts') ? 'ts'
-          : path.endsWith('.css') ? 'css'
-          : 'js';
-        const isEntry = workingFiles.length === 0 || path.endsWith('.html');
-        const file: ProjectFile = { path, content, language, isEntry };
-        workingFiles.push(file);
-        emitEvent({ file_created: file });
-        return `File created: ${path} (${language}, ${content.length} chars)${isEntry ? ' [ENTRY]' : ''}`;
-      },
-    }),
-
-    update_file: tool({
-      description: 'Update an existing file with new content. Writes the COMPLETE file — never partial, never diffs. CRITICAL: content must be PURE code only — no markdown, no fences, no prose.',
-      parameters: z.object({
-        path: z.string().describe('File path to update'),
-        content: z.string().describe('Complete new file content'),
-      }),
-      execute: async ({ path, content }) => {
-        if (!path) return 'Error: Missing file path.';
-        if (content === undefined || content === null) return 'Error: Missing file content.';
-        const idx = workingFiles.findIndex(f => f.path === path);
-        if (idx < 0) return `Error: File not found: ${path}. Use create_file instead.`;
-        workingFiles[idx] = { ...workingFiles[idx], content };
-        emitEvent({ file_updated: { path, content } });
-        return `File updated: ${path} (${content.length} chars)`;
-      },
-    }),
-
-    delete_file: tool({
-      description: 'Delete a file from the project. Use this only as a last resort. Prefer update_file instead. Never delete the last file.',
-      parameters: z.object({
-        path: z.string().describe('File path to delete'),
-      }),
-      execute: async ({ path }) => {
-        if (!path) return 'Error: Missing file path.';
-        const idx = workingFiles.findIndex(f => f.path === path);
-        if (idx < 0) return `Error: File not found: ${path}`;
-        if (workingFiles.length <= 1) return 'Error: Cannot delete the last file in the project.';
-        workingFiles.splice(idx, 1);
-        emitEvent({ file_deleted: { path } });
-        return `File deleted: ${path}. Remaining files: ${workingFiles.map(f => f.path).join(', ')}`;
-      },
-    }),
-
-    read_file: tool({
-      description: 'Read the content of a file. Use this before editing to understand the current state.',
-      parameters: z.object({
-        path: z.string().describe('File path to read'),
-      }),
-      execute: async ({ path }) => {
-        if (!path) return 'Error: Missing file path.';
-        const file = workingFiles.find(f => f.path === path);
-        if (!file) return `Error: File not found: ${path}`;
-        const MAX_CHARS = 12000;
-        const truncated = file.content.length > MAX_CHARS
-          ? file.content.substring(0, MAX_CHARS) + `\n... [truncated, ${file.content.length} chars total]`
-          : file.content;
-        return `File: ${path} (${file.language}, ${file.content.length} chars${file.isEntry ? ', ENTRY' : ''})\n\n${truncated}`;
-      },
-    }),
-
-    list_files: tool({
-      description: 'List all files in the project with their paths, languages, sizes, and entry status.',
-      parameters: z.object({}),
-      execute: async () => {
-        if (workingFiles.length === 0) return 'No files in the project yet. Use create_file to start building.';
-        return workingFiles.map(f =>
-          `${f.isEntry ? '[ENTRY] ' : ''}${f.path} (${f.language}, ${f.content.length} chars)`
-        ).join('\n');
-      },
-    }),
-
-    set_preview: tool({
-      description: 'Set which file to show in the preview pane. HTML files render directly, TSX files are compiled and rendered as React components.',
-      parameters: z.object({
-        path: z.string().describe('File path to preview'),
-      }),
-      execute: async ({ path }) => {
-        if (!path) return 'Error: Missing file path.';
-        const file = workingFiles.find(f => f.path === path);
-        if (!file) return `Error: File not found: ${path}`;
-        for (const f of workingFiles) f.isEntry = false;
-        file.isEntry = true;
-        emitEvent({ preview_set: { path } });
-        return `Preview set to: ${path}`;
-      },
-    }),
-
-    search_library: tool({
-      description: 'Search the skema component library for reusable components, templates, snippets, and design elements.',
-      parameters: z.object({
-        query: z.string().describe('Natural language search query'),
-        category: z.string().optional().describe('Optional category filter'),
-      }),
-      execute: async ({ query, category }) => {
-        if (!query) return 'Error: No search query provided.';
-        const results = await skemaLibrary.searchComponents(query, undefined, 5);
-        const filtered = category ? results.filter(r => r.category === category) : results;
-        if (filtered.length === 0) return `No components found for "${query}".`;
-        const summary = filtered.map(r => {
-          const desc = r.description.length > 150 ? r.description.substring(0, 150) + '...' : r.description;
-          return `[${r.id}] ${r.name} — ${r.category}, ${r.contentType}\n  ${desc}\n  Relevance: ${(r.score * 100).toFixed(0)}%`;
-        }).join('\n\n');
-        return `Found ${filtered.length} component(s):\n\n${summary}`;
-      },
-    }),
-
-    ask_user: tool({
-      description: 'Ask the user a clarifying question. Use this when you need more information before proceeding. Do NOT call any other tools in the same response when using ask_user.',
-      parameters: z.object({
-        question: z.string().describe('The question to ask the user'),
-      }),
-      execute: async ({ question }) => {
-        if (!question) return 'Error: No question provided.';
-        return JSON.stringify({ ask_user: true, question });
-      },
-    }),
-
-    create_todo_list: tool({
-      description: 'Create a structured to-do list of tasks to accomplish. Call this after reading files and analyzing issues. Tasks are displayed visually to the user as a checklist.',
-      parameters: z.object({
-        tasks: z.any().describe('Array of task objects, each with "title" (string), optional "id", "description", and "priority" ("high"|"medium"|"low")'),
-      }),
-      execute: async ({ tasks }) => {
-        let parsedTasks = tasks;
-        if (typeof parsedTasks === 'string') {
-          try { parsedTasks = JSON.parse(parsedTasks); } catch { return 'Error: tasks must be a JSON array.'; }
-        }
-        if (parsedTasks && typeof parsedTasks === 'object' && !Array.isArray(parsedTasks)) {
-          parsedTasks = [parsedTasks];
-        }
-        if (!Array.isArray(parsedTasks)) return 'Error: tasks must be an array of task objects.';
-        if (parsedTasks.length === 0) {
-          return JSON.stringify({ todo_list: true, tasks: [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }] });
-        }
-        const validTasks = parsedTasks.map((t: any, i: number) => ({
-          id: (t.id || t.task_id || String(i + 1)).toString(),
-          title: t.title || t.name || t.task || `Task ${i + 1}`,
-          description: t.description || t.desc || '',
-          priority: (['high', 'medium', 'low'].includes(t.priority || '') ? t.priority : 'medium') as string,
-        }));
-        return JSON.stringify({ todo_list: true, tasks: validTasks });
-      },
-    }),
-  };
-}
-
 function buildFileContext(files: ProjectFile[]): string {
   if (!files || files.length === 0) {
     return 'CURRENT PROJECT: No files yet. Use create_file to start building the project.';
@@ -309,6 +131,7 @@ function buildFileContext(files: ProjectFile[]): string {
 }
 
 router.post('/chat', async (req, res) => {
+  console.log('[skema-agent] HIT /chat');
   try {
     const { messages, model, provider, context = {}, max_tokens, systemPromptAppend } = req.body;
 
@@ -322,10 +145,12 @@ router.post('/chat', async (req, res) => {
     const langInstruction = buildLanguageInstruction(detectedLang);
 
     if (context.images?.length > 0 && !context.imageAnalysis) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no');
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+      }
       res.write(`data: ${JSON.stringify({ status: 'Analyzing reference images...' })}\n\n`);
       context.imageAnalysis = await analyzeImages(context.images, model, provider);
       if (context.imageAnalysis) {
@@ -335,12 +160,13 @@ router.post('/chat', async (req, res) => {
 
     const workingFiles: ProjectFile[] = [...(context.files || [])];
     const fileContext = buildFileContext(workingFiles);
+    const toolPrompt = buildSkemaFileToolPrompt();
 
-    const fullSystem = [SKEMA_AGENT_BASE_PROMPT, fileContext, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
+    console.log('[skema-agent] system prompt parts: base=', SKEMA_AGENT_BASE_PROMPT.length, 'fileContext=', fileContext.length, 'toolPrompt=', toolPrompt.length, 'langInstruction=', langInstruction.length);
 
-    const coreMessages = convertToCoreMessages(messages);
+    const fullSystem = [SKEMA_AGENT_BASE_PROMPT, fileContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
 
-    const aiProvider = createProvider(provider);
+    console.log('[skema-agent] total system:', fullSystem.length, 'chars');
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -354,80 +180,82 @@ router.post('/chat', async (req, res) => {
     let reqClosed = false;
     req.on('close', () => { reqClosed = true; });
 
-    const aiModel = aiProvider.chatModel(model || 'mimo-v2.5');
-    const tools = buildSkemaFileTools(workingFiles, emitEvent);
+    const apiMessages: ChatMessage[] = [];
+    apiMessages.push({ role: 'system', content: fullSystem });
+    for (const msg of messages) {
+      const role = msg.role === 'model' ? 'assistant' : msg.role;
+      apiMessages.push({ role, content: msg.content || '' });
+    }
 
-    const result = streamText({
-      model: aiModel,
-      system: fullSystem,
-      messages: coreMessages,
-      tools,
-      maxSteps: 6,
-      ...(max_tokens ? { maxTokens: max_tokens } : {}),
-    });
+    let iteration = 0;
+    const MAX_ROUNDS = 6;
+    const debugInfo: string[] = [];
 
-    const stream = result.textStream;
-    let fullText = '';
-    for await (const chunk of stream) {
+    while (iteration < MAX_ROUNDS) {
+      iteration++;
+      debugInfo.push(`round ${iteration} start`);
+
+      const response = await streamChatCompletion({
+        model: model || 'mimo-v2.5',
+        messages: apiMessages,
+        stream: true,
+        thinking: { type: 'disabled' },
+        ...(max_tokens ? { max_tokens } : {}),
+      }, provider);
+
+      debugInfo.push(`upstream ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        debugInfo.push(`error: ${errorText.substring(0, 200)}`);
+        emitEvent({ error: `API error ${response.status}: ${errorText}` });
+        break;
+      }
+
+      let fullResponse = '';
+      await readSSEStream(response, (chunk) => {
+        if (reqClosed) return;
+        if (chunk.content) {
+          fullResponse += chunk.content;
+          emitEvent({ content: chunk.content });
+        }
+        if (chunk.reasoning) {
+          emitEvent({ reasoning: chunk.reasoning });
+        }
+      });
+
       if (reqClosed) break;
-      fullText += chunk;
-      emitEvent({ content: chunk });
-    }
 
-    const toolCalls = await result.toolCalls;
-    const finishReason = await result.finishReason;
+      debugInfo.push(`got ${fullResponse.length} chars`);
 
-    if (toolCalls && toolCalls.length > 0) {
-      for (const tc of toolCalls) {
-        emitEvent({ tool_call: { id: tc.toolCallId, name: tc.toolName, arguments: tc.input } });
+      const toolCalls = parseToolCalls(fullResponse);
+      if (toolCalls.length === 0) break;
+
+      apiMessages.push({ role: 'assistant', content: fullResponse });
+
+      for (const call of toolCalls) {
+        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
+        const result = await executeSkemaFileTool(call, workingFiles, emitEvent);
+        const outputStr = result.error ? `Error: ${result.error}` : result.output;
+        emitEvent({ tool_result: { name: result.name, output: result.output, error: result.error } });
+        apiMessages.push({ role: 'user', content: `[Tool: ${result.name}] ${outputStr}` });
       }
     }
 
-    const toolResults = await result.toolResults;
-
-    console.log('[skema-agent] complete, text:', fullText.length, 'toolCalls:', toolCalls?.length || 0, 'toolResults:', toolResults?.length || 0, 'finishReason:', finishReason);
-
-    if (toolCalls && toolCalls.length > 0) {
-      const resultIds = new Set((toolResults || []).map(r => r.toolCallId));
-      for (const tc of toolCalls) {
-        if (!resultIds.has(tc.toolCallId)) {
-          emitEvent({ tool_result: { toolCallId: tc.toolCallId, name: tc.toolName, output: '', error: 'Tool execution failed (invalid arguments or validation error)' } });
-        }
-      }
-    }
-
-    if (toolResults && toolResults.length > 0) {
-      for (const tr of toolResults) {
-        const outputStr = typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output);
-        emitEvent({ tool_result: { toolCallId: tr.toolCallId, name: tr.toolName, output: outputStr } });
-
-        if (tr.toolName === 'ask_user' && !outputStr.startsWith('Error:')) {
-          try {
-            const parsed = JSON.parse(outputStr);
-            if (parsed.ask_user) emitEvent({ ask_user: { question: parsed.question } });
-          } catch {}
-        }
-
-        if (tr.toolName === 'create_todo_list' && !outputStr.startsWith('Error:')) {
-          try {
-            const parsed = JSON.parse(outputStr);
-            if (parsed.todo_list) emitEvent({ todo_list: parsed.tasks });
-          } catch {}
-        }
-      }
-    }
-
-    emitEvent({ done: true });
+    emitEvent({ done: true, _debug: debugInfo });
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
-    console.error('[skema-agent/chat] Error:', error.message, error.stack?.substring(0, 300));
+    const errMsg = error?.message || String(error);
+    console.error('[skema-agent/chat] Error:', errMsg);
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: errMsg });
     } else {
-      res.write(`data: ${JSON.stringify({ error: error.message.substring(0, 500) })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      try {
+        res.write(`data: ${JSON.stringify({ error: errMsg.substring(0, 500) })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      } catch {}
     }
   }
 });

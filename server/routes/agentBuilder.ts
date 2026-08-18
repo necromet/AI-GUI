@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import { streamText, tool, type CoreMessage } from 'ai';
-import { z } from 'zod';
-import { createProvider, convertToCoreMessages } from '../lib/aiSdk';
+import { streamChatCompletion, readSSEStream, ChatMessage, detectLanguage, buildLanguageInstruction } from '../services/mimoService';
+import { parseToolCalls } from '../services/agentService';
 import { pool } from '../db/pg';
 
 const router = Router();
@@ -14,27 +13,6 @@ function jsonbParse<T>(val: unknown, fallback: T): T {
   if (typeof val === 'string') { try { return JSON.parse(val); } catch { return fallback; } }
   if (val && typeof val === 'object') return val as T;
   return fallback;
-}
-
-function buildZodSchema(schema: Record<string, any>): z.ZodObject<any> {
-  const shape: Record<string, z.ZodTypeAny> = {};
-  if (!schema || typeof schema !== 'object') return z.object(shape);
-  const props = schema.properties || {};
-  const required: string[] = schema.required || [];
-  for (const [key, def] of Object.entries(props) as [string, any][]) {
-    let field: z.ZodTypeAny;
-    switch (def.type) {
-      case 'number': field = z.number(); break;
-      case 'boolean': field = z.boolean(); break;
-      case 'array': field = z.array(z.any()); break;
-      case 'object': field = z.record(z.any()); break;
-      default: field = z.string();
-    }
-    if (def.description) field = field.describe(def.description);
-    if (!required.includes(key)) field = field.optional();
-    shape[key] = field;
-  }
-  return z.object(shape);
 }
 
 // ─── Tools CRUD ───
@@ -377,7 +355,30 @@ router.delete('/workflows/:id/tools/:toolId', async (req, res) => {
   }
 });
 
-// ─── Chat (SSE streaming via Vercel AI SDK) ───
+// ─── Chat (SSE streaming via prompt-based tool calling) ───
+
+function buildAgentBuilderToolPrompt(toolRows: any[]): string {
+  if (toolRows.length === 0) return '';
+  const toolDescriptions = toolRows.map(t => {
+    const schema = jsonbParse(t.parameters_schema, {});
+    const props = schema.properties || {};
+    const params = Object.entries(props)
+      .map(([name, def]: [string, any]) => `  - ${name} (${def.type || 'string'}): ${def.description || ''}`)
+      .join('\n');
+    return `### ${t.name}\n${t.description || ''}${params ? '\nParameters:\n' + params : ''}`;
+  }).join('\n\n');
+
+  return `You have access to the following tools. To use a tool, respond with a JSON block in this exact format:
+
+\`\`\`tool
+{"name": "tool_name", "arguments": {"param": "value"}}
+\`\`\`
+
+Available tools:
+${toolDescriptions}
+
+Important: Only use tools when necessary.`;
+}
 
 router.post('/chat', async (req, res) => {
   try {
@@ -398,21 +399,11 @@ router.post('/chat', async (req, res) => {
       [agentId]
     );
 
-    const toolsMap: Record<string, any> = {};
-    for (const t of toolRows) {
-      const schema = jsonbParse(t.parameters_schema, {});
-      toolsMap[t.name] = tool({
-        description: t.description,
-        parameters: buildZodSchema(schema),
-        execute: async (args) => {
-          return `Tool "${t.name}" executed with: ${JSON.stringify(args)}`;
-        },
-      });
-    }
+    const toolPrompt = buildAgentBuilderToolPrompt(toolRows);
+    const fullSystem = [agent.system_prompt || '', toolPrompt].filter(Boolean).join('\n\n');
 
     const providerName = overrideProvider || agent.provider;
     const modelName = overrideModel || agent.model;
-    const aiProvider = createProvider(providerName);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -426,34 +417,45 @@ router.post('/chat', async (req, res) => {
     let reqClosed = false;
     req.on('close', () => { reqClosed = true; });
 
-    const coreMessages = convertToCoreMessages(messages);
+    const apiMessages: ChatMessage[] = [];
+    apiMessages.push({ role: 'system', content: fullSystem });
+    for (const msg of messages) {
+      const role = msg.role === 'model' ? 'assistant' : msg.role;
+      apiMessages.push({ role, content: msg.content || '' });
+    }
 
-    const result = streamText({
-      model: aiProvider.chatModel(modelName),
-      system: agent.system_prompt || '',
-      messages: coreMessages,
-      ...(Object.keys(toolsMap).length > 0 ? { tools: toolsMap, maxSteps: 4 } : {}),
-      ...(max_tokens ? { maxTokens: max_tokens } : {}),
+    const response = await streamChatCompletion({
+      model: modelName || 'mimo-v2.5',
+      messages: apiMessages,
+      stream: true,
+      thinking: { type: 'disabled' },
+      ...(max_tokens ? { max_tokens } : {}),
+    }, providerName);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      emitEvent({ error: `API error ${response.status}: ${errorText}` });
+      emitEvent({ done: true });
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    let fullResponse = '';
+    await readSSEStream(response, (chunk) => {
+      if (reqClosed) return;
+      if (chunk.content) {
+        fullResponse += chunk.content;
+        emitEvent({ content: chunk.content });
+      }
     });
 
-    const stream = result.textStream;
-    for await (const chunk of stream) {
-      if (reqClosed) break;
-      emitEvent({ content: chunk });
-    }
-
-    const toolCalls = await result.toolCalls;
-    if (toolCalls && toolCalls.length > 0) {
-      for (const tc of toolCalls) {
-        emitEvent({ tool_call: { id: tc.toolCallId, name: tc.toolName, arguments: tc.input } });
-      }
-    }
-
-    const toolResults = await result.toolResults;
-    if (toolResults && toolResults.length > 0) {
-      for (const tr of toolResults) {
-        const outputStr = typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output);
-        emitEvent({ tool_result: { toolCallId: tr.toolCallId, name: tr.toolName, output: outputStr } });
+    if (!reqClosed && toolRows.length > 0) {
+      const toolCalls = parseToolCalls(fullResponse);
+      for (const call of toolCalls) {
+        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
+        const output = `Tool "${call.name}" executed with: ${JSON.stringify(call.arguments)}`;
+        emitEvent({ tool_result: { name: call.name, output } });
       }
     }
 

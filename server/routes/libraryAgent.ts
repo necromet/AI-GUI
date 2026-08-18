@@ -1,11 +1,8 @@
 import { Router } from 'express';
-import { streamText, tool, type CoreMessage } from 'ai';
-import { z } from 'zod';
-import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
+import { detectLanguage, buildLanguageInstruction, streamChatCompletion, readSSEStream, ChatMessage } from '../services/mimoService';
 import * as library from '../services/libraryService';
 import { setVerifyResult } from '../services/verifyService';
-import { toolExecuteCode } from '../services/agentService';
-import { createProvider, convertToCoreMessages } from '../lib/aiSdk';
+import { buildLibraryToolPrompt, executeLibraryTool, parseToolCalls, convertMessagesForPromptBased } from '../services/agentService';
 
 const router = Router();
 
@@ -190,193 +187,6 @@ function buildComponentContext(comp: any): string {
 The user is currently editing this component. When they ask to modify, update, or improve "this component" or "it", they are referring to the component above. Use read_component with ID "${comp.id}" to see the current file contents before making changes.`;
 }
 
-function buildLibraryTools(componentId?: string) {
-  return {
-    search_library: tool({
-      description: 'Search the component library for reference components using natural language. Returns matching components with relevance scores and content previews.',
-      parameters: z.object({
-        query: z.string().describe('Natural language search query'),
-        category: z.string().optional().describe('Optional category filter: ui-widget, template, theme'),
-        topK: z.number().optional().describe('Max results to return (default 5)'),
-      }),
-      execute: async ({ query, category, topK }) => {
-        if (!query) return 'Error: No search query provided.';
-        const results = await library.searchComponents(query, topK || 5);
-        const filtered = category ? results.filter(r => r.category === category) : results;
-        if (filtered.length === 0) return `No components found for "${query}".`;
-        const summary = filtered.map(r => {
-          const filesInfo = r.files && r.files.length > 1 ? ` (${r.files.length} files)` : '';
-          const desc = r.description.length > 150 ? r.description.substring(0, 150) + '...' : r.description;
-          return `[${r.id}] ${r.name} — ${r.category}, ${r.contentType}${filesInfo}\n  ${desc}\n  Relevance: ${(r.score * 100).toFixed(0)}%`;
-        }).join('\n\n');
-        return `Found ${filtered.length} component(s):\n\n${summary}`;
-      },
-    }),
-
-    read_component: tool({
-      description: 'Read a component by ID, including all its files and metadata. Use this to inspect the current component before editing.',
-      parameters: z.object({
-        id: z.string().optional().describe('Component ID. If omitted, reads the component currently being edited.'),
-      }),
-      execute: async ({ id }) => {
-        const effectiveId = id || componentId;
-        if (!effectiveId) return 'Error: Missing required field: id. Provide the component ID.';
-        const comp = await library.getComponent(effectiveId);
-        if (!comp) return `Component not found: ${effectiveId}`;
-        const header = `Component: ${comp.name}\nID: ${comp.id}\nCategory: ${comp.category}\nDescription: ${comp.description}\nTags: ${comp.tags.join(', ')}\nCreated: ${comp.createdAt}\nUpdated: ${comp.updatedAt}\n\nFiles:\n`;
-        const MAX_TOTAL = 12000;
-        let remaining = MAX_TOTAL - header.length;
-        const filesSummary = (comp.files || []).map(f => {
-          if (remaining <= 0) return `  ${f.filename} [skipped — output limit reached]`;
-          const fileHeader = `  ${f.isEntry ? '[ENTRY] ' : ''}${f.filename} (${f.contentType}, ${f.content.length} chars)\n`;
-          const budget = Math.min(remaining - fileHeader.length, 4000);
-          if (budget <= 0) return fileHeader.trim();
-          const truncated = f.content.length <= budget ? f.content : f.content.substring(0, budget) + `\n... [truncated, ${f.content.length} chars total]`;
-          remaining -= fileHeader.length + truncated.length;
-          return fileHeader + truncated;
-        }).join('\n\n');
-        return header + filesSummary;
-      },
-    }),
-
-    ask_user: tool({
-      description: 'Ask the user a clarifying question. Use this when you need more information before proceeding. Do NOT call any other tools in the same response when using ask_user.',
-      parameters: z.object({
-        question: z.string().describe('The question to ask the user'),
-      }),
-      execute: async ({ question }) => {
-        if (!question) return 'Error: No question provided.';
-        return JSON.stringify({ ask_user: true, question });
-      },
-    }),
-
-    execute_code: tool({
-      description: 'Execute JavaScript code in a sandboxed environment and return the output. Use console.log() to see results.',
-      parameters: z.object({
-        code: z.string().describe('JavaScript code to execute'),
-      }),
-      execute: async ({ code }) => {
-        if (!code) return 'Error: No code provided.';
-        return await toolExecuteCode(code);
-      },
-    }),
-
-    write_component_file: tool({
-      description: 'Write or update a single file within a component. Creates the file if it does not exist, updates it if it does. This is the primary tool for editing the current component. CRITICAL: The content must be PURE code only — no XML tags, no markdown, no tool call syntax, no prose. Every file must be complete (not truncated, no diffs). Do NOT use type/interface declarations — use inline type annotations instead.',
-      parameters: z.object({
-        componentId: z.string().describe('Component ID'),
-        filename: z.string().describe('File to write (e.g. "components.tsx")'),
-        content: z.string().describe('Full file content to write. Must be valid, complete code.'),
-      }),
-      execute: async ({ componentId, filename, content }) => {
-        if (!componentId) return 'Error: Missing required field: componentId';
-        if (!filename) return 'Error: Missing required field: filename';
-        if (content === undefined || content === null) return 'Error: Missing required field: content';
-        const targetComp = await library.getComponent(componentId);
-        if (!targetComp) return `Component not found: ${componentId}`;
-        const written = await library.writeComponentFile(componentId, filename, content);
-        return `File written successfully:\n  Component ID: ${componentId}\n  Filename: ${written.filename}\n  Content type: ${written.contentType}\n  Size: ${content.length} chars`;
-      },
-    }),
-
-    delete_component_file: tool({
-      description: 'Delete a single file from a component by filename. Use this only as a last resort. Prefer write_component_file instead.',
-      parameters: z.object({
-        componentId: z.string().describe('Component ID'),
-        filename: z.string().describe('Filename to delete'),
-      }),
-      execute: async ({ componentId, filename }) => {
-        if (!componentId) return 'Error: Missing required field: componentId';
-        if (!filename) return 'Error: Missing required field: filename';
-        const targetComp = await library.getComponent(componentId);
-        if (!targetComp) return `Component not found: ${componentId}`;
-        const fileToDelete = (targetComp.files || []).find(f => f.filename === filename);
-        if (!fileToDelete) return `File not found: ${filename} in component ${componentId}`;
-        const remainingFiles = (targetComp.files || []).filter(f => f.filename !== filename);
-        if (remainingFiles.length == 0) return 'Error: Cannot delete the last file in a component.';
-        const deleted = await library.deleteComponentFile(fileToDelete.id);
-        if (deleted && fileToDelete.isEntry && remainingFiles.length > 0) {
-          await library.updateComponentFile(remainingFiles[0].id, { isEntry: true } as any);
-        }
-        return deleted
-          ? `File deleted: ${filename} from component ${componentId}. Remaining files: ${remainingFiles.map(f => f.filename).join(', ')}`
-          : `Failed to delete file: ${filename}`;
-      },
-    }),
-
-    create_todo_list: tool({
-      description: 'Create a structured to-do list of tasks to accomplish. Call this after reading files and analyzing issues. Tasks are displayed visually to the user as a checklist.',
-      parameters: z.object({
-        tasks: z.any().describe('Array of task objects, each with "title" (string), optional "id", "description", and "priority" ("high"|"medium"|"low")'),
-      }),
-      execute: async ({ tasks }) => {
-        let parsedTasks = tasks;
-        if (typeof parsedTasks === 'string') {
-          try { parsedTasks = JSON.parse(parsedTasks); } catch { return 'Error: tasks must be a JSON array.'; }
-        }
-        if (parsedTasks && typeof parsedTasks === 'object' && !Array.isArray(parsedTasks)) {
-          parsedTasks = [parsedTasks];
-        }
-        if (!Array.isArray(parsedTasks)) return 'Error: tasks must be an array of task objects.';
-        if (parsedTasks.length === 0) {
-          return JSON.stringify({ todo_list: true, tasks: [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }] });
-        }
-        const validTasks = parsedTasks.map((t: any, i: number) => ({
-          id: (t.id || t.task_id || String(i + 1)).toString(),
-          title: t.title || t.name || t.task || `Task ${i + 1}`,
-          description: t.description || t.desc || '',
-          priority: (['high', 'medium', 'low'].includes(t.priority || '') ? t.priority : 'medium') as string,
-        }));
-        return JSON.stringify({ todo_list: true, tasks: validTasks });
-      },
-    }),
-
-    verify_component: tool({
-      description: 'Verify the component renders correctly in the preview sandbox. Triggers a live preview render and checks for React/runtime errors. The result is reported asynchronously — continue working after calling this.',
-      parameters: z.object({
-        componentId: z.string().describe('Component ID to verify'),
-      }),
-      execute: async ({ componentId }) => {
-        if (!componentId) return 'Error: Missing componentId. Use {"componentId": "..."} not {"id": "..."}';
-        const comp = await library.getComponent(componentId);
-        if (!comp) return `Component not found: ${componentId}`;
-        return 'Verification triggered. The preview will render the component and check for errors. You can continue working — the result will be shown to the user.';
-      },
-    }),
-
-    list_folders: tool({
-      description: 'List all library folders with their IDs, names, descriptions, and component counts.',
-      parameters: z.object({}),
-      execute: async () => {
-        const allFolders = await library.listFolders();
-        if (allFolders.length === 0) return 'No folders exist yet.';
-        const summary = allFolders.map(f =>
-          `[${f.id}] ${f.name} — ${f.componentCount ?? 0} component(s)${f.description ? '\n  ' + f.description : ''}`
-        ).join('\n\n');
-        return `Found ${allFolders.length} folder(s):\n\n${summary}`;
-      },
-    }),
-
-    list_folder_contents: tool({
-      description: 'List all components in a specific folder.',
-      parameters: z.object({
-        folderId: z.string().describe('Folder ID'),
-      }),
-      execute: async ({ folderId }) => {
-        if (!folderId) return 'Error: Missing required field: folderId';
-        const listFolder = await library.getFolder(folderId);
-        if (!listFolder) return `Folder not found: ${folderId}`;
-        const folderComps = await library.getComponentsInFolder(folderId);
-        if (folderComps.length === 0) return `Folder "${listFolder.name}" is empty.`;
-        const summary = folderComps.map(c =>
-          `[${c.id}] ${c.name} — ${c.category}${c.description ? '\n  ' + c.description.substring(0, 100) : ''}`
-        ).join('\n\n');
-        return `Folder "${listFolder.name}" contains ${folderComps.length} component(s):\n\n${summary}`;
-      },
-    }),
-  };
-}
-
 router.post('/verify-result', (req, res) => {
   try {
     const { componentId, errors, success } = req.body;
@@ -391,6 +201,8 @@ router.post('/verify-result', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+const MAX_AGENT_ROUNDS = 6;
 
 router.post('/chat', async (req, res) => {
   try {
@@ -411,12 +223,8 @@ router.post('/chat', async (req, res) => {
     const detectedLang = detectLanguage(userQuery);
     const langInstruction = buildLanguageInstruction(detectedLang);
 
-    const fullSystem = [LIBRARY_AGENT_BASE_PROMPT, componentContext, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
-
-    const coreMessages = convertToCoreMessages(messages);
-
-    const aiProvider = createProvider(provider);
-    const tools = buildLibraryTools(componentId);
+    const toolPrompt = buildLibraryToolPrompt();
+    const fullSystem = [LIBRARY_AGENT_BASE_PROMPT, componentContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -430,84 +238,56 @@ router.post('/chat', async (req, res) => {
     let reqClosed = false;
     req.on('close', () => { reqClosed = true; });
 
-    const aiModel = aiProvider.chatModel(model || 'mimo-v2.5');
+    const apiMessages: ChatMessage[] = [];
+    apiMessages.push({ role: 'system', content: fullSystem });
+    apiMessages.push(...convertMessagesForPromptBased(messages));
 
-    const result = streamText({
-      model: aiModel,
-      system: fullSystem,
-      messages: coreMessages,
-      tools,
-      maxSteps: 6,
-      ...(max_tokens ? { maxTokens: max_tokens } : {}),
-    });
+    let iteration = 0;
 
-    const stream = result.textStream;
-    let fullText = '';
-    for await (const chunk of stream) {
-      fullText += chunk;
-      emitEvent({ content: chunk });
-    }
+    while (iteration < MAX_AGENT_ROUNDS) {
+      iteration++;
 
-    const toolCalls = await result.toolCalls;
-    const finishReason = await result.finishReason;
+      const response = await streamChatCompletion({
+        model: model || 'mimo-v2.5',
+        messages: apiMessages,
+        stream: true,
+        thinking: { type: 'disabled' },
+        ...(max_tokens ? { max_tokens } : {}),
+      }, provider);
 
-    if (toolCalls && toolCalls.length > 0) {
-      for (const tc of toolCalls) {
-        emitEvent({ tool_call: { id: tc.toolCallId, name: tc.toolName, arguments: tc.input } });
-        if (tc.toolName === 'verify_component') {
-          emitEvent({ verify_component: { componentId: (tc.input as any).componentId } });
-        }
+      if (!response.ok) {
+        const errorText = await response.text();
+        emitEvent({ error: `API error ${response.status}: ${errorText}` });
+        break;
       }
-    }
 
-    const toolResults = await result.toolResults;
-
-    console.log('[library-agent] complete, text:', fullText.length, 'toolCalls:', toolCalls?.length || 0, 'toolResults:', toolResults?.length || 0, 'finishReason:', finishReason);
-
-    if (toolCalls && toolCalls.length > 0) {
-      const resultIds = new Set((toolResults || []).map(r => r.toolCallId));
-      for (const tc of toolCalls) {
-        if (!resultIds.has(tc.toolCallId)) {
-          emitEvent({ tool_result: { toolCallId: tc.toolCallId, name: tc.toolName, output: '', error: 'Tool execution failed (invalid arguments or validation error)' } });
+      let fullResponse = '';
+      await readSSEStream(response, (chunk) => {
+        if (reqClosed) return;
+        if (chunk.content) {
+          fullResponse += chunk.content;
+          emitEvent({ content: chunk.content });
         }
-      }
-    }
-
-    if (toolResults && toolResults.length > 0) {
-      for (let i = 0; i < toolResults.length; i++) {
-        const tr = toolResults[i];
-        const outputStr = typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output);
-        emitEvent({ tool_result: { toolCallId: tr.toolCallId, name: tr.toolName, output: outputStr } });
-
-        if (tr.toolName === 'create_component' && !outputStr.startsWith('Error:')) {
-          const match = outputStr.match(/ID:\s*(\w+)/);
-          if (match) {
-            const comp = await library.getComponent(match[1]);
-            if (comp) emitEvent({ component_created: comp });
-          }
+        if (chunk.reasoning) {
+          emitEvent({ reasoning: chunk.reasoning });
         }
+      });
 
-        if ((tr.toolName === 'write_component_file' || tr.toolName === 'update_component' || tr.toolName === 'delete_component_file') && !outputStr.startsWith('Error:')) {
-          const match = outputStr.match(/Component ID:\s*(\w+)/) || outputStr.match(/ID:\s*(\w+)/) || outputStr.match(/component\s+(\w+)/i);
-          if (match) {
-            const comp = await library.getComponent(match[1]);
-            if (comp) emitEvent({ component_updated: comp });
-          }
-        }
+      if (reqClosed) break;
 
-        if (tr.toolName === 'create_todo_list' && !outputStr.startsWith('Error:')) {
-          try {
-            const parsed = JSON.parse(outputStr);
-            if (parsed.todo_list) emitEvent({ todo_list: parsed.tasks });
-          } catch {}
-        }
+      const toolCalls = parseToolCalls(fullResponse);
+      console.log('[library-agent] round', iteration, 'text:', fullResponse.length, 'toolCalls:', toolCalls.length);
 
-        if (tr.toolName === 'ask_user' && !outputStr.startsWith('Error:')) {
-          try {
-            const parsed = JSON.parse(outputStr);
-            if (parsed.ask_user) emitEvent({ ask_user: { question: parsed.question } });
-          } catch {}
-        }
+      if (toolCalls.length === 0) break;
+
+      apiMessages.push({ role: 'assistant', content: fullResponse });
+
+      for (const call of toolCalls) {
+        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
+        const result = await executeLibraryTool(call, componentId, emitEvent);
+        const outputStr = result.error ? `Error: ${result.error}` : result.output;
+        emitEvent({ tool_result: { name: result.name, output: result.output, error: result.error } });
+        apiMessages.push({ role: 'user', content: `[Tool: ${result.name}] ${outputStr}` });
       }
     }
 

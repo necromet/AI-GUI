@@ -3,6 +3,8 @@ import * as cheerio from 'cheerio';
 import { chatCompletion, streamChatCompletion, readSSEStream, ChatMessage } from './mimoService';
 import { buildSpecSystemPrompt, buildSpecEditSystemPrompt } from './skemaSpecPrompt';
 import * as libraryService from './libraryService';
+import * as skemaLibrary from './skemaLibraryService';
+import type { ProjectFile } from '../../types';
 
 export async function analyzeImages(images: any[], model?: string, provider?: string): Promise<string> {
   if (!images || images.length === 0) return '';
@@ -928,4 +930,559 @@ export function parseToolCalls(response: string): ToolCall[] {
   }
 
   return calls;
+}
+
+// ─── Message conversion for prompt-based tool calling ───
+
+export function convertMessagesForPromptBased(messages: any[]): ChatMessage[] {
+  const result: ChatMessage[] = [];
+
+  for (const msg of messages) {
+    const role = msg.role === 'model' ? 'assistant' : msg.role;
+
+    if (role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      let content = msg.content || '';
+      for (const tc of msg.tool_calls) {
+        const fn = tc.function || tc;
+        const name = fn.name || tc.name;
+        let args = fn.arguments || tc.arguments || '{}';
+        if (typeof args === 'object') args = JSON.stringify(args);
+        content += `\n\n\`\`\`tool\n{"name": "${name}", "arguments": ${args}}\n\`\`\``;
+      }
+      result.push({ role: 'assistant', content });
+    } else if (role === 'tool') {
+      const toolName = msg.tool_name || msg.name || 'tool';
+      const toolContent = msg.content || '';
+      result.push({ role: 'user', content: `[Tool: ${toolName}] Result:\n${toolContent}` });
+    } else {
+      result.push({ role, content: msg.content || '' });
+    }
+  }
+
+  return result;
+}
+
+// ─── Skema File Tools (prompt-based) ───
+
+export const SKEMA_FILE_TOOLS: ToolDefinition[] = [
+  {
+    name: 'create_file',
+    description: 'Create a new file in the project. The language is auto-detected from the file extension.',
+    parameters: {
+      path: { type: 'string', description: 'File path, e.g. "index.html" or "src/App.tsx"' },
+      content: { type: 'string', description: 'Complete file content. Must be valid, complete code.' },
+    },
+  },
+  {
+    name: 'update_file',
+    description: 'Update an existing file with new content. Writes the COMPLETE file — never partial, never diffs.',
+    parameters: {
+      path: { type: 'string', description: 'File path to update' },
+      content: { type: 'string', description: 'Complete new file content' },
+    },
+  },
+  {
+    name: 'delete_file',
+    description: 'Delete a file from the project. Use only as a last resort.',
+    parameters: {
+      path: { type: 'string', description: 'File path to delete' },
+    },
+  },
+  {
+    name: 'read_file',
+    description: 'Read the content of a file. Use before editing to understand current state.',
+    parameters: {
+      path: { type: 'string', description: 'File path to read' },
+    },
+  },
+  {
+    name: 'list_files',
+    description: 'List all files in the project with their paths, languages, sizes, and entry status.',
+    parameters: {},
+  },
+  {
+    name: 'set_preview',
+    description: 'Set which file to show in the preview pane.',
+    parameters: {
+      path: { type: 'string', description: 'File path to preview' },
+    },
+  },
+  {
+    name: 'search_library',
+    description: 'Search the skema component library for reusable components, templates, snippets, and design elements.',
+    parameters: {
+      query: { type: 'string', description: 'Natural language search query' },
+      category: { type: 'string', description: 'Optional category filter' },
+    },
+  },
+  {
+    name: 'ask_user',
+    description: 'Ask the user a clarifying question. Do NOT call any other tools in the same response.',
+    parameters: {
+      question: { type: 'string', description: 'The question to ask the user' },
+    },
+  },
+  {
+    name: 'create_todo_list',
+    description: 'Create a structured to-do list of tasks. Tasks are displayed visually to the user as a checklist.',
+    parameters: {
+      tasks: { type: 'string', description: 'JSON array of task objects, each with "title" (string), optional "id", "description", and "priority" ("high"|"medium"|"low")' },
+    },
+  },
+];
+
+export function buildSkemaFileToolPrompt(): string {
+  const toolDescriptions = SKEMA_FILE_TOOLS.map(t => {
+    const params = Object.entries(t.parameters)
+      .map(([name, p]) => `  - ${name} (${p.type}): ${p.description}`)
+      .join('\n');
+    return `### ${t.name}\n${t.description}${params ? '\nParameters:\n' + params : ''}`;
+  }).join('\n\n');
+
+  return `You have access to the following tools. To use a tool, respond with a JSON block in this exact format:
+
+\`\`\`tool
+{"name": "tool_name", "arguments": {"param": "value"}}
+\`\`\`
+
+You can use multiple tools in sequence. After using a tool, you will receive the result and can continue reasoning or provide a final answer.
+
+Before EVERY tool call, output a short sentence describing what you are about to do and why.
+
+Available tools:
+${toolDescriptions}
+
+Important: Only use tools when necessary. When you have enough information, provide a clear final answer without using more tools.`;
+}
+
+export async function executeSkemaFileTool(
+  call: ToolCall,
+  workingFiles: ProjectFile[],
+  emitEvent: (event: any) => void,
+): Promise<ToolResult> {
+  const result: ToolResult = { name: call.name, input: call.arguments, output: '' };
+
+  try {
+    switch (call.name) {
+      case 'create_file': {
+        const path = call.arguments.path;
+        const content = call.arguments.content;
+        if (!path) { result.output = 'Error: Missing file path.'; result.error = 'Missing path'; break; }
+        if (content === undefined || content === null) { result.output = 'Error: Missing file content.'; result.error = 'Missing content'; break; }
+        const existing = workingFiles.find(f => f.path === path);
+        if (existing) { result.output = `Error: File already exists: ${path}. Use update_file instead.`; result.error = 'Already exists'; break; }
+        const language = path.endsWith('.html') ? 'html'
+          : path.endsWith('.tsx') ? 'tsx'
+          : path.endsWith('.ts') ? 'ts'
+          : path.endsWith('.css') ? 'css'
+          : 'js';
+        const isEntry = workingFiles.length === 0 || path.endsWith('.html');
+        const file: ProjectFile = { path, content, language, isEntry };
+        workingFiles.push(file);
+        emitEvent({ file_created: file });
+        result.output = `File created: ${path} (${language}, ${content.length} chars)${isEntry ? ' [ENTRY]' : ''}`;
+        break;
+      }
+
+      case 'update_file': {
+        const path = call.arguments.path;
+        const content = call.arguments.content;
+        if (!path) { result.output = 'Error: Missing file path.'; result.error = 'Missing path'; break; }
+        if (content === undefined || content === null) { result.output = 'Error: Missing file content.'; result.error = 'Missing content'; break; }
+        const idx = workingFiles.findIndex(f => f.path === path);
+        if (idx < 0) { result.output = `Error: File not found: ${path}. Use create_file instead.`; result.error = 'Not found'; break; }
+        workingFiles[idx] = { ...workingFiles[idx], content };
+        emitEvent({ file_updated: { path, content } });
+        result.output = `File updated: ${path} (${content.length} chars)`;
+        break;
+      }
+
+      case 'delete_file': {
+        const path = call.arguments.path;
+        if (!path) { result.output = 'Error: Missing file path.'; result.error = 'Missing path'; break; }
+        const idx = workingFiles.findIndex(f => f.path === path);
+        if (idx < 0) { result.output = `Error: File not found: ${path}`; result.error = 'Not found'; break; }
+        if (workingFiles.length <= 1) { result.output = 'Error: Cannot delete the last file in the project.'; result.error = 'Last file'; break; }
+        workingFiles.splice(idx, 1);
+        emitEvent({ file_deleted: { path } });
+        result.output = `File deleted: ${path}. Remaining files: ${workingFiles.map(f => f.path).join(', ')}`;
+        break;
+      }
+
+      case 'read_file': {
+        const path = call.arguments.path;
+        if (!path) { result.output = 'Error: Missing file path.'; result.error = 'Missing path'; break; }
+        const file = workingFiles.find(f => f.path === path);
+        if (!file) { result.output = `Error: File not found: ${path}`; result.error = 'Not found'; break; }
+        const MAX_CHARS = 12000;
+        const truncated = file.content.length > MAX_CHARS
+          ? file.content.substring(0, MAX_CHARS) + `\n... [truncated, ${file.content.length} chars total]`
+          : file.content;
+        result.output = `File: ${path} (${file.language}, ${file.content.length} chars${file.isEntry ? ', ENTRY' : ''})\n\n${truncated}`;
+        break;
+      }
+
+      case 'list_files': {
+        if (workingFiles.length === 0) {
+          result.output = 'No files in the project yet. Use create_file to start building.';
+        } else {
+          result.output = workingFiles.map(f =>
+            `${f.isEntry ? '[ENTRY] ' : ''}${f.path} (${f.language}, ${f.content.length} chars)`
+          ).join('\n');
+        }
+        break;
+      }
+
+      case 'set_preview': {
+        const path = call.arguments.path;
+        if (!path) { result.output = 'Error: Missing file path.'; result.error = 'Missing path'; break; }
+        const file = workingFiles.find(f => f.path === path);
+        if (!file) { result.output = `Error: File not found: ${path}`; result.error = 'Not found'; break; }
+        for (const f of workingFiles) f.isEntry = false;
+        file.isEntry = true;
+        emitEvent({ preview_set: { path } });
+        result.output = `Preview set to: ${path}`;
+        break;
+      }
+
+      case 'search_library': {
+        const query = call.arguments.query || '';
+        const category = call.arguments.category;
+        if (!query) { result.output = 'Error: No search query provided.'; result.error = 'No query'; break; }
+        const results = await skemaLibrary.searchComponents(query, undefined, 5);
+        const filtered = category ? results.filter(r => r.category === category) : results;
+        if (filtered.length === 0) {
+          result.output = `No components found for "${query}".`;
+        } else {
+          const summary = filtered.map(r => {
+            const desc = r.description.length > 150 ? r.description.substring(0, 150) + '...' : r.description;
+            return `[${r.id}] ${r.name} — ${r.category}, ${r.contentType}\n  ${desc}\n  Relevance: ${(r.score * 100).toFixed(0)}%`;
+          }).join('\n\n');
+          result.output = `Found ${filtered.length} component(s):\n\n${summary}`;
+        }
+        break;
+      }
+
+      case 'ask_user': {
+        const question = call.arguments.question;
+        if (!question) { result.output = 'Error: No question provided.'; result.error = 'No question'; break; }
+        result.output = JSON.stringify({ ask_user: true, question });
+        emitEvent({ ask_user: { question } });
+        break;
+      }
+
+      case 'create_todo_list': {
+        let tasks = call.arguments.tasks;
+        if (typeof tasks === 'string') {
+          try { tasks = JSON.parse(tasks); } catch { result.output = 'Error: tasks must be a JSON array.'; result.error = 'Parse error'; break; }
+        }
+        if (tasks && typeof tasks === 'object' && !Array.isArray(tasks)) tasks = [tasks];
+        if (!Array.isArray(tasks)) { result.output = 'Error: tasks must be an array of task objects.'; result.error = 'Invalid format'; break; }
+        if (tasks.length === 0) {
+          tasks = [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }];
+        }
+        const validTasks = tasks.map((t: any, i: number) => ({
+          id: (t.id || t.task_id || String(i + 1)).toString(),
+          title: t.title || t.name || t.task || `Task ${i + 1}`,
+          description: t.description || t.desc || '',
+          priority: ['high', 'medium', 'low'].includes(t.priority || '') ? t.priority : 'medium',
+        }));
+        result.output = JSON.stringify({ todo_list: true, tasks: validTasks });
+        emitEvent({ todo_list: validTasks });
+        break;
+      }
+
+      default:
+        result.output = `Unknown tool: ${call.name}`;
+        result.error = 'Tool not found';
+    }
+  } catch (err: any) {
+    result.output = '';
+    result.error = err.message || 'Tool execution failed';
+  }
+
+  return result;
+}
+
+// ─── Library Agent Tools (prompt-based) ───
+
+export const LIBRARY_AGENT_TOOLS: ToolDefinition[] = [
+  {
+    name: 'search_library',
+    description: 'Search the component library for reference components using natural language.',
+    parameters: {
+      query: { type: 'string', description: 'Natural language search query' },
+      category: { type: 'string', description: 'Optional category filter: ui-widget, template, theme' },
+      topK: { type: 'number', description: 'Max results to return (default 5)' },
+    },
+  },
+  {
+    name: 'read_component',
+    description: 'Read a component by ID, including all its files and metadata.',
+    parameters: {
+      id: { type: 'string', description: 'Component ID. If omitted, reads the component currently being edited.' },
+    },
+  },
+  {
+    name: 'write_component_file',
+    description: 'Write or update a single file within a component. Creates the file if it does not exist.',
+    parameters: {
+      componentId: { type: 'string', description: 'Component ID' },
+      filename: { type: 'string', description: 'File to write (e.g. "components.tsx")' },
+      content: { type: 'string', description: 'Full file content. Must be valid, complete code.' },
+    },
+  },
+  {
+    name: 'delete_component_file',
+    description: 'Delete a single file from a component by filename.',
+    parameters: {
+      componentId: { type: 'string', description: 'Component ID' },
+      filename: { type: 'string', description: 'Filename to delete' },
+    },
+  },
+  {
+    name: 'ask_user',
+    description: 'Ask the user a clarifying question.',
+    parameters: {
+      question: { type: 'string', description: 'The question to ask the user' },
+    },
+  },
+  {
+    name: 'execute_code',
+    description: 'Execute JavaScript code in a sandboxed environment and return the output.',
+    parameters: {
+      code: { type: 'string', description: 'JavaScript code to execute' },
+    },
+  },
+  {
+    name: 'create_todo_list',
+    description: 'Create a structured to-do list of tasks.',
+    parameters: {
+      tasks: { type: 'string', description: 'JSON array of task objects' },
+    },
+  },
+  {
+    name: 'verify_component',
+    description: 'Verify the component renders correctly in the preview sandbox.',
+    parameters: {
+      componentId: { type: 'string', description: 'Component ID to verify' },
+    },
+  },
+  {
+    name: 'list_folders',
+    description: 'List all library folders with their IDs, names, descriptions, and component counts.',
+    parameters: {},
+  },
+  {
+    name: 'list_folder_contents',
+    description: 'List all components in a specific folder.',
+    parameters: {
+      folderId: { type: 'string', description: 'Folder ID' },
+    },
+  },
+];
+
+export function buildLibraryToolPrompt(): string {
+  const toolDescriptions = LIBRARY_AGENT_TOOLS.map(t => {
+    const params = Object.entries(t.parameters)
+      .map(([name, p]) => `  - ${name} (${p.type}): ${p.description}`)
+      .join('\n');
+    return `### ${t.name}\n${t.description}${params ? '\nParameters:\n' + params : ''}`;
+  }).join('\n\n');
+
+  return `You have access to the following tools. To use a tool, respond with a JSON block in this exact format:
+
+\`\`\`tool
+{"name": "tool_name", "arguments": {"param": "value"}}
+\`\`\`
+
+You can use multiple tools in sequence. After using a tool, you will receive the result and can continue reasoning or provide a final answer.
+
+Before EVERY tool call, output a short sentence describing what you are about to do and why.
+
+Available tools:
+${toolDescriptions}
+
+Important: Only use tools when necessary. When you have enough information, provide a clear final answer without using more tools.`;
+}
+
+export async function executeLibraryTool(
+  call: ToolCall,
+  componentId?: string,
+  emitEvent?: (event: any) => void,
+): Promise<ToolResult> {
+  const result: ToolResult = { name: call.name, input: call.arguments, output: '' };
+
+  try {
+    switch (call.name) {
+      case 'search_library': {
+        const query = call.arguments.query || '';
+        const category = call.arguments.category;
+        const topK = call.arguments.topK || 5;
+        if (!query) { result.output = 'Error: No search query provided.'; result.error = 'No query'; break; }
+        const results = await libraryService.searchComponents(query, topK);
+        const filtered = category ? results.filter(r => r.category === category) : results;
+        if (filtered.length === 0) {
+          result.output = `No components found for "${query}".`;
+        } else {
+          const summary = filtered.map(r => {
+            const filesInfo = r.files && r.files.length > 1 ? ` (${r.files.length} files)` : '';
+            const desc = r.description.length > 150 ? r.description.substring(0, 150) + '...' : r.description;
+            return `[${r.id}] ${r.name} — ${r.category}, ${r.contentType}${filesInfo}\n  ${desc}\n  Relevance: ${(r.score * 100).toFixed(0)}%`;
+          }).join('\n\n');
+          result.output = `Found ${filtered.length} component(s):\n\n${summary}`;
+        }
+        break;
+      }
+
+      case 'read_component': {
+        const id = call.arguments.id || componentId;
+        if (!id) { result.output = 'Error: Missing required field: id.'; result.error = 'Missing id'; break; }
+        const comp = await libraryService.getComponent(id);
+        if (!comp) { result.output = `Component not found: ${id}`; result.error = 'Not found'; break; }
+        const header = `Component: ${comp.name}\nID: ${comp.id}\nCategory: ${comp.category}\nDescription: ${comp.description}\nTags: ${comp.tags.join(', ')}\nCreated: ${comp.createdAt}\nUpdated: ${comp.updatedAt}\n\nFiles:\n`;
+        const MAX_TOTAL = 12000;
+        let remaining = MAX_TOTAL - header.length;
+        const filesSummary = (comp.files || []).map((f: any) => {
+          if (remaining <= 0) return `  ${f.filename} [skipped — output limit reached]`;
+          const fileHeader = `  ${f.isEntry ? '[ENTRY] ' : ''}${f.filename} (${f.contentType}, ${f.content.length} chars)\n`;
+          const budget = Math.min(remaining - fileHeader.length, 4000);
+          if (budget <= 0) return fileHeader.trim();
+          const truncated = f.content.length <= budget ? f.content : f.content.substring(0, budget) + `\n... [truncated, ${f.content.length} chars total]`;
+          remaining -= fileHeader.length + truncated.length;
+          return fileHeader + truncated;
+        }).join('\n\n');
+        result.output = header + filesSummary;
+        break;
+      }
+
+      case 'write_component_file': {
+        const compId = call.arguments.componentId;
+        const filename = call.arguments.filename;
+        const content = call.arguments.content;
+        if (!compId) { result.output = 'Error: Missing componentId.'; result.error = 'Missing componentId'; break; }
+        if (!filename) { result.output = 'Error: Missing filename.'; result.error = 'Missing filename'; break; }
+        if (content === undefined || content === null) { result.output = 'Error: Missing content.'; result.error = 'Missing content'; break; }
+        const targetComp = await libraryService.getComponent(compId);
+        if (!targetComp) { result.output = `Component not found: ${compId}`; result.error = 'Not found'; break; }
+        const written = await libraryService.writeComponentFile(compId, filename, content);
+        result.output = `File written successfully:\n  Component ID: ${compId}\n  Filename: ${written.filename}\n  Content type: ${written.contentType}\n  Size: ${content.length} chars`;
+        if (emitEvent) {
+          const updated = await libraryService.getComponent(compId);
+          if (updated) emitEvent({ component_updated: updated });
+        }
+        break;
+      }
+
+      case 'delete_component_file': {
+        const compId = call.arguments.componentId;
+        const filename = call.arguments.filename;
+        if (!compId) { result.output = 'Error: Missing componentId.'; result.error = 'Missing componentId'; break; }
+        if (!filename) { result.output = 'Error: Missing filename.'; result.error = 'Missing filename'; break; }
+        const targetComp = await libraryService.getComponent(compId);
+        if (!targetComp) { result.output = `Component not found: ${compId}`; result.error = 'Not found'; break; }
+        const fileToDelete = (targetComp.files || []).find((f: any) => f.filename === filename);
+        if (!fileToDelete) { result.output = `File not found: ${filename} in component ${compId}`; result.error = 'Not found'; break; }
+        const remainingFiles = (targetComp.files || []).filter((f: any) => f.filename !== filename);
+        if (remainingFiles.length === 0) { result.output = 'Error: Cannot delete the last file in a component.'; result.error = 'Last file'; break; }
+        const deleted = await libraryService.deleteComponentFile(fileToDelete.id);
+        if (deleted && fileToDelete.isEntry && remainingFiles.length > 0) {
+          await libraryService.updateComponentFile(remainingFiles[0].id, { isEntry: true } as any);
+        }
+        result.output = deleted
+          ? `File deleted: ${filename} from component ${compId}. Remaining files: ${remainingFiles.map((f: any) => f.filename).join(', ')}`
+          : `Failed to delete file: ${filename}`;
+        if (emitEvent && deleted) {
+          const updated = await libraryService.getComponent(compId);
+          if (updated) emitEvent({ component_updated: updated });
+        }
+        break;
+      }
+
+      case 'ask_user': {
+        const question = call.arguments.question;
+        if (!question) { result.output = 'Error: No question provided.'; result.error = 'No question'; break; }
+        result.output = JSON.stringify({ ask_user: true, question });
+        if (emitEvent) emitEvent({ ask_user: { question } });
+        break;
+      }
+
+      case 'execute_code': {
+        const code = call.arguments.code;
+        if (!code) { result.output = 'Error: No code provided.'; result.error = 'No code'; break; }
+        result.output = await toolExecuteCode(code);
+        break;
+      }
+
+      case 'create_todo_list': {
+        let tasks = call.arguments.tasks;
+        if (typeof tasks === 'string') {
+          try { tasks = JSON.parse(tasks); } catch { result.output = 'Error: tasks must be a JSON array.'; result.error = 'Parse error'; break; }
+        }
+        if (tasks && typeof tasks === 'object' && !Array.isArray(tasks)) tasks = [tasks];
+        if (!Array.isArray(tasks)) { result.output = 'Error: tasks must be an array.'; result.error = 'Invalid format'; break; }
+        if (tasks.length === 0) {
+          tasks = [{ id: '1', title: 'Complete the task', description: '', priority: 'medium' }];
+        }
+        const validTasks = tasks.map((t: any, i: number) => ({
+          id: (t.id || t.task_id || String(i + 1)).toString(),
+          title: t.title || t.name || t.task || `Task ${i + 1}`,
+          description: t.description || t.desc || '',
+          priority: ['high', 'medium', 'low'].includes(t.priority || '') ? t.priority : 'medium',
+        }));
+        result.output = JSON.stringify({ todo_list: true, tasks: validTasks });
+        if (emitEvent) emitEvent({ todo_list: validTasks });
+        break;
+      }
+
+      case 'verify_component': {
+        const compId = call.arguments.componentId;
+        if (!compId) { result.output = 'Error: Missing componentId.'; result.error = 'Missing componentId'; break; }
+        const comp = await libraryService.getComponent(compId);
+        if (!comp) { result.output = `Component not found: ${compId}`; result.error = 'Not found'; break; }
+        result.output = 'Verification triggered. The preview will render the component and check for errors.';
+        if (emitEvent) emitEvent({ verify_component: { componentId: compId } });
+        break;
+      }
+
+      case 'list_folders': {
+        const allFolders = await libraryService.listFolders();
+        if (allFolders.length === 0) {
+          result.output = 'No folders exist yet.';
+        } else {
+          const summary = allFolders.map(f =>
+            `[${f.id}] ${f.name} — ${f.componentCount ?? 0} component(s)${f.description ? '\n  ' + f.description : ''}`
+          ).join('\n\n');
+          result.output = `Found ${allFolders.length} folder(s):\n\n${summary}`;
+        }
+        break;
+      }
+
+      case 'list_folder_contents': {
+        const folderId = call.arguments.folderId;
+        if (!folderId) { result.output = 'Error: Missing folderId.'; result.error = 'Missing folderId'; break; }
+        const folder = await libraryService.getFolder(folderId);
+        if (!folder) { result.output = `Folder not found: ${folderId}`; result.error = 'Not found'; break; }
+        const folderComps = await libraryService.getComponentsInFolder(folderId);
+        if (folderComps.length === 0) {
+          result.output = `Folder "${folder.name}" is empty.`;
+        } else {
+          const summary = folderComps.map(c =>
+            `[${c.id}] ${c.name} — ${c.category}${c.description ? '\n  ' + c.description.substring(0, 100) : ''}`
+          ).join('\n\n');
+          result.output = `Folder "${folder.name}" contains ${folderComps.length} component(s):\n\n${summary}`;
+        }
+        break;
+      }
+
+      default:
+        result.output = `Unknown tool: ${call.name}`;
+        result.error = 'Tool not found';
+    }
+  } catch (err: any) {
+    result.output = '';
+    result.error = err.message || 'Tool execution failed';
+  }
+
+  return result;
 }
