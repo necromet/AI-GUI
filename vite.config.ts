@@ -97,7 +97,14 @@ export default defineConfig(({ mode }) => {
         'process.env.MIMO_API_KEY': JSON.stringify(env.MIMO_API_KEY),
         'process.env.MIMO_BASE_URL': JSON.stringify(env.MIMO_BASE_URL),
         'process.env.MIMO_DIRECT_API_KEY': JSON.stringify(env.MIMO_DIRECT_API_KEY),
-        'process.env.MIMO_DIRECT_BASE_URL': JSON.stringify(env.MIMO_DIRECT_BASE_URL)
+        'process.env.MIMO_DIRECT_BASE_URL': JSON.stringify(env.MIMO_DIRECT_BASE_URL),
+        'process.env.CHAT_PASSWORD': JSON.stringify(env.CHAT_PASSWORD),
+        'process.env.RAG_PASSWORD': JSON.stringify(env.RAG_PASSWORD),
+        'process.env.SKEMA_PASSWORD': JSON.stringify(env.SKEMA_PASSWORD),
+        'process.env.PYTHON_PASSWORD': JSON.stringify(env.PYTHON_PASSWORD),
+        'process.env.LIBRARY_PASSWORD': JSON.stringify(env.LIBRARY_PASSWORD),
+        'process.env.DATABASE_PASSWORD': JSON.stringify(env.DATABASE_PASSWORD),
+        'process.env.AGENT_BUILDER_PASSWORD': JSON.stringify(env.AGENT_BUILDER_PASSWORD)
       },
       resolve: {
         alias: {

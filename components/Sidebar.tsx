@@ -1192,7 +1192,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </ScrollArea>
               </>
             ) : (
-              <>
+              <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="px-3 pt-3">
                   <div className="px-2 pb-2">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Library</span>
@@ -1211,11 +1211,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </ul>
                 </div>
                 {libraryFolders.length > 0 && (
-                  <div className="px-3 pt-2">
+                  <div className="flex flex-col flex-1 min-h-0 px-3 pt-2">
                     <div className="px-2 pb-2">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)]">Folders</span>
                     </div>
-                    <ScrollArea className="flex-1">
+                    <ScrollArea className="flex-1 min-h-0">
                       <ul className="space-y-0.5">
                         {libraryFolders.map(folder => {
                           const isActive = location.pathname.startsWith(`/library/folder/${folder.id}`);
@@ -1242,7 +1242,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </ScrollArea>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         ) : currentMode === 'database' ? (

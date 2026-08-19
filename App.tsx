@@ -32,6 +32,7 @@ import { SkemaControls } from './components/SkemaEditor';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 import DatabasePanel from './components/DatabasePanel';
+import { AnimatedShaderBackground } from './components/AuroraHero';
 import type { DatabaseSidebarControls } from './components/DatabasePanel';
 import type { DatabaseHeaderControls } from './components/DatabasePanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -1442,14 +1443,16 @@ const App: React.FC = () => {
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                        <div className="relative mb-8">
-                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      <AnimatedShaderBackground>
+                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
+                          <div className="relative mb-8">
+                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                          </div>
+                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+                            How can I help you today?
+                          </h2>
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                          How can I help you today?
-                        </h2>
-                      </div>
+                      </AnimatedShaderBackground>
                     ) : (
                       <ChatMessageList
                         messages={messages}
@@ -1466,14 +1469,16 @@ const App: React.FC = () => {
                 <Route path="/chat/:conversationId" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                        <div className="relative mb-8">
-                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      <AnimatedShaderBackground>
+                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
+                          <div className="relative mb-8">
+                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                          </div>
+                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+                            How can I help you today?
+                          </h2>
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                          How can I help you today?
-                        </h2>
-                      </div>
+                      </AnimatedShaderBackground>
                     ) : (
                       <ChatMessageList
                         messages={messages}

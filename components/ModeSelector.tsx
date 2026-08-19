@@ -6,13 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
-const CHAT_PASSWORD = 'thelordismyshepherd';
-const RAG_PASSWORD = 'herestoresmysoul';
-const SKEMA_PASSWORD = 'pathsofrighteousness';
-const PYTHON_PASSWORD = 'mycuprunnethover';
-const LIBRARY_PASSWORD = 'psalm23';
-const DATABASE_PASSWORD = 'heleadsmebesidequietwater';
-const AGENT_BUILDER_PASSWORD = 'shepherdofmysoul';
+const CHAT_PASSWORD = process.env.CHAT_PASSWORD;
+const RAG_PASSWORD = process.env.RAG_PASSWORD;
+const SKEMA_PASSWORD = process.env.SKEMA_PASSWORD;
+const PYTHON_PASSWORD = process.env.PYTHON_PASSWORD;
+const LIBRARY_PASSWORD = process.env.LIBRARY_PASSWORD;
+const DATABASE_PASSWORD = process.env.DATABASE_PASSWORD;
+const AGENT_BUILDER_PASSWORD = process.env.AGENT_BUILDER_PASSWORD;
 
 interface InlinePasswordModalProps {
   isOpen: boolean;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Search, Plus, X, Package, RefreshCw, Sparkles, Layers, LayoutGrid, Folder, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Plus, X, Package, RefreshCw, Sparkles, LayoutGrid, Folder, ChevronRight, Loader2 } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, ModelConfig } from '../types';
 import * as db from '../services/apiDatabaseAdapter';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+
 import { CATEGORIES } from './library/constants';
 import { ComponentCard } from './library/ComponentCard';
 import { FolderCard } from './library/FolderCard';
@@ -14,6 +14,7 @@ import { CreateFolderDialog } from './library/CreateFolderDialog';
 import { EditFolderDialog } from './library/EditFolderDialog';
 import { EditComponentDialog } from './library/EditComponentDialog';
 import { ComponentEditor, type LibraryControls } from './library/ComponentEditor';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export type { LibraryControls } from './library/ComponentEditor';
 
@@ -45,6 +46,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'component' | 'folder'; id: string; name: string } | null>(null);
   const pageSize = 24;
 
   const activeFolder = useMemo(() => {
@@ -175,23 +177,9 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    try {
-      const response = await fetch(`/api/library/components/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Delete failed');
-      db.invalidateLibraryCache();
-      setComponents(prev => prev.filter(c => c.id !== id));
-      if (selectedComponent?.id === id) {
-        setSelectedComponent(null);
-        if (activeFolder) {
-          navigate(`/library/folder/${activeFolder.id}`);
-        } else {
-          navigate('/library');
-        }
-      }
-      onNotification?.('Component deleted', 'success');
-      loadFolders();
-    } catch (err: any) {
-      onNotification?.(err.message, 'error');
+    const comp = components.find(c => c.id === id);
+    if (comp) {
+      setDeleteConfirm({ type: 'component', id, name: comp.name });
     }
   };
 
@@ -266,18 +254,9 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
   const handleDeleteFolder = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    try {
-      const response = await fetch(`/api/library/folders/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Delete folder failed');
-      db.invalidateLibraryCache();
-      setFolders(prev => prev.filter(f => f.id !== id));
-      if (activeFolder?.id === id) {
-        navigate('/library', { replace: true });
-      }
-      onNotification?.('Folder deleted', 'success');
-      loadComponents();
-    } catch (err: any) {
-      onNotification?.(err.message, 'error');
+    const folder = folders.find(f => f.id === id);
+    if (folder) {
+      setDeleteConfirm({ type: 'folder', id, name: folder.name });
     }
   };
 
@@ -299,6 +278,42 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
       onNotification?.(folderId ? 'Moved to folder' : 'Removed from folder', 'success');
       await loadComponents();
       await loadFolders();
+    } catch (err: any) {
+      onNotification?.(err.message, 'error');
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { type, id } = deleteConfirm;
+    setDeleteConfirm(null);
+    try {
+      if (type === 'component') {
+        const response = await fetch(`/api/library/components/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Delete failed');
+        db.invalidateLibraryCache();
+        setComponents(prev => prev.filter(c => c.id !== id));
+        if (selectedComponent?.id === id) {
+          setSelectedComponent(null);
+          if (activeFolder) {
+            navigate(`/library/folder/${activeFolder.id}`);
+          } else {
+            navigate('/library');
+          }
+        }
+        onNotification?.('Component deleted', 'success');
+        loadFolders();
+      } else {
+        const response = await fetch(`/api/library/folders/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Delete folder failed');
+        db.invalidateLibraryCache();
+        setFolders(prev => prev.filter(f => f.id !== id));
+        if (activeFolder?.id === id) {
+          navigate('/library', { replace: true });
+        }
+        onNotification?.('Folder deleted', 'success');
+        loadComponents();
+      }
     } catch (err: any) {
       onNotification?.(err.message, 'error');
     }
@@ -330,130 +345,97 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
 
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col h-full">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden px-6 pt-8 pb-6 flex-shrink-0">
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            background: `radial-gradient(ellipse 80% 50% at 50% -20%, rgba(var(--neon-rgb), 0.15), transparent)`,
-          }}
-        />
-        <div className="relative flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div
-                className="relative p-3 rounded-2xl"
-                style={{
-                  background: 'rgba(var(--neon-rgb), 0.1)',
-                  boxShadow: '0 0 30px rgba(var(--neon-rgb), 0.1), inset 0 1px 0 rgba(255,255,255,0.05)',
-                }}
-              >
-                <Package size={24} style={{ color: 'var(--neon-color)' }} />
-              </div>
-              <div>
-                <h1
-                  className="text-2xl font-bold tracking-tight"
-                  style={{ color: 'var(--text-100)' }}
-                >
-                  Component Library
-                </h1>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--text-500)' }}>
-                  Reusable widgets, templates, and agent tools
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 px-3 rounded-xl text-xs"
-              onClick={handleSeed}
-              disabled={isSeeding}
+      {/* Row 1: Toolbar */}
+      <div className="flex items-center gap-3 px-4 pt-3 pb-2 flex-shrink-0">
+        <Package size={14} style={{ color: 'var(--neon-color)' }} />
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>Library</span>
+        {activeFolder && (
+          <>
+            <ChevronRight size={12} style={{ color: 'var(--text-500)' }} />
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium"
               style={{
-                backgroundColor: 'var(--bg-200)',
-                color: 'var(--text-300)',
-                borderColor: 'var(--border-300)',
+                backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                color: activeFolder.color,
+                border: '1px solid rgba(var(--neon-rgb), 0.15)',
               }}
             >
-              <RefreshCw size={13} className={isSeeding ? 'animate-spin' : ''} />
-              Seed
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 px-3 rounded-xl text-xs"
-              onClick={() => setIsCreatingFolder(true)}
-              style={{
-                backgroundColor: 'var(--bg-200)',
-                color: 'var(--text-300)',
-                borderColor: 'var(--border-300)',
-              }}
-            >
-              <Folder size={13} />
-              New Folder
-            </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 h-9 px-4 rounded-xl text-xs font-semibold"
-              onClick={() => setIsCreating(true)}
-              style={{
-                background: 'linear-gradient(135deg, var(--neon-color), rgba(var(--neon-rgb), 0.8))',
-                color: '#000',
-                boxShadow: '0 2px 12px rgba(var(--neon-rgb), 0.3)',
-              }}
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              New Component
-            </Button>
-          </div>
-        </div>
-
-        {/* Breadcrumb + Stats row */}
-        {!isLoading && (
-          <div className="relative flex items-center gap-4 mt-5">
-            {activeFolder ? (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleBackToFolders}
-                  className="text-xs font-medium transition-colors hover:opacity-80"
-                  style={{ color: 'var(--text-500)' }}
-                >
-                  All Folders
-                </button>
-                <ChevronRight size={12} style={{ color: 'var(--text-500)' }} />
-                <span className="text-xs font-semibold" style={{ color: activeFolder.color }}>
-                  {activeFolder.name}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <LayoutGrid size={13} style={{ color: 'var(--text-500)' }} />
-                <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>
-                  {filteredCount} component{filteredCount !== 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
-            {!activeFolder && (
-              <>
-                <div className="w-px h-3" style={{ backgroundColor: 'var(--border-300)' }} />
-                <div className="flex items-center gap-1.5">
-                  <Folder size={13} style={{ color: 'var(--text-500)' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>
-                    {folders.length} folder{folders.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="w-px h-3" style={{ backgroundColor: 'var(--border-300)' }} />
-                <div className="flex items-center gap-1.5">
-                  <Layers size={13} style={{ color: 'var(--text-500)' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-500)' }}>
-                    {CATEGORIES.length - 1} categories
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+              <Folder size={10} />
+              {activeFolder.name}
+            </span>
+          </>
         )}
+        <div
+          className="flex items-center gap-2 h-8 w-64 px-3 rounded-lg ml-2"
+          style={{
+            backgroundColor: 'var(--bg-200)',
+            border: '1px solid var(--border-300)',
+          }}
+        >
+          <Search size={13} style={{ color: 'var(--text-500)' }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder={activeFolder ? `Search in ${activeFolder.name}...` : 'Search...'}
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-[var(--text-500)]"
+            style={{ color: 'var(--text-100)' }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); loadComponents(); }}
+              className="p-0.5 rounded transition-colors hover:bg-[var(--bg-300)]"
+              style={{ color: 'var(--text-500)' }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-7 px-2 rounded-lg text-[11px]"
+            onClick={handleSeed}
+            disabled={isSeeding}
+            style={{
+              backgroundColor: 'var(--bg-200)',
+              color: 'var(--text-300)',
+              borderColor: 'var(--border-300)',
+            }}
+          >
+            <RefreshCw size={11} className={isSeeding ? 'animate-spin' : ''} />
+            Seed
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-7 px-2 rounded-lg text-[11px]"
+            onClick={() => setIsCreatingFolder(true)}
+            style={{
+              backgroundColor: 'var(--bg-200)',
+              color: 'var(--text-300)',
+              borderColor: 'var(--border-300)',
+            }}
+          >
+            <Folder size={11} />
+            Folder+
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5 h-7 px-2 rounded-lg text-[11px] font-semibold"
+            onClick={() => setIsCreating(true)}
+            style={{
+              backgroundColor: 'var(--neon-color)',
+              color: '#000',
+            }}
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            New
+          </Button>
+        </div>
       </div>
 
       <CreateComponentDialog
@@ -488,73 +470,68 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
         onNotification={onNotification}
       />
 
-      {/* Search Bar */}
-      <div className="px-6 pb-4 flex-shrink-0">
-        <div
-          className="flex items-center gap-3 h-11 px-4 rounded-xl transition-all duration-200"
-          style={{
-            backgroundColor: 'var(--bg-200)',
-            border: '1px solid var(--border-300)',
-          }}
-        >
-          <Search size={15} style={{ color: 'var(--text-500)' }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder={activeFolder ? `Search in ${activeFolder.name}...` : 'Search components by name, tag, or description...'}
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--text-500)]"
-            style={{ color: 'var(--text-100)' }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => { setSearchQuery(''); loadComponents(); }}
-              className="p-1 rounded-md transition-colors hover:bg-[var(--bg-300)]"
-              style={{ color: 'var(--text-500)' }}
-            >
-              <X size={13} />
-            </button>
-          )}
-          <div className="w-px h-5" style={{ backgroundColor: 'var(--border-300)' }} />
-          <button
-            onClick={handleSearch}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-150"
-            style={{
-              backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-              color: 'var(--neon-color)',
-            }}
-          >
-            Search
-          </button>
-        </div>
-      </div>
-
-      {/* Category Tabs */}
-      <div className="px-6 pb-5 flex-shrink-0">
-        <ScrollArea className="w-full whitespace-nowrap">
-          <div className="flex gap-1.5">
-            {CATEGORIES.map(cat => {
-              const isActive = activeCategory === cat.key;
-              return (
-                <button
-                  key={cat.key}
-                  onClick={() => setActiveCategory(cat.key)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap"
-                  style={{
-                    backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
-                    color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
-                    border: isActive ? '1px solid rgba(var(--neon-rgb), 0.25)' : '1px solid transparent',
-                  }}
-                >
-                  {cat.icon}
-                  {cat.label}
-                </button>
-              );
-            })}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <DialogContent hideCloseButton className="max-w-[400px] p-0 overflow-hidden" style={{ background: 'var(--bg-100)', border: '1px solid var(--border-300)' }}>
+          <div className="p-6">
+            <DialogHeader>
+              <DialogTitle className="text-base" style={{ color: 'var(--text-100)' }}>
+                Delete {deleteConfirm?.type === 'folder' ? 'Folder' : 'Component'}?
+              </DialogTitle>
+              <DialogDescription className="text-sm" style={{ color: 'var(--text-500)' }}>
+                {deleteConfirm?.type === 'folder'
+                  ? <>The folder <span className="font-semibold" style={{ color: 'var(--text-200)' }}>{deleteConfirm?.name}</span> will be deleted. Components inside will be moved out of the folder.</>
+                  : <>The component <span className="font-semibold" style={{ color: 'var(--text-200)' }}>{deleteConfirm?.name}</span> will be permanently deleted.</>
+                }
+              </DialogDescription>
+            </DialogHeader>
           </div>
-          <ScrollBar orientation="horizontal" className="h-1.5" />
-        </ScrollArea>
+          <DialogFooter className="px-6 pb-5 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm(null)}
+              className="h-9 rounded-xl text-xs"
+              style={{ borderColor: 'var(--border-300)', color: 'var(--text-300)' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              className="h-9 rounded-xl text-xs font-semibold bg-red-500 hover:bg-red-600 text-white"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Row 2: Category Tabs + Stats */}
+      <div className="flex items-center gap-3 px-4 pb-3 flex-shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          {CATEGORIES.map(cat => {
+            const isActive = activeCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                onClick={() => setActiveCategory(cat.key)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.15)' : 'transparent',
+                  color: isActive ? 'var(--neon-color)' : 'var(--text-500)',
+                  border: isActive ? '1px solid rgba(var(--neon-rgb), 0.25)' : '1px solid transparent',
+                }}
+              >
+                {cat.icon}
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex-1" />
+        {!isLoading && (
+          <span className="text-[11px] whitespace-nowrap" style={{ color: 'var(--text-500)' }}>
+            {filteredCount} component{filteredCount !== 1 ? 's' : ''} · {folders.length} folder{folders.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Content Area */}
