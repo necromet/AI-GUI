@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Lock, CheckCircle2, ArrowRight, Package, Database, Workflow, Layers, Terminal, FileSearch } from 'lucide-react';
+import { MessageSquare, ArrowRight, Package, Database, Workflow, Layers, Terminal, FileSearch, StickyNote } from 'lucide-react';
 import NeuralBackground from './NeuralBackground';
 import { TextGlitch } from './TextGlitch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ const PYTHON_PASSWORD = process.env.PYTHON_PASSWORD;
 const LIBRARY_PASSWORD = process.env.LIBRARY_PASSWORD;
 const DATABASE_PASSWORD = process.env.DATABASE_PASSWORD;
 const AGENT_BUILDER_PASSWORD = process.env.AGENT_BUILDER_PASSWORD;
+const NOTES_PASSWORD = process.env.NOTES_PASSWORD;
 
 interface InlinePasswordModalProps {
   isOpen: boolean;
@@ -104,6 +105,7 @@ interface ModeSelectorProps {
   isLibraryAuthenticated: boolean;
   isDatabaseAuthenticated: boolean;
   isAgentBuilderAuthenticated: boolean;
+  isNotesAuthenticated: boolean;
   onSelectChat: () => void;
   onSelectRag: () => void;
   onSelectSkema: () => void;
@@ -111,6 +113,7 @@ interface ModeSelectorProps {
   onSelectLibrary: () => void;
   onSelectDatabase: () => void;
   onSelectAgentBuilder: () => void;
+  onSelectNotes: () => void;
   onUnlockChat: () => void;
   onUnlockRag: () => void;
   onUnlockSkema: () => void;
@@ -118,6 +121,7 @@ interface ModeSelectorProps {
   onUnlockLibrary: () => void;
   onUnlockDatabase: () => void;
   onUnlockAgentBuilder: () => void;
+  onUnlockNotes: () => void;
 }
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({
@@ -128,6 +132,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
   isLibraryAuthenticated,
   isDatabaseAuthenticated,
   isAgentBuilderAuthenticated,
+  isNotesAuthenticated,
   onSelectChat,
   onSelectRag,
   onSelectSkema,
@@ -135,6 +140,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
   onSelectLibrary,
   onSelectDatabase,
   onSelectAgentBuilder,
+  onSelectNotes,
   onUnlockChat,
   onUnlockRag,
   onUnlockSkema,
@@ -142,6 +148,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
   onUnlockLibrary,
   onUnlockDatabase,
   onUnlockAgentBuilder,
+  onUnlockNotes,
 }) => {
   const [neonColor, setNeonColor] = useState('#f87171');
   const [showChatPasswordModal, setShowChatPasswordModal] = useState(false);
@@ -151,6 +158,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
   const [showLibraryPasswordModal, setShowLibraryPasswordModal] = useState(false);
   const [showDatabasePasswordModal, setShowDatabasePasswordModal] = useState(false);
   const [showAgentBuilderPasswordModal, setShowAgentBuilderPasswordModal] = useState(false);
+  const [showNotesPasswordModal, setShowNotesPasswordModal] = useState(false);
 
   useEffect(() => {
     const color = getComputedStyle(document.documentElement).getPropertyValue('--neon-color').trim();
@@ -213,6 +221,14 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
+  const handleNotesClick = () => {
+    if (isNotesAuthenticated) {
+      onSelectNotes();
+    } else {
+      setShowNotesPasswordModal(true);
+    }
+  };
+
   const handleChatPasswordSuccess = () => {
     onUnlockChat();
     onSelectChat();
@@ -253,6 +269,12 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
     onUnlockAgentBuilder();
     onSelectAgentBuilder();
     setShowAgentBuilderPasswordModal(false);
+  };
+
+  const handleNotesPasswordSuccess = () => {
+    onUnlockNotes();
+    onSelectNotes();
+    setShowNotesPasswordModal(false);
   };
 
   const cards = [
@@ -312,63 +334,99 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       locked: !isAgentBuilderAuthenticated,
       onClick: handleAgentBuilderClick,
     },
+    {
+      id: 'notes' as const,
+      icon: StickyNote,
+      title: 'Notes',
+      description: 'Notion-style notes with blocks, pages, and markdown',
+      locked: !isNotesAuthenticated,
+      onClick: handleNotesClick,
+    },
   ];
 
   return (
     <div className="relative flex min-h-screen items-center justify-center">
       <NeuralBackground className="absolute inset-0 z-0" color={neonColor} trailOpacity={0.12} particleCount={600} speed={0.8} />
 
-      <div className="relative z-10 w-full max-w-7xl mx-4 px-4">
-        <div className="text-center mb-12">
+      <div className="relative z-10 w-full max-w-6xl mx-4 px-4">
+        <div className="text-center mb-16">
           <TextGlitch text="EDWARD:LABS" />
-          <p className="text-base mt-4" style={{ color: 'var(--text-500)' }}>
+          <p className="text-[13px] mt-4 tracking-[0.2em] uppercase" style={{ color: 'var(--text-500)' }}>
             AI-powered tools for the curious
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-5 md:gap-6 max-w-3xl mx-auto">
           {cards.map((card, index) => (
             <button
               key={card.id}
               onClick={card.onClick}
-              className="group relative p-6 md:p-8 rounded-2xl border text-left transition-all duration-300 animate-fade-in"
+              className="group relative flex flex-col items-center text-center animate-fade-in cursor-pointer rounded-2xl p-5 transition-all duration-300"
               style={{
-                backgroundColor: 'rgba(20, 20, 20, 0.7)',
-                backdropFilter: 'blur(20px)',
-                borderColor: 'rgba(255, 255, 255, 0.06)',
                 opacity: 0,
                 animationFillMode: 'forwards',
-                animationDelay: `${index * 100}ms`,
+                animationDelay: `${index * 60}ms`,
+                backgroundColor: 'rgba(12, 12, 12, 0.92)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
-                e.currentTarget.style.boxShadow = '0 8px 40px rgba(var(--neon-rgb), 0.12)';
+                e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              <div className="flex items-center justify-between mb-4">
+              {/* Icon container — the hero */}
+              <div className="relative mb-3">
                 <div
-                  className="p-3 rounded-xl"
-                  style={{ background: 'rgba(var(--neon-rgb), 0.1)' }}
+                  className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110"
+                  style={{
+                    backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
+                    border: '1px solid rgba(var(--neon-rgb), 0.15)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.18)';
+                    e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.3)';
+                    e.currentTarget.style.boxShadow = '0 0 28px rgba(var(--neon-rgb), 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(var(--neon-rgb), 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(var(--neon-rgb), 0.15)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
                 >
-                  <card.icon size={24} style={{ color: 'var(--neon-color)' }} />
+                  <card.icon size={28} strokeWidth={1.5} style={{ color: 'var(--neon-color)' }} />
                 </div>
-                {card.locked ? (
-                  <Lock size={16} style={{ color: 'var(--text-500)' }} />
-                ) : (
-                  <CheckCircle2 size={16} style={{ color: 'var(--neon-color)' }} />
-                )}
+
+                {/* Status dot — top right corner of icon */}
+                <div
+                  className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2"
+                  style={{
+                    backgroundColor: card.locked ? 'rgba(255,255,255,0.08)' : 'var(--neon-color)',
+                    borderColor: 'var(--bg-100)',
+                    boxShadow: card.locked ? 'none' : '0 0 8px rgba(var(--neon-rgb), 0.5)',
+                  }}
+                />
               </div>
 
-              <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-100)' }}>
+              {/* Title */}
+              <h3
+                className="text-[14px] font-semibold tracking-tight leading-tight"
+                style={{ color: 'var(--text-100)' }}
+              >
                 {card.title}
               </h3>
-              <p className="text-sm" style={{ color: 'var(--text-500)' }}>
+
+              {/* Description — hover only */}
+              <p
+                className="text-[11px] leading-snug mt-1.5 max-w-[160px] opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                style={{ color: 'var(--text-500)' }}
+              >
                 {card.description}
               </p>
             </button>
@@ -437,6 +495,15 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
         onSuccess={handleAgentBuilderPasswordSuccess}
         onClose={() => setShowAgentBuilderPasswordModal(false)}
         correctPassword={AGENT_BUILDER_PASSWORD}
+      />
+
+      <InlinePasswordModal
+        isOpen={showNotesPasswordModal}
+        title="Unlock Notes"
+        subtitle="Enter your password to access the notes app"
+        onSuccess={handleNotesPasswordSuccess}
+        onClose={() => setShowNotesPasswordModal(false)}
+        correctPassword={NOTES_PASSWORD}
       />
     </div>
   );

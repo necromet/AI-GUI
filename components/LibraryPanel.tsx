@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Search, Plus, X, Package, RefreshCw, Sparkles, LayoutGrid, Folder, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Plus, X, Package, RefreshCw, Sparkles, LayoutGrid, List, Folder, ChevronRight, Loader2 } from 'lucide-react';
 import { LibraryComponent, LibraryFolder, ModelConfig } from '../types';
 import * as db from '../services/apiDatabaseAdapter';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CATEGORIES } from './library/constants';
 import { ComponentCard } from './library/ComponentCard';
 import { FolderCard } from './library/FolderCard';
+import { ListView } from './library/ListView';
 import { CreateComponentDialog } from './library/CreateComponentDialog';
 import { CreateFolderDialog } from './library/CreateFolderDialog';
 import { EditFolderDialog } from './library/EditFolderDialog';
@@ -49,10 +50,24 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'component' | 'folder'; id: string; name: string } | null>(null);
   const pageSize = 24;
 
+  const [viewMode, setViewMode] = useState<string>(() => {
+    return localStorage.getItem('edward:labs_libraryViewMode') || 'grid-3';
+  });
+
+  const gridClass = viewMode === 'list'
+    ? 'grid grid-cols-1 gap-3'
+    : viewMode === 'grid-4'
+      ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+      : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+
   const activeFolder = useMemo(() => {
     if (!routeFolderId || folders.length === 0) return null;
-    return folders.find(f => f.id === routeFolderId) || null;
-  }, [routeFolderId, folders]);
+    const found = folders.find(f => f.id === routeFolderId);
+    if (routeFolderId && folders.length > 0 && !found) {
+      setTimeout(() => navigate('/library', { replace: true }), 0);
+    }
+    return found || null;
+  }, [routeFolderId, folders, navigate]);
 
   const loadComponents = useCallback(async () => {
     setIsLoading(true);
@@ -124,6 +139,10 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
     window.addEventListener('library-reload', handler);
     return () => window.removeEventListener('library-reload', handler);
   }, [loadComponents, loadFolders]);
+
+  useEffect(() => {
+    localStorage.setItem('edward:labs_libraryViewMode', viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     setActiveCategory('all');
@@ -313,6 +332,8 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
         }
         onNotification?.('Folder deleted', 'success');
         loadComponents();
+        loadFolders();
+        window.dispatchEvent(new CustomEvent('library-reload'));
       }
     } catch (err: any) {
       onNotification?.(err.message, 'error');
@@ -391,6 +412,27 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
               <X size={12} />
             </button>
           )}
+        </div>
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-200)', border: '1px solid var(--border-300)' }}>
+          {[
+            { key: 'grid-3', Icon: LayoutGrid, tip: 'Grid (3-col)' },
+            { key: 'grid-4', Icon: LayoutGrid, tip: 'Grid (4-col)' },
+            { key: 'list', Icon: List, tip: 'List' },
+          ].map(v => (
+            <button
+              key={v.key}
+              onClick={() => setViewMode(v.key)}
+              title={v.tip}
+              className="p-1.5 rounded-md transition-all duration-150"
+              style={{
+                backgroundColor: viewMode === v.key ? 'var(--bg-100)' : 'transparent',
+                color: viewMode === v.key ? 'var(--neon-color)' : 'var(--text-500)',
+                boxShadow: viewMode === v.key ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+              }}
+            >
+              <v.Icon size={13} />
+            </button>
+          ))}
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
@@ -613,85 +655,104 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ theme = 'dark', modelConfig
           </div>
         ) : (
           <>
-            {/* Folders Grid (only on root view) */}
-            {showFolders && folders.length > 0 && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Folder size={14} style={{ color: 'var(--text-500)' }} />
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
-                    Folders
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {folders.map((folder, idx) => (
-                    <FolderCard
-                      key={folder.id}
-                      folder={folder}
-                      index={idx}
-                      onSelect={handleSelectFolder}
-                      onEdit={handleEditFolder}
-                      onDelete={handleDeleteFolder}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Components Grid */}
-            {components.length > 0 && (
-              <div>
+            {viewMode === 'list' ? (
+              <ListView
+                folders={showFolders ? folders : []}
+                components={components}
+                copiedId={copiedId}
+                onSelectComponent={handleSelectComponent}
+                onCopy={handleCopy}
+                onDuplicate={handleDuplicate}
+                onDeleteComponent={handleDelete}
+                onEditComponent={handleEdit}
+                onMoveToFolder={handleMoveToFolder}
+                onSelectFolder={handleSelectFolder}
+                onEditFolder={handleEditFolder}
+                onDeleteFolder={handleDeleteFolder}
+              />
+            ) : (
+              <>
+                {/* Folders Grid (only on root view) */}
                 {showFolders && folders.length > 0 && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <LayoutGrid size={14} style={{ color: 'var(--text-500)' }} />
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
-                      {activeCategory !== 'all' ? CATEGORIES.find(c => c.key === activeCategory)?.label || 'Components' : 'Components'}
-                    </span>
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Folder size={14} style={{ color: 'var(--text-500)' }} />
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
+                        Folders
+                      </span>
+                    </div>
+                    <div className={gridClass}>
+                      {folders.map((folder, idx) => (
+                        <FolderCard
+                          key={folder.id}
+                          folder={folder}
+                          index={idx}
+                          onSelect={handleSelectFolder}
+                          onEdit={handleEditFolder}
+                          onDelete={handleDeleteFolder}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {components.map((comp, idx) => (
-                    <ComponentCard
-                      key={comp.id}
-                      component={comp}
-                      index={idx}
-                      copiedId={copiedId}
-                      onSelect={handleSelectComponent}
-                      onCopy={handleCopy}
-                      onDuplicate={handleDuplicate}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onMoveToFolder={handleMoveToFolder}
-                      folders={folders}
-                    />
-                  ))}
-                </div>
-                {hasMore && !searchQuery && (
-                  <div className="flex justify-center mt-6">
-                    <Button
-                      variant="outline"
-                      onClick={loadMore}
-                      disabled={isLoadingMore}
-                      className="gap-2 rounded-xl text-xs h-9 px-6"
-                      style={{
-                        backgroundColor: 'var(--bg-200)',
-                        color: 'var(--text-300)',
-                        borderColor: 'var(--border-300)',
-                      }}
-                    >
-                      {isLoadingMore ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          Load More ({components.length} of {total})
-                        </>
-                      )}
-                    </Button>
+
+                {/* Components Grid */}
+                {components.length > 0 && (
+                  <div>
+                    {showFolders && folders.length > 0 && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <LayoutGrid size={14} style={{ color: 'var(--text-500)' }} />
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>
+                          {activeCategory !== 'all' ? CATEGORIES.find(c => c.key === activeCategory)?.label || 'Components' : 'Components'}
+                        </span>
+                      </div>
+                    )}
+                    <div className={gridClass}>
+                      {components.map((comp, idx) => (
+                        <ComponentCard
+                          key={comp.id}
+                          component={comp}
+                          index={idx}
+                          copiedId={copiedId}
+                          onSelect={handleSelectComponent}
+                          onCopy={handleCopy}
+                          onDuplicate={handleDuplicate}
+                          onDelete={handleDelete}
+                          onEdit={handleEdit}
+                          onMoveToFolder={handleMoveToFolder}
+                          folders={folders}
+                        />
+                      ))}
+                    </div>
+                    {hasMore && !searchQuery && (
+                      <div className="flex justify-center mt-6">
+                        <Button
+                          variant="outline"
+                          onClick={loadMore}
+                          disabled={isLoadingMore}
+                          className="gap-2 rounded-xl text-xs h-9 px-6"
+                          style={{
+                            backgroundColor: 'var(--bg-200)',
+                            color: 'var(--text-300)',
+                            borderColor: 'var(--border-300)',
+                          }}
+                        >
+                          {isLoadingMore ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              Load More ({components.length} of {total})
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </>
         )}

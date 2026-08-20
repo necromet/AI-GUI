@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp, Bot, Workflow, MessageSquare, Wrench, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { Plus, PanelLeftClose, Settings as SettingsIcon, Trash2, BarChart3, Sun, Moon, Database, Puzzle, Home, Layers, Package, ArrowLeft, FileCode, FileText, FileJson, FileType, Eye, Code, Terminal, FileCode2, ChevronRight, ChevronDown, ArrowUp, ArrowDown, RefreshCw, ChevronUp, Bot, Workflow, MessageSquare, Wrench, LayoutGrid, SlidersHorizontal, StickyNote, MoreHorizontal, Star, StarOff } from 'lucide-react';
 import { ChatSession, Mode, ModelConfig } from '../types';
 import type { LibraryComponentFile, LibraryFolder } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
 import type { DatabaseSidebarControls } from './DatabasePanel';
 import type { AgentBuilderSidebarControls } from './agent-builder/AgentBuilderPanel';
+import type { NotesControls } from './notes/NotesPanel';
 import DatabaseSchemaBrowser from './DatabaseSchemaBrowser';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
 import { SECTION_TYPES, COLORS } from './canvas/constants';
@@ -42,6 +43,7 @@ interface SidebarProps {
   canvasControls?: CanvasSidebarControls | null;
   dbSidebarControls?: DatabaseSidebarControls | null;
   agentBuilderControls?: AgentBuilderSidebarControls | null;
+  notesControls?: NotesControls | null;
 }
 
 function getFileIcon(filename: string) {
@@ -763,6 +765,148 @@ const AgentBuilderSidebarContent: React.FC<{ controls: AgentBuilderSidebarContro
   );
 };
 
+const NoteSidebarItem: React.FC<{
+  note: any;
+  depth: number;
+  selectedNoteId: string | null;
+  controls: NotesControls;
+}> = ({ note, depth, selectedNoteId, controls }) => {
+  const [expanded, setExpanded] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(note.title);
+  const hasChildren = note.children && note.children.length > 0;
+  const isActive = selectedNoteId === note.id;
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
+
+  const handleRename = () => {
+    if (renameValue.trim() && renameValue !== note.title) {
+      controls.onRenameNote(note.id, renameValue.trim());
+    }
+    setIsRenaming(false);
+  };
+
+  return (
+    <div>
+      <div
+        className={`group flex items-center gap-1 px-2 py-1 rounded-lg cursor-pointer transition-colors relative ${
+          isActive ? 'bg-[var(--bg-200)]' : 'hover:bg-[var(--bg-200)]'
+        }`}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        onClick={() => controls.onSelectNote(note.id)}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+          className="w-4 h-4 flex items-center justify-center flex-shrink-0"
+          style={{ color: 'var(--text-500)', visibility: hasChildren ? 'visible' : 'hidden' }}
+        >
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+
+        <span className="text-sm flex-shrink-0 w-5 text-center">{note.icon}</span>
+
+        {isRenaming ? (
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRename();
+              if (e.key === 'Escape') setIsRenaming(false);
+            }}
+            className="flex-1 min-w-0 text-sm bg-transparent border-none outline-none px-1"
+            style={{ color: 'var(--text-100)' }}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="flex-1 min-w-0 text-sm truncate" style={{ color: isActive ? 'var(--text-100)' : 'var(--text-300)' }}>
+            {note.title || 'Untitled'}
+          </span>
+        )}
+
+        {note.isFavorite && (
+          <Star size={10} fill="var(--neon-color)" style={{ color: 'var(--neon-color)' }} className="flex-shrink-0" />
+        )}
+
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--bg-300)] transition-colors"
+            style={{ color: 'var(--text-500)' }}
+          >
+            <MoreHorizontal size={12} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); controls.onCreateNote(note.id); }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--bg-300)] transition-colors"
+            style={{ color: 'var(--text-500)' }}
+            title="Add sub-page"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+
+        {showMenu && (
+          <div
+            ref={menuRef}
+            className="absolute left-full top-0 z-50 w-44 rounded-lg border shadow-lg py-1 ml-1"
+            style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => { setIsRenaming(true); setShowMenu(false); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--bg-200)] transition-colors cursor-pointer"
+              style={{ color: 'var(--text-300)' }}
+            >
+              <FileText size={12} /> Rename
+            </button>
+            <button
+              onClick={() => { controls.onToggleFavorite(note.id, note.isFavorite); setShowMenu(false); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--bg-200)] transition-colors cursor-pointer"
+              style={{ color: 'var(--text-300)' }}
+            >
+              {note.isFavorite ? <StarOff size={12} /> : <Star size={12} />}
+              {note.isFavorite ? 'Unfavorite' : 'Favorite'}
+            </button>
+            <div className="h-px my-1" style={{ backgroundColor: 'var(--border-300)' }} />
+            <button
+              onClick={() => { controls.onDeleteNote(note.id); setShowMenu(false); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--bg-200)] transition-colors cursor-pointer"
+              style={{ color: '#ef4444' }}
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          </div>
+        )}
+      </div>
+
+      {expanded && hasChildren && (
+        <div>
+          {note.children!.map((child: any) => (
+            <NoteSidebarItem
+              key={child.id}
+              note={child}
+              depth={depth + 1}
+              selectedNoteId={selectedNoteId}
+              controls={controls}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
@@ -781,6 +925,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   canvasControls,
   dbSidebarControls,
   agentBuilderControls,
+  notesControls,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -808,6 +953,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isPythonMode = location.pathname.startsWith('/python');
   const isLibraryMode = location.pathname.startsWith('/library');
   const isDatabaseMode = location.pathname.startsWith('/database');
+  const isNotesMode = location.pathname.startsWith('/notes');
   const isSettingsPage = location.pathname === '/settings';
 
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
@@ -829,7 +975,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('library-reload', handler);
   }, [isLibraryMode, fetchLibraryFolders]);
 
-  const currentMode: Mode = isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : 'chat';
+  const currentMode: Mode = isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isNotesMode ? 'notes' : 'chat';
 
   const prevPathRef = useRef<string>('/chat');
   useEffect(() => {
@@ -941,7 +1087,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 color: 'var(--neon-color)',
               }}
             >
-              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : isSettingsPage ? 'Settings' : ''}
+              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : currentMode === 'notes' ? 'Notes' : isSettingsPage ? 'Settings' : ''}
             </Badge>
           </div>
           <div className="absolute flex items-center right-3 top-4">
@@ -1264,6 +1410,102 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-sm font-semibold mb-1.5 text-[var(--text-300)]">Database Explorer</p>
                 <p className="text-xs leading-relaxed text-[var(--text-500)]">
                   Connect to PostgreSQL databases, browse schemas, and run SQL queries.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : currentMode === 'notes' ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {notesControls ? (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="px-3 pt-3 pb-2">
+                  <button
+                    onClick={() => notesControls.onCreateNote(null)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
+                      border: '1px solid rgba(var(--neon-rgb), 0.12)',
+                      color: 'var(--text-100)',
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
+                      style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.15)' }}
+                    >
+                      <Plus size={13} style={{ color: 'var(--neon-color)' }} />
+                    </div>
+                    <span>New page</span>
+                  </button>
+                </div>
+
+                <ScrollArea className="flex-1 px-3 pt-2">
+                  {/* Favorites */}
+                  {(() => {
+                    const collectFavorites = (notes: typeof notesControls.notes): typeof notesControls.notes => {
+                      const result: typeof notesControls.notes = [];
+                      for (const n of notes) {
+                        if (n.isFavorite) result.push(n);
+                        if (n.children) result.push(...collectFavorites(n.children));
+                      }
+                      return result;
+                    };
+                    const favorites = collectFavorites(notesControls.notes);
+                    return favorites.length > 0 ? (
+                    <div className="mb-2">
+                      <div className="px-2 pb-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
+                          Favorites
+                        </span>
+                      </div>
+                      {favorites.map(note => (
+                        <NoteSidebarItem
+                          key={note.id}
+                          note={note}
+                          depth={0}
+                          selectedNoteId={notesControls.selectedNoteId}
+                          controls={notesControls}
+                        />
+                      ))}
+                    </div>
+                    ) : null;
+                  })()}
+
+                  {/* All pages */}
+                  <div>
+                    <div className="px-2 pb-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
+                        Pages
+                      </span>
+                    </div>
+                    {notesControls.notes.filter(n => !n.parentId).length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
+                          <FileText size={18} className="text-[var(--text-500)]" />
+                        </div>
+                        <p className="text-xs font-medium text-[var(--text-500)]">No pages yet</p>
+                      </div>
+                    ) : (
+                      notesControls.notes.filter(n => !n.parentId).map(note => (
+                        <NoteSidebarItem
+                          key={note.id}
+                          note={note}
+                          depth={0}
+                          selectedNoteId={notesControls.selectedNoteId}
+                          controls={notesControls}
+                        />
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.12), rgba(var(--neon-rgb), 0.04))' }}>
+                  <StickyNote size={22} style={{ color: 'var(--neon-color)' }} />
+                </div>
+                <p className="text-sm font-semibold mb-1.5 text-[var(--text-300)]">Notes</p>
+                <p className="text-xs leading-relaxed text-[var(--text-500)]">
+                  Notion-style notes with blocks, pages, and markdown.
                 </p>
               </div>
             )}

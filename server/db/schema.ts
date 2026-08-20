@@ -211,6 +211,22 @@ CREATE TABLE IF NOT EXISTS database_connections (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Notes (Notion-like pages with block-based content)
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT 'Untitled',
+  icon TEXT DEFAULT '📄',
+  cover_url TEXT,
+  parent_id TEXT REFERENCES notes(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  blocks_json TEXT NOT NULL DEFAULT '[]',
+  is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_id);
+CREATE INDEX IF NOT EXISTS idx_notes_sort ON notes(sort_order);
+
 -- Agent Builder: tools
 CREATE TABLE IF NOT EXISTS agent_builder_tools (
   id TEXT PRIMARY KEY,

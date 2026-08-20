@@ -56,7 +56,7 @@ export type ModelType = 'chat' | 'tts' | 'tts-voicedesign' | 'tts-voiceclone' | 
 
 export type ConversationType = 'chat' | 'rag' | 'skema' | 'python' | 'library';
 
-export type Mode = 'selector' | 'chat' | 'rag' | 'skema' | 'python' | 'library' | 'database' | 'agent-builder';
+export type Mode = 'selector' | 'chat' | 'rag' | 'skema' | 'python' | 'library' | 'database' | 'agent-builder' | 'notes';
 
 export interface LibraryComponent {
   id: string;
@@ -233,4 +233,64 @@ export interface TableInfo {
 export interface SchemaInfo {
   schemas: string[];
   tables: TableInfo[];
+}
+
+// ===== Notes Types =====
+
+export type NoteBlockType =
+  | 'paragraph'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'bullet_list'
+  | 'numbered_list'
+  | 'todo'
+  | 'toggle'
+  | 'code'
+  | 'callout'
+  | 'quote'
+  | 'divider'
+  | 'image';
+
+export interface NoteBlock {
+  id: string;
+  type: NoteBlockType;
+  content: string;
+  props?: {
+    checked?: boolean;
+    language?: string;
+    emoji?: string;
+    collapsed?: boolean;
+    imageUrl?: string;
+    caption?: string;
+    level?: number;
+  };
+  children?: NoteBlock[];
+}
+
+export interface TipTapDocument {
+  type: 'doc';
+  content: TipTapNode[];
+}
+
+export interface TipTapNode {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: TipTapNode[];
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+  text?: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  icon: string;
+  coverUrl?: string;
+  parentId?: string | null;
+  sortOrder: number;
+  blocks: NoteBlock[] | TipTapDocument;
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+  children?: Note[];
 }

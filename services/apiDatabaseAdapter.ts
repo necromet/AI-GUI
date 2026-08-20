@@ -495,3 +495,72 @@ export const pingDbConnection = async (connectionId: string) => {
     method: 'POST',
   });
 };
+
+// ===== Notes =====
+
+export const getNotes = async () => {
+  return cacheFetch('notes:tree', async () => {
+    const data = await apiFetch<{ notes: any[] }>('/notes');
+    return data.notes;
+  });
+};
+
+export const getNotesFlat = async () => {
+  return cacheFetch('notes:flat', async () => {
+    const data = await apiFetch<{ notes: any[] }>('/notes/flat');
+    return data.notes;
+  });
+};
+
+export const getNote = async (id: string) => {
+  const data = await apiFetch<{ note: any }>(`/notes/${id}`);
+  return data.note;
+};
+
+export const createNote = async (title?: string, icon?: string, parentId?: string | null, blocks?: any[]) => {
+  const data = await apiFetch<{ note: any }>('/notes', {
+    method: 'POST',
+    body: JSON.stringify({ title, icon, parentId, blocks }),
+  });
+  cacheInvalidatePrefix('notes:');
+  return data.note;
+};
+
+export const saveNote = async (id: string, updates: {
+  title?: string;
+  icon?: string;
+  coverUrl?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  blocks?: any[];
+  isFavorite?: boolean;
+}) => {
+  const data = await apiFetch<{ note: any }>(`/notes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  cacheInvalidatePrefix('notes:');
+  return data.note;
+};
+
+export const deleteNote = async (id: string) => {
+  await apiFetch<any>(`/notes/${id}`, { method: 'DELETE' });
+  cacheInvalidatePrefix('notes:');
+};
+
+export const moveNote = async (id: string, parentId: string | null, sortOrder?: number) => {
+  const data = await apiFetch<{ note: any }>(`/notes/${id}/move`, {
+    method: 'PUT',
+    body: JSON.stringify({ parentId, sortOrder }),
+  });
+  cacheInvalidatePrefix('notes:');
+  return data.note;
+};
+
+export const reorderNotes = async (order: { id: string; sortOrder: number }[]) => {
+  await apiFetch<any>('/notes/batch/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ order }),
+  });
+  cacheInvalidatePrefix('notes:');
+};
