@@ -217,10 +217,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
   const handleToggleChange = (value: string) => {
     if (value === "search") {
       setShowSearch((prev) => !prev);
-      setShowThink(false);
     } else if (value === "think") {
       setShowThink((prev) => !prev);
-      setShowSearch(false);
     }
   };
 
@@ -462,7 +460,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                   <ModelSelect currentModel={currentModel} models={models} onSelect={onSelectModel} theme={theme} />
                 </div>
               )}
-              {supportsVision ? (
+              {supportsVision && (
               <PromptInputAction tooltip="Upload image or document">
                   <button
                   onClick={() => uploadInputRef.current?.click()}
@@ -483,30 +481,6 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                       if (e.target) e.target.value = "";
                     }}
                     accept="image/*,.pdf,.doc,.docx,.xlsx,.txt,.csv,.md,.html,.json,.log,.xml,.yaml,.yml"
-                  />
-                </button>
-              </PromptInputAction>
-              ) : (
-              <PromptInputAction tooltip="Upload document">
-                  <button
-                  onClick={() => uploadInputRef.current?.click()}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors"
-                  style={{ color: 'var(--text-500)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-300)'; e.currentTarget.style.color = 'var(--text-300)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-500)'; }}
-                  disabled={isRecording}
-                >
-                  <Paperclip className="h-5 w-5 transition-colors" />
-                  <input
-                    ref={uploadInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) processFiles(Array.from(e.target.files));
-                      if (e.target) e.target.value = "";
-                    }}
-                    accept=".pdf,.doc,.docx,.xlsx,.txt,.csv,.md,.html,.json,.log,.xml,.yaml,.yml"
                   />
                 </button>
               </PromptInputAction>

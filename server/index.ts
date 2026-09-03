@@ -35,6 +35,7 @@ const { default: pythonRoutes } = await import('./routes/python');
 const { default: databaseRoutes } = await import('./routes/database');
 const { default: agentBuilderRoutes } = await import('./routes/agentBuilder');
 const { default: workflowRoutes } = await import('./routes/workflows');
+const { default: notesRoutes } = await import('./routes/notes');
 const { initializeDatabaseWithRetry } = await import('./db');
 
 const app = express();
@@ -99,6 +100,7 @@ app.use('/api/python', pythonRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/agent-builder', agentBuilderRoutes);
 app.use('/api/workflows', workflowRoutes);
+app.use('/api/notes', notesRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[server] Unhandled error:', err);

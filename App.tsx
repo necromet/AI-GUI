@@ -32,8 +32,11 @@ import { SkemaControls } from './components/SkemaEditor';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 import DatabasePanel from './components/DatabasePanel';
+import { AnimatedShaderBackground } from './components/AuroraHero';
 import type { DatabaseSidebarControls } from './components/DatabasePanel';
 import type { DatabaseHeaderControls } from './components/DatabasePanel';
+import { NotesPanel } from './components/notes/NotesPanel';
+import type { NotesControls } from './components/notes/NotesPanel';
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 const isDocumentFile = (file: File) => {
@@ -191,8 +194,9 @@ const App: React.FC = () => {
   const isLibraryMode = location.pathname.startsWith('/library');
   const isDatabaseMode = location.pathname.startsWith('/database');
   const isAgentBuilderMode = location.pathname.startsWith('/agent-builder');
+  const isNotesMode = location.pathname.startsWith('/notes');
   const isSettingsPage = location.pathname === '/settings';
-  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isAgentBuilderMode ? 'agent-builder' : 'library';
+  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isAgentBuilderMode ? 'agent-builder' : isNotesMode ? 'notes' : 'library';
 
   const skemaProjectId = (() => {
     const match = location.pathname.match(/^\/skema\/([^/]+)$/);
@@ -224,6 +228,9 @@ const App: React.FC = () => {
   });
   const [isAgentBuilderAuthenticated, setIsAgentBuilderAuthenticated] = useState(() => {
     return !!sessionStorage.getItem('edward:labs_agent-builder_session');
+  });
+  const [isNotesAuthenticated, setIsNotesAuthenticated] = useState(() => {
+    return !!sessionStorage.getItem('edward:labs_notes_session');
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [htmlFullscreenCode, setHtmlFullscreenCode] = useState<string | null>(null);
@@ -273,6 +280,7 @@ const App: React.FC = () => {
   const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
   const [agentBuilderControls, setAgentBuilderControls] = useState<AgentBuilderSidebarControls | null>(null);
+  const [notesControls, setNotesControls] = useState<NotesControls | null>(null);
 
   useEffect(() => {
     if (!isDatabaseMode) {
@@ -1041,6 +1049,7 @@ const App: React.FC = () => {
         isLibraryAuthenticated={isLibraryAuthenticated}
         isDatabaseAuthenticated={isDatabaseAuthenticated}
         isAgentBuilderAuthenticated={isAgentBuilderAuthenticated}
+        isNotesAuthenticated={isNotesAuthenticated}
         onSelectChat={() => navigate('/chat')}
         onSelectRag={() => navigate('/rag')}
         onSelectSkema={() => navigate('/skema')}
@@ -1048,6 +1057,7 @@ const App: React.FC = () => {
         onSelectLibrary={() => navigate('/library')}
         onSelectDatabase={() => navigate('/database')}
         onSelectAgentBuilder={() => navigate('/agent-builder')}
+        onSelectNotes={() => navigate('/notes')}
         onUnlockChat={() => {
           setIsChatAuthenticated(true);
           sessionStorage.setItem('edward:labs_chat_session', 'true');
@@ -1075,6 +1085,10 @@ const App: React.FC = () => {
         onUnlockAgentBuilder={() => {
           setIsAgentBuilderAuthenticated(true);
           sessionStorage.setItem('edward:labs_agent-builder_session', 'true');
+        }}
+        onUnlockNotes={() => {
+          setIsNotesAuthenticated(true);
+          sessionStorage.setItem('edward:labs_notes_session', 'true');
         }}
       />
     );
@@ -1126,6 +1140,7 @@ const App: React.FC = () => {
         canvasControls={canvasSidebarControls}
         dbSidebarControls={dbSidebarControls}
         agentBuilderControls={agentBuilderControls}
+        notesControls={notesControls}
       />
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300" style={{ backgroundColor: 'var(--bg-100)' }}>
@@ -1143,7 +1158,7 @@ const App: React.FC = () => {
 
         {/* Top bar — hidden on settings page */}
         {isSettingsPage ? (
-          <RequireAuth isAuth={isChatAuthenticated || isRagAuthenticated || isSkemaAuthenticated || isPythonAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated}>
+          <RequireAuth isAuth={isChatAuthenticated || isRagAuthenticated || isSkemaAuthenticated || isPythonAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated || isNotesAuthenticated}>
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -1442,14 +1457,16 @@ const App: React.FC = () => {
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                        <div className="relative mb-8">
-                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      <AnimatedShaderBackground>
+                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
+                          <div className="relative mb-8">
+                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                          </div>
+                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+                            How can I help you today?
+                          </h2>
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                          How can I help you today?
-                        </h2>
-                      </div>
+                      </AnimatedShaderBackground>
                     ) : (
                       <ChatMessageList
                         messages={messages}
@@ -1466,14 +1483,16 @@ const App: React.FC = () => {
                 <Route path="/chat/:conversationId" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center p-8 text-center pb-48">
-                        <div className="relative mb-8">
-                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                      <AnimatedShaderBackground>
+                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
+                          <div className="relative mb-8">
+                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+                          </div>
+                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+                            How can I help you today?
+                          </h2>
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                          How can I help you today?
-                        </h2>
-                      </div>
+                      </AnimatedShaderBackground>
                     ) : (
                       <ChatMessageList
                         messages={messages}
@@ -1638,6 +1657,28 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
+                <Route path="/notes" element={
+                  <RequireAuth isAuth={isNotesAuthenticated}>
+                    <div className="h-full">
+                      <NotesPanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        onControlsChange={setNotesControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
+                <Route path="/notes/:noteId" element={
+                  <RequireAuth isAuth={isNotesAuthenticated}>
+                    <div className="h-full">
+                      <NotesPanel
+                        theme={theme}
+                        onNotification={handleNotification}
+                        onControlsChange={setNotesControls}
+                      />
+                    </div>
+                  </RequireAuth>
+                } />
                         <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
@@ -1645,7 +1686,7 @@ const App: React.FC = () => {
             {/* Input Area — chat mode only */}
             {modelType === 'chat' && isChatMode && (
               <div
-                className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4"
+                className="absolute bottom-0 left-0 w-full pt-20 pb-6 px-4 z-10"
                 style={{
                   background: `linear-gradient(to top, var(--bg-100) 50%, transparent)`,
                 }}
