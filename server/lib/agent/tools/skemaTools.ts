@@ -1,15 +1,8 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import {
-  toolExecuteCode,
-  toolWebBrowse,
-  toolSearchWeb,
-  toolEditHtml,
-  toolGenerateHtml,
-  toolGenerateSpec,
-  toolEditSpec,
-  type EditOperation,
-} from '../../../services/agentService';
+import { toolWebBrowse, toolSearchWeb } from '../../../services/tools/webTools';
+import { toolExecuteCode } from '../../../services/tools/codeTools';
+import { toolEditHtml, toolGenerateHtml, toolGenerateSpec, toolEditSpec, type EditOperation } from '../../../services/tools/htmlTools';
 import { buildCanvasTools } from '../../../services/canvasAgentTools';
 import * as skemaLibrary from '../../../services/skemaLibraryService';
 

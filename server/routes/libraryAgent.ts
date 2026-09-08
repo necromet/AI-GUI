@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { detectLanguage, buildLanguageInstruction, streamChatCompletion, readSSEStream, ChatMessage } from '../services/mimoService';
+import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
 import * as library from '../services/libraryService';
 import { setVerifyResult } from '../services/verifyService';
-import { buildLibraryToolPrompt, executeLibraryTool, parseToolCalls, convertMessagesForPromptBased } from '../services/agentService';
+import { buildLibraryToolPrompt, executeLibraryTool, convertMessagesForPromptBased } from '../services/agentService';
+import { runAgentLoopSafe } from '../lib/agentRunner';
+import { buildSystemPrompt, sendSSEError } from '../lib/sseHelpers';
 
 const router = Router();
 
@@ -202,8 +204,6 @@ router.post('/verify-result', (req, res) => {
   }
 });
 
-const MAX_AGENT_ROUNDS = 6;
-
 router.post('/chat', async (req, res) => {
   try {
     const { messages, model, provider, componentId, max_tokens, systemPromptAppend } = req.body;
@@ -224,85 +224,24 @@ router.post('/chat', async (req, res) => {
     const langInstruction = buildLanguageInstruction(detectedLang);
 
     const toolPrompt = buildLibraryToolPrompt();
-    const fullSystem = [LIBRARY_AGENT_BASE_PROMPT, componentContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
+    const systemPrompt = buildSystemPrompt(LIBRARY_AGENT_BASE_PROMPT, componentContext, toolPrompt, systemPromptAppend, langInstruction);
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-
-    const emitEvent = (event: any) => {
-      if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
-    };
-
-    let reqClosed = false;
-    req.on('close', () => { reqClosed = true; });
-
-    const apiMessages: ChatMessage[] = [];
-    apiMessages.push({ role: 'system', content: fullSystem });
-    apiMessages.push(...convertMessagesForPromptBased(messages));
-
-    let iteration = 0;
-
-    while (iteration < MAX_AGENT_ROUNDS) {
-      iteration++;
-
-      const response = await streamChatCompletion({
-        model: model || 'mimo-v2.5',
-        messages: apiMessages,
-        stream: true,
-        thinking: { type: 'disabled' },
-        ...(max_tokens ? { max_tokens } : {}),
-      }, provider);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        emitEvent({ error: `API error ${response.status}: ${errorText}` });
-        break;
-      }
-
-      let fullResponse = '';
-      await readSSEStream(response, (chunk) => {
-        if (reqClosed) return;
-        if (chunk.content) {
-          fullResponse += chunk.content;
-          emitEvent({ content: chunk.content });
-        }
-        if (chunk.reasoning) {
-          emitEvent({ reasoning: chunk.reasoning });
-        }
-      });
-
-      if (reqClosed) break;
-
-      const toolCalls = parseToolCalls(fullResponse);
-      console.log('[library-agent] round', iteration, 'text:', fullResponse.length, 'toolCalls:', toolCalls.length);
-
-      if (toolCalls.length === 0) break;
-
-      apiMessages.push({ role: 'assistant', content: fullResponse });
-
-      for (const call of toolCalls) {
-        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
-        const result = await executeLibraryTool(call, componentId, emitEvent);
-        const outputStr = result.error ? `Error: ${result.error}` : result.output;
-        emitEvent({ tool_result: { name: result.name, output: result.output, error: result.error } });
-        apiMessages.push({ role: 'user', content: `[Tool: ${result.name}] ${outputStr}` });
-      }
-    }
-
-    emitEvent({ done: true });
-    res.write('data: [DONE]\n\n');
-    res.end();
+    await runAgentLoopSafe({
+      req,
+      res,
+      systemPrompt,
+      messages,
+      convertMessages: convertMessagesForPromptBased,
+      executeTool: (call, emitEvent) => executeLibraryTool(call, componentId, emitEvent),
+      model,
+      provider,
+      max_tokens,
+      maxRounds: 6,
+      logTag: 'library-agent',
+    });
   } catch (error: any) {
-    console.error('[library-agent/chat] Error:', error.message, error.stack?.substring(0, 300));
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    } else {
-      res.write(`data: ${JSON.stringify({ error: error.message.substring(0, 500) })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
-    }
+    console.error('[library-agent/chat] Error:', error.message);
+    sendSSEError(res, error.message);
   }
 });
 

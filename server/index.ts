@@ -18,8 +18,18 @@ if (existsSync(envPath)) {
   }
 }
 
+if (!process.env.SESSION_SECRET) {
+  console.warn('[server] SESSION_SECRET not set — using fallback (insecure, set in .env for production)');
+}
+
+if (!process.env.DB_ENCRYPTION_KEY) {
+  console.warn('[server] DB_ENCRYPTION_KEY not set — database connection passwords stored as base64 (insecure)');
+}
+
 const { default: express } = await import('express');
 const { default: cors } = await import('cors');
+const { default: session } = await import('express-session');
+const { default: rateLimit } = await import('express-rate-limit');
 const { default: chatRoutes } = await import('./routes/chat');
 const { default: skemaRoutes } = await import('./routes/skema');
 const { default: ragRoutes } = await import('./routes/rag');
@@ -36,13 +46,49 @@ const { default: databaseRoutes } = await import('./routes/database');
 const { default: agentBuilderRoutes } = await import('./routes/agentBuilder');
 const { default: workflowRoutes } = await import('./routes/workflows');
 const { default: notesRoutes } = await import('./routes/notes');
+const { default: authRoutes } = await import('./routes/auth');
+const { requireModeAuth } = await import('./middleware/auth');
 const { initializeDatabaseWithRetry } = await import('./db');
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
 
-app.use(cors());
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',').map(s => s.trim());
+
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+}));
 app.use(express.json({ limit: '50mb' }));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'edward-labs-fallback-secret-change-me',
+  name: 'edward.sid',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: 'auto',
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+  },
+}));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many authentication attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -85,6 +131,10 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/auth', authLimiter, authRoutes);
+
+app.use('/api', apiLimiter, requireModeAuth);
+
 app.use('/api/chat', chatRoutes);
 app.use('/api/skema', skemaRoutes);
 app.use('/api/rag', ragRoutes);
@@ -104,7 +154,10 @@ app.use('/api/notes', notesRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[server] Unhandled error:', err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const status = err.status || 500;
+  res.status(status).json({
+    error: status >= 500 ? 'Internal server error' : err.message,
+  });
 });
 
 app.listen(PORT, () => {

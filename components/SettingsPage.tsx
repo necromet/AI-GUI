@@ -105,10 +105,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   const [maxTokensInput, setMaxTokensInput] = useState(maxOutputTokens?.toString() || '');
   const mode = theme === 'dark' ? 'dark' : 'light';
 
-  const resetPassword = () => {
-    sessionStorage.removeItem('edward:labs_chat_session');
-    sessionStorage.removeItem('edward:labs_experiments_session');
-    sessionStorage.removeItem('edward:labs_library_session');
+  const resetPassword = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Logout endpoint unreachable — still reload to clear client state
+    }
     window.location.reload();
   };
 

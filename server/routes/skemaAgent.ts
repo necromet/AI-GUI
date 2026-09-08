@@ -1,7 +1,9 @@
 import { Router } from 'express';
-import { detectLanguage, buildLanguageInstruction, streamChatCompletion, readSSEStream, ChatMessage } from '../services/mimoService';
-import { analyzeImages, buildSkemaFileToolPrompt, executeSkemaFileTool, parseToolCalls, convertMessagesForPromptBased } from '../services/agentService';
+import { detectLanguage, buildLanguageInstruction } from '../services/mimoService';
+import { analyzeImages, buildSkemaFileToolPrompt, executeSkemaFileTool, convertMessagesForPromptBased } from '../services/agentService';
 import * as sessionService from '../services/skemaAgentService';
+import { runAgentLoopSafe } from '../lib/agentRunner';
+import { buildSystemPrompt, sendSSEError } from '../lib/sseHelpers';
 import type { ProjectFile } from '../../types';
 
 const router = Router();
@@ -145,17 +147,7 @@ router.post('/chat', async (req, res) => {
     const langInstruction = buildLanguageInstruction(detectedLang);
 
     if (context.images?.length > 0 && !context.imageAnalysis) {
-      if (!res.headersSent) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no');
-      }
-      res.write(`data: ${JSON.stringify({ status: 'Analyzing reference images...' })}\n\n`);
       context.imageAnalysis = await analyzeImages(context.images, model, provider);
-      if (context.imageAnalysis) {
-        res.write(`data: ${JSON.stringify({ status: 'Image analysis complete. Generating design...' })}\n\n`);
-      }
     }
 
     const workingFiles: ProjectFile[] = [...(context.files || [])];
@@ -171,119 +163,24 @@ router.post('/chat', async (req, res) => {
       htmlContext = `CURRENT HTML IN PREVIEW:\n\`\`\`html\n${truncated}\n\`\`\`\n\nWhen the user asks to modify "this" or "the current design", edit the HTML above using update_file on the entry file.`;
     }
 
-    console.log('[skema-agent] system prompt parts: base=', SKEMA_AGENT_BASE_PROMPT.length, 'fileContext=', fileContext.length, 'htmlContext=', htmlContext.length, 'toolPrompt=', toolPrompt.length, 'langInstruction=', langInstruction.length);
+    const systemPrompt = buildSystemPrompt(SKEMA_AGENT_BASE_PROMPT, fileContext, htmlContext, toolPrompt, systemPromptAppend, langInstruction);
 
-    const fullSystem = [SKEMA_AGENT_BASE_PROMPT, fileContext, htmlContext, toolPrompt, systemPromptAppend, langInstruction].filter(Boolean).join('\n\n');
-
-    console.log('[skema-agent] total system:', fullSystem.length, 'chars');
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-
-    const emitEvent = (event: any) => {
-      if (!res.writableEnded) {
-        try {
-          res.write(`data: ${JSON.stringify(event)}\n\n`);
-        } catch (e: any) {
-          console.log('[skema-agent] emitEvent write failed:', e.message);
-        }
-      } else {
-        console.log('[skema-agent] emitEvent skipped — res.writableEnded=true');
-      }
-    };
-
-    let reqClosed = false;
-    req.on('close', () => {
-      reqClosed = true;
-      console.log('[skema-agent] req CLOSED — client disconnected');
+    await runAgentLoopSafe({
+      req,
+      res,
+      systemPrompt,
+      messages,
+      convertMessages: convertMessagesForPromptBased,
+      executeTool: (call, emitEvent) => executeSkemaFileTool(call, workingFiles, emitEvent),
+      model,
+      provider,
+      max_tokens,
+      maxRounds: 6,
+      logTag: 'skema-agent',
     });
-
-    const apiMessages: ChatMessage[] = [];
-    apiMessages.push({ role: 'system', content: fullSystem });
-    apiMessages.push(...convertMessagesForPromptBased(messages));
-    console.log('[skema-agent] apiMessages count:', apiMessages.length, 'roles:', apiMessages.map(m => m.role).join(','));
-
-    let iteration = 0;
-    const MAX_ROUNDS = 6;
-    const debugInfo: string[] = [];
-
-    while (iteration < MAX_ROUNDS) {
-      iteration++;
-      debugInfo.push(`round ${iteration} start`);
-
-      const response = await streamChatCompletion({
-        model: model || 'mimo-v2.5',
-        messages: apiMessages,
-        stream: true,
-        thinking: { type: 'disabled' },
-        ...(max_tokens ? { max_tokens } : {}),
-      }, provider);
-
-      debugInfo.push(`upstream ${response.status}`);
-      console.log('[skema-agent] before readSSEStream, reqClosed=', reqClosed);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        debugInfo.push(`error: ${errorText.substring(0, 200)}`);
-        emitEvent({ error: `API error ${response.status}: ${errorText}` });
-        break;
-      }
-
-      let fullResponse = '';
-      let chunkCount = 0;
-      await readSSEStream(response, (chunk) => {
-        if (chunk.content) {
-          chunkCount++;
-          fullResponse += chunk.content;
-          emitEvent({ content: chunk.content });
-        }
-        if (chunk.reasoning) {
-          emitEvent({ reasoning: chunk.reasoning });
-        }
-      });
-
-      if (reqClosed) {
-        console.log('[skema-agent] reqClosed=true after readSSEStream, breaking');
-        break;
-      }
-
-      debugInfo.push(`got ${fullResponse.length} chars, ${chunkCount} chunks`);
-      if (fullResponse.length > 0) {
-        debugInfo.push(`preview: ${fullResponse.substring(0, 150).replace(/\n/g, '\\n')}`);
-      }
-
-      const toolCalls = parseToolCalls(fullResponse);
-      if (toolCalls.length === 0) break;
-
-      apiMessages.push({ role: 'assistant', content: fullResponse });
-
-      for (const call of toolCalls) {
-        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
-        const result = await executeSkemaFileTool(call, workingFiles, emitEvent);
-        const outputStr = result.error ? `Error: ${result.error}` : result.output;
-        emitEvent({ tool_result: { name: result.name, output: result.output, error: result.error } });
-        apiMessages.push({ role: 'user', content: `[Tool: ${result.name}] ${outputStr}` });
-      }
-    }
-
-    emitEvent({ done: true, _debug: debugInfo });
-    console.log('[skema-agent] done, debug:', debugInfo.join(' | '));
-    res.write('data: [DONE]\n\n');
-    res.end();
   } catch (error: any) {
-    const errMsg = error?.message || String(error);
-    console.error('[skema-agent/chat] Error:', errMsg);
-    if (!res.headersSent) {
-      res.status(500).json({ error: errMsg });
-    } else {
-      try {
-        res.write(`data: ${JSON.stringify({ error: errMsg.substring(0, 500) })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-      } catch {}
-    }
+    console.error('[skema-agent/chat] Error:', error.message);
+    sendSSEError(res, error.message);
   }
 });
 

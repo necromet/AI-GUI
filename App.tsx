@@ -3,8 +3,8 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
-import { CHATGPT_LOGO, DEFAULT_MODELS, NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from './constants';
-import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, Mode, SkemaProject, ConversationType } from './types';
+import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
+import { Role, Message, ModelConfig, ChatSession, getModelType, Attachment, SkemaProject, ConversationType } from './types';
 import { generateResponseStream, generateChatTitle, parseDocument } from './services/apiService';
 import * as db from './services/apiDatabaseAdapter';
 import { listDocuments } from './services/ragService';
@@ -32,11 +32,13 @@ import { SkemaControls } from './components/SkemaEditor';
 import SettingsPage from './components/SettingsPage';
 import PythonExecutorPanel from './components/PythonExecutorPanel';
 import DatabasePanel from './components/DatabasePanel';
-import { AnimatedShaderBackground } from './components/AuroraHero';
 import type { DatabaseSidebarControls } from './components/DatabasePanel';
 import type { DatabaseHeaderControls } from './components/DatabasePanel';
 import { NotesPanel } from './components/notes/NotesPanel';
 import type { NotesControls } from './components/notes/NotesPanel';
+import { useModeAuth } from './hooks/useModeAuth';
+import { useThemeSettings } from './hooks/useThemeSettings';
+import { getCurrentMode } from './lib/modeRegistry';
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 const isDocumentFile = (file: File) => {
@@ -59,17 +61,7 @@ const fileToAttachment = (file: File): Promise<Attachment> => {
   });
 };
 
-export const FONT_SIZE_MAP: Record<string, number> = { xs: 16, sm: 17, base: 18, lg: 20, xl: 22 };
-
-export const FONT_FAMILY_MAP: Record<string, string> = {
-  default: "'Plus Jakarta Sans', 'Google Sans', 'Open Sans', 'Fredoka', 'Comfortaa', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
-  'plus-jakarta-sans': "'Plus Jakarta Sans', sans-serif",
-  'google-sans': "'Google Sans', sans-serif",
-  'open-sans': "'Open Sans', sans-serif",
-  fredoka: "'Fredoka', sans-serif",
-  comfortaa: "'Comfortaa', sans-serif",
-  'space-grotesk': "'Space Grotesk', sans-serif",
-};
+export { FONT_SIZE_MAP, FONT_FAMILY_MAP } from './hooks/useThemeSettings';
 
 
 
@@ -186,17 +178,17 @@ const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const currentMode = getCurrentMode(location.pathname);
   const isSelector = location.pathname === '/';
-  const isChatMode = location.pathname.startsWith('/chat');
-  const isRagMode = location.pathname.startsWith('/rag');
-  const isSkemaMode = location.pathname.startsWith('/skema');
-  const isPythonMode = location.pathname.startsWith('/python');
-  const isLibraryMode = location.pathname.startsWith('/library');
-  const isDatabaseMode = location.pathname.startsWith('/database');
-  const isAgentBuilderMode = location.pathname.startsWith('/agent-builder');
-  const isNotesMode = location.pathname.startsWith('/notes');
+  const isChatMode = currentMode === 'chat';
+  const isRagMode = currentMode === 'rag';
+  const isSkemaMode = currentMode === 'skema';
+  const isPythonMode = currentMode === 'python';
+  const isLibraryMode = currentMode === 'library';
+  const isDatabaseMode = currentMode === 'database';
+  const isAgentBuilderMode = currentMode === 'agent-builder';
+  const isNotesMode = currentMode === 'notes';
   const isSettingsPage = location.pathname === '/settings';
-  const currentMode: Mode = isSelector ? 'selector' : isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isAgentBuilderMode ? 'agent-builder' : isNotesMode ? 'notes' : 'library';
 
   const skemaProjectId = (() => {
     const match = location.pathname.match(/^\/skema\/([^/]+)$/);
@@ -208,60 +200,16 @@ const App: React.FC = () => {
     return match ? match[1] : undefined;
   })();
 
-  const [isChatAuthenticated, setIsChatAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_chat_session');
-  });
-  const [isRagAuthenticated, setIsRagAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_rag_session');
-  });
-  const [isSkemaAuthenticated, setIsSkemaAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_skema_session');
-  });
-  const [isPythonAuthenticated, setIsPythonAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_python_session');
-  });
-  const [isLibraryAuthenticated, setIsLibraryAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_library_session');
-  });
-  const [isDatabaseAuthenticated, setIsDatabaseAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_database_session');
-  });
-  const [isAgentBuilderAuthenticated, setIsAgentBuilderAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_agent-builder_session');
-  });
-  const [isNotesAuthenticated, setIsNotesAuthenticated] = useState(() => {
-    return !!sessionStorage.getItem('edward:labs_notes_session');
-  });
+  const auth = useModeAuth();
+  const { isChatAuthenticated, isRagAuthenticated, isSkemaAuthenticated, isPythonAuthenticated, isLibraryAuthenticated, isDatabaseAuthenticated, isAgentBuilderAuthenticated, isNotesAuthenticated } = auth;
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [htmlFullscreenCode, setHtmlFullscreenCode] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('none');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [fontSize, setFontSize] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_fontSize') || 'base';
-  });
-  const [fontFamily, setFontFamily] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_fontFamily') || 'default';
-  });
-  const [neonColor, setNeonColor] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_neonColor') || 'red';
-  });
-  const [neonPreset, setNeonPreset] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_neonPreset') || 'cyber';
-  });
-  const [themePreset, setThemePreset] = useState<string>(() => {
-    return localStorage.getItem('edward:labs_themePreset') || 'default';
-  });
-  const [maxOutputTokens, setMaxOutputTokens] = useState<number | undefined>(() => {
-    const stored = localStorage.getItem('edward:labs_maxOutputTokens');
-    if (stored) {
-      const val = parseInt(stored, 10);
-      return isNaN(val) || val <= 0 ? undefined : val;
-    }
-    return undefined;
-  });
+  const themeSettings = useThemeSettings();
+  const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, neonColor, setNeonColor, neonPreset, setNeonPreset, themePreset, setThemePreset, maxOutputTokens, setMaxOutputTokens } = themeSettings;
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [defaultModelId, setDefaultModelId] = useState<string>(() => {
     return localStorage.getItem('edward:labs_defaultModel') || DEFAULT_MODELS[0].id;
@@ -369,85 +317,6 @@ const App: React.FC = () => {
       toast.error('Backend server is not reachable. Chat, TTS, and ASR will not work.');
     });
   }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const isDark = theme === 'dark';
-    const mode = isDark ? 'dark' : 'light';
-
-    if (neonPreset) {
-      const preset = NEON_PRESETS.find(p => p.id === neonPreset) || NEON_PRESETS[0];
-      root.style.setProperty('--neon-rgb', preset.primary[mode].rgb);
-      root.style.setProperty('--neon-color', preset.primary[mode].tailwind);
-      root.style.setProperty('--neon-secondary-rgb', preset.secondary[mode].rgb);
-      root.style.setProperty('--neon-secondary', preset.secondary[mode].tailwind);
-      root.style.setProperty('--neon-accent-rgb', preset.accent[mode].rgb);
-      root.style.setProperty('--neon-accent', preset.accent[mode].tailwind);
-    } else {
-      const color = INDIVIDUAL_COLORS[neonColor] || INDIVIDUAL_COLORS.red;
-      const variant = color[mode];
-      root.style.setProperty('--neon-rgb', variant.rgb);
-      root.style.setProperty('--neon-color', variant.tailwind);
-      root.style.setProperty('--neon-secondary-rgb', variant.rgb);
-      root.style.setProperty('--neon-secondary', variant.tailwind);
-      root.style.setProperty('--neon-accent-rgb', variant.rgb);
-      root.style.setProperty('--neon-accent', variant.tailwind);
-    }
-
-    localStorage.setItem('edward:labs_neonPreset', neonPreset);
-    localStorage.setItem('edward:labs_neonColor', neonColor);
-  }, [neonColor, neonPreset, theme]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const mode = theme === 'dark' ? 'dark' : 'light';
-    const preset = THEME_PRESETS.find(p => p.id === themePreset) || THEME_PRESETS[0];
-    const vars = preset[mode];
-
-    const defaultVars = THEME_PRESETS[0][mode];
-    for (const key of new Set([...Object.keys(vars), ...Object.keys(defaultVars)])) {
-      root.style.setProperty(key, vars[key] || '');
-    }
-
-    if (preset.neon) {
-      const neonColors = preset.neon[mode];
-      root.style.setProperty('--neon-rgb', neonColors.primary.rgb);
-      root.style.setProperty('--neon-color', neonColors.primary.tailwind);
-      root.style.setProperty('--neon-secondary-rgb', neonColors.secondary.rgb);
-      root.style.setProperty('--neon-secondary', neonColors.secondary.tailwind);
-      root.style.setProperty('--neon-accent-rgb', neonColors.accent.rgb);
-      root.style.setProperty('--neon-accent', neonColors.accent.tailwind);
-    }
-
-    localStorage.setItem('edward:labs_themePreset', themePreset);
-  }, [themePreset, theme]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--app-font-size', `${FONT_SIZE_MAP[fontSize] || 15}px`);
-    localStorage.setItem('edward:labs_fontSize', fontSize);
-  }, [fontSize]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_MAP[fontFamily] || FONT_FAMILY_MAP.default);
-    localStorage.setItem('edward:labs_fontFamily', fontFamily);
-  }, [fontFamily]);
-
-  useEffect(() => {
-    if (maxOutputTokens) {
-      localStorage.setItem('edward:labs_maxOutputTokens', maxOutputTokens.toString());
-    } else {
-      localStorage.removeItem('edward:labs_maxOutputTokens');
-    }
-  }, [maxOutputTokens]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1039,17 +908,25 @@ const App: React.FC = () => {
     </div>
   );
 
+  if (auth.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0f172a' }}>
+        <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (isSelector) {
     return (
       <ModeSelector
-        isChatAuthenticated={isChatAuthenticated}
-        isRagAuthenticated={isRagAuthenticated}
-        isSkemaAuthenticated={isSkemaAuthenticated}
-        isPythonAuthenticated={isPythonAuthenticated}
-        isLibraryAuthenticated={isLibraryAuthenticated}
-        isDatabaseAuthenticated={isDatabaseAuthenticated}
-        isAgentBuilderAuthenticated={isAgentBuilderAuthenticated}
-        isNotesAuthenticated={isNotesAuthenticated}
+        isChatAuthenticated={auth.isChatAuthenticated}
+        isRagAuthenticated={auth.isRagAuthenticated}
+        isSkemaAuthenticated={auth.isSkemaAuthenticated}
+        isPythonAuthenticated={auth.isPythonAuthenticated}
+        isLibraryAuthenticated={auth.isLibraryAuthenticated}
+        isDatabaseAuthenticated={auth.isDatabaseAuthenticated}
+        isAgentBuilderAuthenticated={auth.isAgentBuilderAuthenticated}
+        isNotesAuthenticated={auth.isNotesAuthenticated}
         onSelectChat={() => navigate('/chat')}
         onSelectRag={() => navigate('/rag')}
         onSelectSkema={() => navigate('/skema')}
@@ -1058,38 +935,14 @@ const App: React.FC = () => {
         onSelectDatabase={() => navigate('/database')}
         onSelectAgentBuilder={() => navigate('/agent-builder')}
         onSelectNotes={() => navigate('/notes')}
-        onUnlockChat={() => {
-          setIsChatAuthenticated(true);
-          sessionStorage.setItem('edward:labs_chat_session', 'true');
-        }}
-        onUnlockRag={() => {
-          setIsRagAuthenticated(true);
-          sessionStorage.setItem('edward:labs_rag_session', 'true');
-        }}
-        onUnlockSkema={() => {
-          setIsSkemaAuthenticated(true);
-          sessionStorage.setItem('edward:labs_skema_session', 'true');
-        }}
-        onUnlockPython={() => {
-          setIsPythonAuthenticated(true);
-          sessionStorage.setItem('edward:labs_python_session', 'true');
-        }}
-        onUnlockLibrary={() => {
-          setIsLibraryAuthenticated(true);
-          sessionStorage.setItem('edward:labs_library_session', 'true');
-        }}
-        onUnlockDatabase={() => {
-          setIsDatabaseAuthenticated(true);
-          sessionStorage.setItem('edward:labs_database_session', 'true');
-        }}
-        onUnlockAgentBuilder={() => {
-          setIsAgentBuilderAuthenticated(true);
-          sessionStorage.setItem('edward:labs_agent-builder_session', 'true');
-        }}
-        onUnlockNotes={() => {
-          setIsNotesAuthenticated(true);
-          sessionStorage.setItem('edward:labs_notes_session', 'true');
-        }}
+        onUnlockChat={auth.onUnlockChat}
+        onUnlockRag={auth.onUnlockRag}
+        onUnlockSkema={auth.onUnlockSkema}
+        onUnlockPython={auth.onUnlockPython}
+        onUnlockLibrary={auth.onUnlockLibrary}
+        onUnlockDatabase={auth.onUnlockDatabase}
+        onUnlockAgentBuilder={auth.onUnlockAgentBuilder}
+        onUnlockNotes={auth.onUnlockNotes}
       />
     );
   }
@@ -1158,7 +1011,7 @@ const App: React.FC = () => {
 
         {/* Top bar — hidden on settings page */}
         {isSettingsPage ? (
-          <RequireAuth isAuth={isChatAuthenticated || isRagAuthenticated || isSkemaAuthenticated || isPythonAuthenticated || isLibraryAuthenticated || isDatabaseAuthenticated || isNotesAuthenticated}>
+          <RequireAuth isAuth={auth.isAnyAuthenticated}>
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -1457,16 +1310,14 @@ const App: React.FC = () => {
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <AnimatedShaderBackground>
-                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
-                          <div className="relative mb-8">
-                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                          </div>
-                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                            How can I help you today?
-                          </h2>
+                      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3rem)] p-8 text-center">
+                        <div className="relative mb-8">
+                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
                         </div>
-                      </AnimatedShaderBackground>
+                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+                          How can I help you today?
+                        </h2>
+                      </div>
                     ) : (
                       <ChatMessageList
                         messages={messages}
@@ -1483,16 +1334,14 @@ const App: React.FC = () => {
                 <Route path="/chat/:conversationId" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
                     {chatRouteElement || (messages.length === 0 ? (
-                      <AnimatedShaderBackground>
-                        <div className="flex flex-col items-center justify-center p-8 text-center pb-48">
+                      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3rem)] p-8 text-center">
                           <div className="relative mb-8">
                             <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
                           </div>
                           <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
                             How can I help you today?
                           </h2>
-                        </div>
-                      </AnimatedShaderBackground>
+                      </div>
                     ) : (
                       <ChatMessageList
                         messages={messages}

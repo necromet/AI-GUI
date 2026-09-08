@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { streamChatCompletion, readSSEStream, ChatMessage, detectLanguage, buildLanguageInstruction } from '../services/mimoService';
 import { parseToolCalls } from '../services/agentService';
 import { pool } from '../db/pg';
+import { setupSSEHeaders, createEmitter, setupCloseDetection, sendSSEError } from '../lib/sseHelpers';
+import { formatToolList, type PromptToolDef } from '../lib/formatToolPrompt';
 
 const router = Router();
 
@@ -359,14 +361,16 @@ router.delete('/workflows/:id/tools/:toolId', async (req, res) => {
 
 function buildAgentBuilderToolPrompt(toolRows: any[]): string {
   if (toolRows.length === 0) return '';
-  const toolDescriptions = toolRows.map(t => {
+  const tools: PromptToolDef[] = toolRows.map(t => {
     const schema = jsonbParse(t.parameters_schema, {});
     const props = schema.properties || {};
-    const params = Object.entries(props)
-      .map(([name, def]: [string, any]) => `  - ${name} (${def.type || 'string'}): ${def.description || ''}`)
-      .join('\n');
-    return `### ${t.name}\n${t.description || ''}${params ? '\nParameters:\n' + params : ''}`;
-  }).join('\n\n');
+    const parameters: Record<string, { type: string; description: string }> = {};
+    for (const [name, def] of Object.entries(props) as [string, any][]) {
+      parameters[name] = { type: def.type || 'string', description: def.description || '' };
+    }
+    return { name: t.name, description: t.description || '', parameters };
+  });
+  const toolDescriptions = formatToolList(tools);
 
   return `You have access to the following tools. To use a tool, respond with a JSON block in this exact format:
 
@@ -405,17 +409,9 @@ router.post('/chat', async (req, res) => {
     const providerName = overrideProvider || agent.provider;
     const modelName = overrideModel || agent.model;
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-
-    const emitEvent = (event: any) => {
-      if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
-    };
-
-    let reqClosed = false;
-    req.on('close', () => { reqClosed = true; });
+    setupSSEHeaders(res);
+    const emitEvent = createEmitter(res);
+    const conn = setupCloseDetection(req);
 
     const apiMessages: ChatMessage[] = [];
     apiMessages.push({ role: 'system', content: fullSystem });
@@ -443,14 +439,14 @@ router.post('/chat', async (req, res) => {
 
     let fullResponse = '';
     await readSSEStream(response, (chunk) => {
-      if (reqClosed) return;
+      if (conn.isClosed()) return;
       if (chunk.content) {
         fullResponse += chunk.content;
         emitEvent({ content: chunk.content });
       }
     });
 
-    if (!reqClosed && toolRows.length > 0) {
+    if (!conn.isClosed() && toolRows.length > 0) {
       const toolCalls = parseToolCalls(fullResponse);
       for (const call of toolCalls) {
         emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
@@ -464,13 +460,7 @@ router.post('/chat', async (req, res) => {
     res.end();
   } catch (error: any) {
     console.error('[agent-builder/chat] Error:', error.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    } else {
-      res.write(`data: ${JSON.stringify({ error: error.message.substring(0, 500) })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
-    }
+    sendSSEError(res, error.message);
   }
 });
 
