@@ -15,7 +15,6 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import CustomNode from './CustomNode';
-import WorkflowSidebar from './WorkflowSidebar';
 import NodeSettingsPanel from './NodeSettingsPanel';
 import ExecutionPanel from './ExecutionPanel';
 import WorkflowToolbar from './WorkflowToolbar';
@@ -100,7 +99,6 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved }: Props) {
 
   return (
     <div className="flex h-full w-full">
-      <WorkflowSidebar />
       <div className="flex-1 flex flex-col">
         <WorkflowToolbar
           name={workflowName}

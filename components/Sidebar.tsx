@@ -7,6 +7,8 @@ import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
 import type { DatabaseSidebarControls } from './DatabasePanel';
 import type { AgentBuilderSidebarControls } from './agent-builder/AgentBuilderPanel';
+import { NODE_CATEGORIES, NODE_DEFINITIONS } from './agent-builder/constants';
+import type { WorkflowNodeType } from './agent-builder/types';
 import type { NotesControls } from './notes/NotesPanel';
 import DatabaseSchemaBrowser from './DatabaseSchemaBrowser';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
@@ -954,6 +956,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isLibraryMode = location.pathname.startsWith('/library');
   const isDatabaseMode = location.pathname.startsWith('/database');
   const isNotesMode = location.pathname.startsWith('/notes');
+  const isAgentBuilderMode = location.pathname.startsWith('/agent-builder');
   const isSettingsPage = location.pathname === '/settings';
 
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
@@ -975,7 +978,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('library-reload', handler);
   }, [isLibraryMode, fetchLibraryFolders]);
 
-  const currentMode: Mode = isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isNotesMode ? 'notes' : 'chat';
+  const currentMode: Mode = isChatMode ? 'chat' : isRagMode ? 'rag' : isSkemaMode ? 'skema' : isPythonMode ? 'python' : isLibraryMode ? 'library' : isDatabaseMode ? 'database' : isNotesMode ? 'notes' : isAgentBuilderMode ? 'agent-builder' : 'chat';
 
   const prevPathRef = useRef<string>('/chat');
   useEffect(() => {
@@ -1087,7 +1090,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 color: 'var(--neon-color)',
               }}
             >
-              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : currentMode === 'notes' ? 'Notes' : isSettingsPage ? 'Settings' : ''}
+              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : currentMode === 'notes' ? 'Notes' : currentMode === 'agent-builder' ? 'Builder' : isSettingsPage ? 'Settings' : ''}
             </Badge>
           </div>
           <div className="absolute flex items-center right-3 top-4">
@@ -1509,6 +1512,54 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </p>
               </div>
             )}
+          </div>
+        ) : isAgentBuilderMode && agentBuilderControls ? (
+          <AgentBuilderSidebarContent
+            controls={agentBuilderControls}
+            onBack={() => navigate('/')}
+          />
+        ) : isAgentBuilderMode ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-3 pt-3 pb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)] px-1">Nodes</span>
+            </div>
+            <ScrollArea className="flex-1 px-3">
+              {NODE_CATEGORIES.map((cat) => (
+                <div key={cat.id} className="mb-3">
+                  <div className="px-2 mb-1.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{cat.label}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {cat.types.map((type) => {
+                      const def = NODE_DEFINITIONS[type];
+                      return (
+                        <div
+                          key={type}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab active:cursor-grabbing transition-colors"
+                          style={{ color: 'var(--text-300)' }}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('application/reactflow', type);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-200)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          title={def.description}
+                        >
+                          <div
+                            className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                            style={{ background: `${def.color}20`, color: def.color }}
+                          >
+                            <span className="text-[9px] font-bold">{def.label.charAt(0)}</span>
+                          </div>
+                          <span className="text-xs">{def.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </ScrollArea>
           </div>
         ) : (
           <>

@@ -12,6 +12,7 @@
     "dev": "vite",
     "dev:server": "tsx server/index.ts",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev\"",
+    "seed": "tsx server/db/seed-dummy.ts",
     "build": "vite build",
     "preview": "vite preview",
     "docker:build": "docker compose build",
