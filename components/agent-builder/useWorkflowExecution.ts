@@ -1,86 +1,121 @@
 import { useState, useCallback, useRef } from 'react';
-import type { Node, Edge } from '@xyflow/react';
+import { parseSSEStream } from './shared/useSSEStream';
 
-interface ExecutionEvent {
-  type: string;
-  nodeId?: string;
-  data?: any;
+interface ExecutionState {
+  executionId?: string;
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'paused';
+  nodeResults: Record<string, any>;
+  variables: Record<string, any>;
   error?: string;
-  state?: any;
-  pendingAuth?: any;
+  pendingApproval?: {
+    approvalId: string;
+    nodeId: string;
+    message: string;
+    executionId?: string;
+  };
 }
 
 export function useWorkflowExecution() {
-  const [isRunning, setIsRunning] = useState(false);
-  const [events, setEvents] = useState<ExecutionEvent[]>([]);
-  const [nodeStatuses, setNodeStatuses] = useState<Record<string, string>>({});
+  const [state, setState] = useState<ExecutionState>({
+    status: 'idle',
+    nodeResults: {},
+    variables: {},
+  });
   const abortRef = useRef<AbortController | null>(null);
 
-  const execute = useCallback(async (workflowId: string, nodes: Node[], edges: Edge[]) => {
-    if (isRunning) return;
-
-    setIsRunning(true);
-    setEvents([]);
-    setNodeStatuses({});
-
+  const execute = useCallback(async (workflowId: string, input: any) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    setState({
+      status: 'running',
+      nodeResults: {},
+      variables: {},
+    });
+
     try {
-      const res = await fetch(`/api/workflows/${workflowId}/execute-stream`, {
+      const response = await fetch(`/api/workflows/${workflowId}/execute-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: {} }),
+        body: JSON.stringify({ input }),
         signal: controller.signal,
       });
 
-      if (!res.ok || !res.body) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (payload === '[DONE]') continue;
-
-          try {
-            const event: ExecutionEvent = JSON.parse(payload);
-            setEvents(prev => [...prev, event]);
-
-            if (event.type.startsWith('node_')) {
-              const status = event.type.replace('node_', '');
-              if (event.nodeId) {
-                setNodeStatuses(prev => ({ ...prev, [event.nodeId!]: status }));
-              }
-            }
-          } catch {}
+      for await (const event of parseSSEStream(response)) {
+        if (event.type === 'completed') {
+          setState(prev => ({ ...prev, status: 'completed' }));
+        } else if (event.type === 'paused' && event.pendingAuth) {
+          setState(prev => ({
+            ...prev,
+            status: 'paused',
+            pendingApproval: {
+              approvalId: event.pendingAuth.authId,
+              nodeId: event.pendingAuth.nodeId,
+              message: event.pendingAuth.message,
+              executionId: event.pendingAuth.executionId,
+            },
+          }));
+        } else if (event.type === 'error') {
+          setState(prev => ({ ...prev, status: 'failed', error: event.error }));
+        } else if (event.type === 'state_update' && event.state) {
+          setState(prev => ({
+            ...prev,
+            nodeResults: { ...prev.nodeResults, ...(event.state.nodeResults || {}) },
+            variables: { ...prev.variables, ...(event.state.variables || {}) },
+          }));
+        } else if (event.nodeId && event.data) {
+          setState(prev => ({
+            ...prev,
+            nodeResults: {
+              ...prev.nodeResults,
+              [event.nodeId]: event.data,
+            },
+          }));
         }
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        setEvents(prev => [...prev, { type: 'error', error: err.message }]);
+        setState(prev => ({ ...prev, status: 'failed', error: err.message }));
       }
     } finally {
-      setIsRunning(false);
       abortRef.current = null;
     }
-  }, [isRunning]);
+  }, []);
+
+  const resume = useCallback(async (workflowId: string, executionId: string, approved: boolean) => {
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ executionId, approved }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setState(prev => ({ ...prev, status: 'running', pendingApproval: undefined }));
+      }
+    } catch (err: any) {
+      setState(prev => ({ ...prev, error: err.message }));
+    }
+  }, []);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
+    setState(prev => ({ ...prev, status: 'idle' }));
   }, []);
 
-  return { isRunning, events, nodeStatuses, execute, cancel };
+  const reset = useCallback(() => {
+    setState({ status: 'idle', nodeResults: {}, variables: {} });
+  }, []);
+
+  return {
+    ...state,
+    execute,
+    resume,
+    cancel,
+    reset,
+    isRunning: state.status === 'running',
+    isPaused: state.status === 'paused',
+  };
 }

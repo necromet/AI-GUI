@@ -48,6 +48,11 @@ const { default: pythonRoutes } = await import('./routes/python');
 const { default: databaseRoutes } = await import('./routes/database');
 const { default: agentBuilderRoutes } = await import('./routes/agentBuilder');
 const { default: workflowRoutes } = await import('./routes/workflows');
+const { default: workflowMCPRoutes } = await import('./routes/workflowMCP');
+const { default: workflowApprovalRoutes } = await import('./routes/workflowApprovals');
+const { default: workflowKeyRoutes } = await import('./routes/workflowKeys');
+const { default: workflowNodeRoutes } = await import('./routes/workflowNodes');
+const { default: workflowExecutionRoutes } = await import('./routes/workflowExecution');
 const { default: notesRoutes } = await import('./routes/notes');
 const { default: authRoutes } = await import('./routes/auth');
 const { requireModeAuth } = await import('./middleware/auth');
@@ -153,6 +158,11 @@ app.use('/api/python', pythonRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/agent-builder', agentBuilderRoutes);
 app.use('/api/workflows', workflowRoutes);
+app.use('/api/workflows', workflowMCPRoutes);
+app.use('/api/workflows', workflowApprovalRoutes);
+app.use('/api/workflows', workflowKeyRoutes);
+app.use('/api/workflows', workflowNodeRoutes);
+app.use('/api/workflows', workflowExecutionRoutes);
 app.use('/api/notes', notesRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -167,6 +177,14 @@ app.listen(PORT, () => {
   console.log(`[server] API server running on http://localhost:${PORT}`);
 });
 
-initializeDatabaseWithRetry();
+initializeDatabaseWithRetry().then(async () => {
+  try {
+    const { seedBuiltinTemplates } = await import('./db/workflows');
+    await seedBuiltinTemplates();
+    console.log('[server] Built-in templates seeded');
+  } catch (err) {
+    console.warn('[server] Template seeding skipped:', (err as Error).message);
+  }
+});
 
 export default app;

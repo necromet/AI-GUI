@@ -372,6 +372,33 @@ CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 CREATE INDEX IF NOT EXISTS idx_approvals_approval_id ON approvals(approval_id);
+
+-- Workflow templates
+CREATE TABLE IF NOT EXISTS workflow_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT DEFAULT 'general',
+  tags TEXT DEFAULT '[]',
+  nodes JSONB NOT NULL DEFAULT '[]',
+  edges JSONB NOT NULL DEFAULT '[]',
+  difficulty TEXT DEFAULT 'beginner',
+  estimated_time TEXT,
+  is_public BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Execution logs for detailed step-by-step tracking
+CREATE TABLE IF NOT EXISTS execution_logs (
+  id SERIAL PRIMARY KEY,
+  execution_id TEXT NOT NULL REFERENCES executions(id) ON DELETE CASCADE,
+  node_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  data JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exec_logs_execution ON execution_logs(execution_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_templates_category ON workflow_templates(category);
 `;
 
 export const SEED_SQL = `

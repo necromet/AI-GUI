@@ -2,7 +2,10 @@ import { StateGraph, Annotation, START, END, MemorySaver } from '@langchain/lang
 import { executeAgentNode } from './workflowExecutors/agent.js';
 import { executeTransformNode, executeIfElseNode, executeWhileNode, executeUserApprovalNode } from './workflowExecutors/logic.js';
 import { executeMCPNode } from './workflowExecutors/mcp.js';
-import { substituteVariables } from './workflowExecutors/variables.js';
+import { substituteVariables, executeSetStateNode } from './workflowExecutors/variables.js';
+import { executeHTTPNode } from './workflowExecutors/http.js';
+import { executeExtractNode } from './workflowExecutors/extract.js';
+import { executeGuardrailsNode } from './workflowExecutors/tools.js';
 import type { WorkflowNode, WorkflowEdge, NodeExecutionResult } from '../../components/agent-builder/types';
 
 const WorkflowStateAnnotation = Annotation.Root({
@@ -203,6 +206,18 @@ export class WorkflowExecutor {
           case 'user-approval':
             output = await executeUserApprovalNode(node.data, state);
             break;
+          case 'set-state':
+            output = await executeSetStateNode(node.data, state);
+            break;
+          case 'http':
+            output = await executeHTTPNode(node.data, state);
+            break;
+          case 'extract':
+            output = await executeExtractNode(node.data, state, this.options.llmKeys || {});
+            break;
+          case 'note':
+            output = { message: node.data.note || node.data.text || '' };
+            break;
           default:
             output = { message: `Node ${node.type} not implemented` };
         }
@@ -237,6 +252,22 @@ export class WorkflowExecutor {
 
       if (result.output?.__chatHistoryUpdates) {
         updates.chatHistory = result.output.__chatHistoryUpdates;
+      }
+
+      if (result.output?.stateUpdates) {
+        updates.variables = result.output.stateUpdates;
+      }
+
+      if (result.output?.variableUpdates) {
+        updates.variables = result.output.variableUpdates;
+      }
+
+      // Store output as lastOutput for downstream nodes
+      if (result.output && typeof result.output === 'object' && !result.output.error) {
+        const outputVal = result.output.output ?? result.output.result ?? result.output.data ?? result.output;
+        if (!updates.variables) updates.variables = {};
+        updates.variables.lastOutput = outputVal;
+        updates.variables[`${node.id}_output`] = outputVal;
       }
 
       return updates;

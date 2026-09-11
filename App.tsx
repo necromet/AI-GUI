@@ -23,7 +23,6 @@ import VoiceClonePanel from './components/VoiceClonePanel';
 import ASRPanel from './components/ASRPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
-import type { AgentBuilderSidebarControls } from './components/agent-builder/AgentBuilderPanel';
 import AgentBuilderMode from './components/agent-builder/AgentBuilderMode';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
@@ -227,7 +226,6 @@ const App: React.FC = () => {
   const [libraryControls, setLibraryControls] = useState<LibraryControls | null>(null);
   const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
-  const [agentBuilderControls, setAgentBuilderControls] = useState<AgentBuilderSidebarControls | null>(null);
   const [notesControls, setNotesControls] = useState<NotesControls | null>(null);
 
   useEffect(() => {
@@ -992,7 +990,6 @@ const App: React.FC = () => {
         libraryControls={libraryControls}
         canvasControls={canvasSidebarControls}
         dbSidebarControls={dbSidebarControls}
-        agentBuilderControls={agentBuilderControls}
         notesControls={notesControls}
       />
 
@@ -1499,7 +1496,7 @@ const App: React.FC = () => {
                     </div>
                   </RequireAuth>
                 } />
-                <Route path="/agent-builder" element={
+                <Route path="/agent-builder/*" element={
                   <RequireAuth isAuth={isAgentBuilderAuthenticated}>
                     <div className="h-full">
                       <AgentBuilderMode />

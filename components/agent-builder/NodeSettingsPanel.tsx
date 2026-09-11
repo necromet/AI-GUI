@@ -1,9 +1,22 @@
-import { X } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { X, Settings } from 'lucide-react';
 import type { Node } from '@xyflow/react';
-import AgentPanel from './node-panels/AgentPanel';
-import MCPPanel from './node-panels/MCPPanel';
-import LogicPanel from './node-panels/LogicPanel';
 import { NODE_DEFINITIONS } from './constants';
+import type { WorkflowNodeType } from './types';
+import {
+  StartNodeConfig,
+  AgentNodeConfig,
+  MCPNodeConfig,
+  TransformNodeConfig,
+  IfElseNodeConfig,
+  WhileNodeConfig,
+  ApprovalNodeConfig,
+  EndNodeConfig,
+  NoteNodeConfig,
+  HTTPNodeConfig,
+  ExtractNodeConfig,
+  SetStateNodeConfig,
+} from './nodes';
 
 interface Props {
   node: Node;
@@ -11,88 +24,123 @@ interface Props {
   onClose: () => void;
 }
 
-export default function NodeSettingsPanel({ node, onUpdate, onClose }: Props) {
-  const nodeType = (node.data as any)?.nodeType;
-  const def = NODE_DEFINITIONS[nodeType as keyof typeof NODE_DEFINITIONS];
+const CONFIG_PANELS: Record<string, React.ComponentType<{ data: Record<string, any>; onUpdate: (data: Record<string, any>) => void }>> = {
+  start: StartNodeConfig,
+  agent: AgentNodeConfig,
+  mcp: MCPNodeConfig,
+  transform: TransformNodeConfig,
+  'data-transform': TransformNodeConfig,
+  'if-else': IfElseNodeConfig,
+  while: WhileNodeConfig,
+  'user-approval': ApprovalNodeConfig,
+  'user approval': ApprovalNodeConfig,
+  approval: ApprovalNodeConfig,
+  end: EndNodeConfig,
+  note: NoteNodeConfig,
+  http: HTTPNodeConfig,
+  'http-request': HTTPNodeConfig,
+  extract: ExtractNodeConfig,
+  'set-state': SetStateNodeConfig,
+  'set state': SetStateNodeConfig,
+};
 
-  const renderPanel = () => {
-    switch (nodeType) {
-      case 'agent':
-        return <AgentPanel data={node.data as any} onUpdate={onUpdate} />;
-      case 'mcp':
-        return <MCPPanel data={node.data as any} onUpdate={onUpdate} />;
-      case 'if-else':
-      case 'while':
-      case 'user-approval':
-        return <LogicPanel data={node.data as any} onUpdate={onUpdate} nodeType={nodeType} />;
-      case 'transform':
-        return (
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>JavaScript Code</span>
-              <textarea
-                className="mt-1 w-full rounded-md border px-2 py-1.5 text-xs font-mono resize-y min-h-[100px]"
-                style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-200)', color: 'var(--text-100)' }}
-                value={(node.data as any).code || ''}
-                onChange={(e) => onUpdate({ code: e.target.value })}
-                placeholder="return input;"
-              />
-            </label>
-            <p className="text-[10px]" style={{ color: 'var(--text-500)' }}>
-              Available: <code>input</code>, <code>lastOutput</code>, and all workflow variables.
-            </p>
-          </div>
-        );
-      case 'note':
-        return (
-          <label className="block">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>Note Text</span>
-            <textarea
-              className="mt-1 w-full rounded-md border px-2 py-1.5 text-xs resize-y min-h-[80px]"
-              style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-200)', color: 'var(--text-100)' }}
-              value={(node.data as any).text || ''}
-              onChange={(e) => onUpdate({ text: e.target.value })}
-              placeholder="Add a note..."
-            />
-          </label>
-        );
-      default:
-        return (
-          <p className="text-xs" style={{ color: 'var(--text-500)' }}>
-            No settings available for this node type.
-          </p>
-        );
-    }
-  };
+export default function NodeSettingsPanel({ node, onUpdate, onClose }: Props) {
+  const [showJson, setShowJson] = useState(false);
+  const nodeType = (node.data?.nodeType || node.type || 'agent') as string;
+  const def = NODE_DEFINITIONS[nodeType as WorkflowNodeType];
+  const color = node.data?.color || def?.color || '#6b7280';
+  const label = node.data?.label || def?.label || nodeType;
+
+  const ConfigPanel = CONFIG_PANELS[nodeType];
+
+  const handleUpdate = useCallback((data: Record<string, any>) => {
+    onUpdate(data);
+  }, [onUpdate]);
 
   return (
-    <div className="w-72 border-l flex flex-col overflow-y-auto" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
-      <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--border-300)' }}>
+    <div
+      className="w-80 h-full border-l overflow-y-auto flex flex-col"
+      style={{
+        borderColor: 'var(--border-300)',
+        backgroundColor: 'var(--bg-100, #111114)',
+      }}
+    >
+      <div className="h-1 w-full" style={{ backgroundColor: color }} />
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b"
+        style={{ borderColor: 'var(--border-300)' }}
+      >
         <div className="flex items-center gap-2">
-          {def && (
-            <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: `${def.color}20`, color: def.color }}>
-              <span className="text-[9px] font-bold">{def.label.charAt(0)}</span>
+          <div
+            className="w-6 h-6 rounded flex items-center justify-center"
+            style={{ backgroundColor: `${color}20` }}
+          >
+            <Settings size={12} style={{ color }} />
+          </div>
+          <div>
+            <div className="text-xs font-medium" style={{ color: 'var(--text-100)' }}>
+              {label} Settings
             </div>
-          )}
-          <span className="text-sm font-medium" style={{ color: 'var(--text-100)' }}>{def?.label || nodeType}</span>
+            <div className="text-[10px]" style={{ color: 'var(--text-500)' }}>
+              {node.id}
+            </div>
+          </div>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-[var(--bg-200)] cursor-pointer" style={{ color: 'var(--text-500)' }}>
+        <button
+          onClick={onClose}
+          className="p-1 rounded hover:bg-[var(--bg-300)] transition-colors cursor-pointer"
+          style={{ color: 'var(--text-500)' }}
+        >
           <X size={14} />
         </button>
       </div>
 
-      <div className="p-3 flex-1">
-        <label className="block mb-3">
-          <span className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>Label</span>
-          <input
-            type="text"
-            className="mt-1 w-full rounded-md border px-2 py-1.5 text-xs"
-            style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-200)', color: 'var(--text-100)' }}
-            value={(node.data as any).label || ''}
-            onChange={(e) => onUpdate({ label: e.target.value })}
-          />
+      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-300)' }}>
+        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>
+          Node Label
         </label>
-        {renderPanel()}
+        <input
+          value={(node.data?.label as string) || ''}
+          onChange={e => handleUpdate({ label: e.target.value })}
+          className="w-full px-2 py-1.5 text-xs rounded border bg-transparent"
+          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: 'var(--border-300)' }}>
+        <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>Configuration</span>
+        <button
+          onClick={() => setShowJson(!showJson)}
+          className="text-[10px] px-2 py-0.5 rounded cursor-pointer"
+          style={{
+            backgroundColor: showJson ? 'var(--neon-color)' : 'var(--bg-200)',
+            color: showJson ? '#000' : 'var(--text-500)',
+          }}
+        >
+          {showJson ? 'Visual' : 'JSON'}
+        </button>
+      </div>
+
+      {showJson ? (
+        <div className="flex-1 px-4 py-3 overflow-y-auto">
+          <pre className="text-[10px] font-mono p-2 rounded overflow-x-auto" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }}>
+            {JSON.stringify(node.data, null, 2)}
+          </pre>
+        </div>
+      ) : (
+        <div className="flex-1 px-4 py-3 overflow-y-auto">
+          {ConfigPanel ? (
+            <ConfigPanel data={node.data as Record<string, any>} onUpdate={handleUpdate} />
+          ) : (
+            <div className="text-xs text-center py-8" style={{ color: 'var(--text-500)' }}>
+              No settings available for this node type
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="px-4 py-2 border-t text-[10px]" style={{ borderColor: 'var(--border-300)', color: 'var(--text-500)' }}>
+        Use {'{{variableName}}'} to reference workflow variables
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Save, Download, Upload, Play } from 'lucide-react';
+import { Save, Download, Upload, Play, FileCode, Code, Undo2, Redo2, Maximize2 } from 'lucide-react';
 import type { Node, Edge } from '@xyflow/react';
 import { useWorkflow } from './useWorkflow';
 import { toast } from 'sonner';
@@ -11,9 +11,10 @@ interface Props {
   edges: Edge[];
   workflowId?: string;
   onWorkflowSaved?: (id: string) => void;
+  onLoadTemplate?: () => void;
 }
 
-export default function WorkflowToolbar({ name, onNameChange, nodes, edges, workflowId, onWorkflowSaved }: Props) {
+export default function WorkflowToolbar({ name, onNameChange, nodes, edges, workflowId, onWorkflowSaved, onLoadTemplate }: Props) {
   const { saveWorkflow } = useWorkflow();
   const [saving, setSaving] = useState(false);
 
@@ -57,6 +58,25 @@ export default function WorkflowToolbar({ name, onNameChange, nodes, edges, work
     URL.revokeObjectURL(url);
   }, [name, nodes, edges]);
 
+  const handleExportCode = useCallback(async () => {
+    if (!workflowId) return;
+    try {
+      const res = await fetch(`/api/workflows/${workflowId}/export-code`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const blob = new Blob([data.code || JSON.stringify(data, null, 2)], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name.replace(/\s+/g, '-').toLowerCase()}.ts`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Code exported');
+    } catch (err: any) {
+      toast.error(`Export failed: ${err.message}`);
+    }
+  }, [workflowId, name]);
+
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-b" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
       <input
@@ -67,6 +87,37 @@ export default function WorkflowToolbar({ name, onNameChange, nodes, edges, work
         style={{ color: 'var(--text-100)' }}
         placeholder="Workflow name"
       />
+
+      <div className="flex items-center gap-1">
+        <button
+          className="p-1.5 rounded transition-colors cursor-pointer"
+          style={{ color: 'var(--text-500)' }}
+          title="Undo"
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <Undo2 size={14} />
+        </button>
+        <button
+          className="p-1.5 rounded transition-colors cursor-pointer"
+          style={{ color: 'var(--text-500)' }}
+          title="Redo"
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <Redo2 size={14} />
+        </button>
+        <button
+          className="p-1.5 rounded transition-colors cursor-pointer"
+          style={{ color: 'var(--text-500)' }}
+          title="Fit View"
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <Maximize2 size={14} />
+        </button>
+        <div className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-300)' }} />
+      </div>
 
       <button
         onClick={handleSave}
@@ -86,6 +137,29 @@ export default function WorkflowToolbar({ name, onNameChange, nodes, edges, work
       >
         <Download size={14} />
       </button>
+
+      {workflowId && (
+        <button
+          onClick={handleExportCode}
+          className="p-1.5 rounded hover:bg-[var(--bg-200)] cursor-pointer"
+          style={{ color: 'var(--text-400)' }}
+          title="Export as Code"
+        >
+          <Code size={14} />
+        </button>
+      )}
+
+      {onLoadTemplate && (
+        <button
+          onClick={onLoadTemplate}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer"
+          style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }}
+          title="Templates"
+        >
+          <FileCode size={12} />
+          Templates
+        </button>
+      )}
     </div>
   );
 }

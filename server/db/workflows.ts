@@ -1,4 +1,4 @@
-import { getAll, getOne, run, runReturning } from './pg';
+import { getAll, getOne, run, runReturning, pool } from './pg';
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -155,4 +155,108 @@ export async function createUserLLMKey(data: { provider: string; encryptedKey: s
 
 export async function deleteUserLLMKey(id: string) {
   await run('DELETE FROM user_llm_keys WHERE id = $1', [id]);
+}
+
+// ─── MCP Servers (expanded) ───
+
+export async function getAllMCPServers(): Promise<any[]> {
+  const result = await pool.query('SELECT * FROM mcp_servers ORDER BY name');
+  return result.rows;
+}
+
+// ─── User LLM Keys (expanded) ───
+
+export async function saveUserLLMKey(data: {
+  id: string;
+  provider: string;
+  encryptedKey: string;
+  keyPrefix?: string;
+}): Promise<any> {
+  const result = await pool.query(
+    `INSERT INTO user_llm_keys (id, provider, encrypted_key, key_prefix)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (provider) DO UPDATE SET encrypted_key = EXCLUDED.encrypted_key, key_prefix = EXCLUDED.key_prefix, updated_at = NOW()
+     RETURNING *`,
+    [data.id, data.provider, data.encryptedKey, data.keyPrefix || null]
+  );
+  return result.rows[0];
+}
+
+export async function getLLMKeyForProvider(provider: string): Promise<any> {
+  const result = await pool.query(
+    'SELECT * FROM user_llm_keys WHERE provider = $1 AND is_active = true LIMIT 1', [provider]
+  );
+  return result.rows[0] || null;
+}
+
+// ─── Template CRUD ───
+
+export async function getWorkflowTemplates(): Promise<any[]> {
+  const result = await pool.query('SELECT * FROM workflow_templates ORDER BY created_at DESC');
+  return result.rows;
+}
+
+export async function createWorkflowTemplate(data: {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  nodes: any[];
+  edges: any[];
+  difficulty?: string;
+  estimatedTime?: string;
+}): Promise<any> {
+  const result = await pool.query(
+    `INSERT INTO workflow_templates (id, name, description, category, tags, nodes, edges, difficulty, estimated_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [data.id, data.name, data.description || null, data.category || 'general',
+     JSON.stringify(data.tags || []), JSON.stringify(data.nodes), JSON.stringify(data.edges),
+     data.difficulty || 'beginner', data.estimatedTime || null]
+  );
+  return result.rows[0];
+}
+
+export async function deleteWorkflowTemplate(id: string): Promise<void> {
+  await pool.query('DELETE FROM workflow_templates WHERE id = $1', [id]);
+}
+
+// ─── Execution Logs ───
+
+export async function createExecutionLog(data: {
+  executionId: string;
+  nodeId: string;
+  eventType: string;
+  data?: any;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO execution_logs (execution_id, node_id, event_type, data) VALUES ($1, $2, $3, $4)`,
+    [data.executionId, data.nodeId, data.eventType, data.data ? JSON.stringify(data.data) : null]
+  );
+}
+
+export async function getExecutionLogs(executionId: string): Promise<any[]> {
+  const result = await pool.query(
+    'SELECT * FROM execution_logs WHERE execution_id = $1 ORDER BY created_at', [executionId]
+  );
+  return result.rows;
+}
+
+// ─── Seed Built-in Templates ───
+
+export async function seedBuiltinTemplates(): Promise<void> {
+  const { getBuiltinTemplates } = await import('../services/workflowTemplates.js');
+  const templates = getBuiltinTemplates();
+  for (const tpl of templates) {
+    try {
+      await pool.query(
+        `INSERT INTO workflow_templates (id, name, description, category, tags, nodes, edges, difficulty, estimated_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO NOTHING`,
+        [tpl.id, tpl.name, tpl.description, tpl.category,
+         JSON.stringify(tpl.tags), JSON.stringify(tpl.nodes), JSON.stringify(tpl.edges),
+         tpl.difficulty, tpl.estimatedTime]
+      );
+    } catch {}
+  }
 }
