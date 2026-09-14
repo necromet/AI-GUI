@@ -36,21 +36,14 @@ export default function EdgeAddButton({ x, y, sourceNodeId, targetNodeId, onInse
 
   return (
     <div
-      className="absolute z-50 min-w-[160px] rounded-lg border shadow-xl overflow-hidden"
+      className="absolute z-20 min-w-[160px] rounded-lg border shadow-xl overflow-hidden ctx-menu-enter"
       style={{
         left: x,
         top: y,
         borderColor: 'var(--border-300)',
         backgroundColor: 'var(--bg-100)',
-        animation: 'ctxMenuIn 0.12s ease-out',
       }}
     >
-      <style>{`
-        @keyframes ctxMenuIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
       <div className="px-2 py-1 border-b" style={{ borderColor: 'var(--border-300)' }}>
         <span className="text-[10px] font-medium" style={{ color: 'var(--text-500)' }}>Insert Node</span>
       </div>

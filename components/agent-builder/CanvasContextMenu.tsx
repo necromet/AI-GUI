@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { NODE_CATEGORIES, NODE_DEFINITIONS } from './constants';
 import type { WorkflowNodeType } from './types';
 import { Circle } from 'lucide-react';
 import { ICON_MAP } from './shared/icons';
+import { SEMANTIC_COLORS } from './shared/colors';
 
 interface Props {
   x: number;
@@ -15,6 +16,18 @@ interface Props {
 
 export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDeleteSelected, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [adjustedPos, setAdjustedPos] = useState({ x, y });
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    setAdjustedPos({
+      x: Math.min(x, vw - rect.width - 8),
+      y: Math.min(y, vh - rect.height - 8),
+    });
+  }, [x, y]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -32,22 +45,15 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden"
+      className="fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden ctx-menu-enter"
       style={{
-        left: x,
-        top: y,
+        left: adjustedPos.x,
+        top: adjustedPos.y,
         borderColor: 'var(--border-300)',
         backgroundColor: 'var(--bg-100)',
         backdropFilter: 'blur(12px)',
-        animation: 'ctxMenuIn 0.12s ease-out',
       }}
     >
-      <style>{`
-        @keyframes ctxMenuIn {
-          from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
 
       <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--border-300)' }}>
         <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>Add Node</span>
@@ -91,7 +97,7 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
         <button
           onClick={() => { onDeleteSelected(); onClose(); }}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
-          style={{ color: '#f87171' }}
+          style={{ color: SEMANTIC_COLORS.danger }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
         >

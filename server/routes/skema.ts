@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import express from 'express';
 import * as path from 'path';
 import { chatCompletion, streamChatCompletion, ChatMessage } from '../services/mimoService';
 import { analyzeImages } from '../services/agentService';
@@ -36,7 +37,7 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/projects/:id', async (req: Request, res: Response) => {
+router.put('/projects/:id', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
   try {
     const { title, description, project_type, boards_json, theme_json, full_design_spec_json, created_at, updated_at } = req.body;
     if (!title || boards_json === undefined) {
@@ -218,7 +219,7 @@ router.post('/generate-spec', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/generate-html', async (req: Request, res: Response) => {
+router.post('/generate-html', express.json({ limit: '5mb' }), async (req: Request, res: Response) => {
   try {
     const { boardDescription, layout, prompt: userPrompt, model, provider, stream, isReasoning, currentHtml, history, projectType, images, slideNumber, totalSlides, referenceSlideHtml } = req.body;
 

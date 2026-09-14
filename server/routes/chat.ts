@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import {
   streamChatCompletion,
   chatCompletion,
@@ -10,11 +12,62 @@ import {
 } from '../services/mimoService';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
-const docUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'text/plain', 'text/markdown', 'text/csv', 'text/html',
+  'application/json', 'application/xml', 'text/xml',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype) || file.mimetype.startsWith('text/')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+    }
+  },
+});
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype) || file.mimetype.startsWith('text/')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+    }
+  },
+});
+
+const completionsSchema = z.object({
+  model: z.string().min(1).max(100),
+  messages: z.array(z.object({
+    role: z.string().max(20),
+    content: z.union([z.string().max(1_000_000), z.array(z.any())]),
+    attachments: z.array(z.any()).optional(),
+  })).min(1).max(500),
+  stream: z.boolean().optional(),
+  max_tokens: z.number().int().min(1).max(200_000).optional(),
+  systemInstruction: z.string().max(100_000).optional(),
+  provider: z.string().max(50).optional(),
+  search: z.boolean().optional(),
+  think: z.boolean().optional(),
+  language: z.string().max(10).optional(),
+});
 
 router.post('/completions', async (req: Request, res: Response) => {
   try {
+    const parsed = completionsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+      return;
+    }
+
     const {
       model,
       messages,
@@ -25,7 +78,7 @@ router.post('/completions', async (req: Request, res: Response) => {
       search,
       think,
       language,
-    } = req.body;
+    } = parsed.data;
 
     if (!model || !messages || !Array.isArray(messages)) {
       res.status(400).json({ error: 'Missing required fields: model, messages' });
@@ -200,9 +253,17 @@ router.post('/tts', async (req: Request, res: Response) => {
   }
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many uploads. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const MAX_TEXT_LENGTH = 50000;
 
-router.post('/parse-document', docUpload.single('file'), async (req: Request, res: Response) => {
+router.post('/parse-document', uploadLimiter, docUpload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'Missing file' });

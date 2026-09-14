@@ -1,26 +1,34 @@
+import VariableAutocomplete from '../VariableAutocomplete';
+import { CHAT_MODELS } from '@/constants';
+import { DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_AGENT_MODEL } from '../constants';
+
 interface Props {
   data: Record<string, any>;
   onUpdate: (data: Record<string, any>) => void;
+  upstreamNodes?: { id: string; label: string }[];
 }
 
-const MODELS = [
-  { value: 'mimo-v2.5', label: 'MiMo V2.5', provider: 'mimo' },
-  { value: 'mimo-v2.5-pro', label: 'MiMo V2.5 Pro (Reasoning)', provider: 'mimo' },
-  { value: 'mimo-v2.5-direct', label: 'MiMo V2.5 (API Key)', provider: 'mimo-direct' },
-  { value: 'mimo-v2.5-pro-direct', label: 'MiMo V2.5 Pro (API Key)', provider: 'mimo-direct' },
-  { value: 'deepseek-chat', label: 'DeepSeek Chat', provider: 'deepseek' },
-  { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner', provider: 'deepseek' },
-  { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', provider: 'deepseek' },
-  { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro (Reasoning)', provider: 'deepseek' },
+const MODELS = CHAT_MODELS.map(m => ({
+  value: m.id,
+  label: m.name,
+  provider: m.provider,
+}));
+
+const PROMPT_TEMPLATES = [
+  { label: 'Summarizer', system: 'You are a text summarizer. Provide concise summaries.', user: 'Summarize the following:\n\n{{input}}' },
+  { label: 'Classifier', system: 'You are a text classifier. Classify into the given categories.', user: 'Classify this text:\n\n{{input}}' },
+  { label: 'Extractor', system: 'You extract structured data from unstructured text.', user: 'Extract key information from:\n\n{{input}}' },
+  { label: 'Translator', system: 'You are a professional translator.', user: 'Translate the following:\n\n{{input}}' },
+  { label: 'Code Generator', system: 'You write clean, efficient code.', user: 'Write code for:\n\n{{input}}' },
 ];
 
-export default function AgentNodeConfig({ data, onUpdate }: Props) {
+export default function AgentNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
   return (
     <div className="space-y-3">
       <div>
         <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>Model</label>
         <select
-          value={data.model || 'mimo-v2.5'}
+          value={data.model || DEFAULT_AGENT_MODEL}
           onChange={e => onUpdate({ model: e.target.value })}
           className="w-full px-2 py-1.5 text-xs rounded border bg-transparent"
           style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
@@ -30,26 +38,41 @@ export default function AgentNodeConfig({ data, onUpdate }: Props) {
       </div>
 
       <div>
-        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>System Prompt</label>
-        <textarea
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium" style={{ color: 'var(--text-300)' }}>System Prompt</label>
+          <select
+            className="text-[10px] px-1.5 py-0.5 rounded border bg-transparent cursor-pointer"
+            style={{ borderColor: 'var(--border-300)', color: 'var(--text-500)' }}
+            onChange={e => {
+              const tmpl = PROMPT_TEMPLATES[parseInt(e.target.value)];
+              if (tmpl) onUpdate({ systemPrompt: tmpl.system, userPrompt: tmpl.user });
+              e.target.value = '';
+            }}
+            defaultValue=""
+          >
+            <option value="" disabled>Insert template...</option>
+            {PROMPT_TEMPLATES.map((t, i) => (
+              <option key={i} value={i}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+        <VariableAutocomplete
           value={data.systemPrompt || data.instructions || ''}
-          onChange={e => onUpdate({ systemPrompt: e.target.value, instructions: e.target.value })}
+          onChange={v => onUpdate({ systemPrompt: v, instructions: v })}
           placeholder="You are a helpful assistant..."
-          rows={4}
-          className="w-full px-2 py-1.5 text-xs rounded border bg-transparent resize-none"
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+          multiline
+          upstreamNodes={upstreamNodes}
         />
       </div>
 
       <div>
         <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>User Prompt</label>
-        <textarea
+        <VariableAutocomplete
           value={data.userPrompt || ''}
-          onChange={e => onUpdate({ userPrompt: e.target.value })}
+          onChange={v => onUpdate({ userPrompt: v })}
           placeholder="Use {{variable}} for dynamic values..."
-          rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded border bg-transparent resize-none"
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+          multiline
+          upstreamNodes={upstreamNodes}
         />
       </div>
 
@@ -58,7 +81,7 @@ export default function AgentNodeConfig({ data, onUpdate }: Props) {
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>Max Tokens</label>
           <input
             type="number"
-            value={data.maxTokens || 4096}
+            value={data.maxTokens || DEFAULT_MAX_TOKENS}
             onChange={e => onUpdate({ maxTokens: parseInt(e.target.value) })}
             className="w-full px-2 py-1.5 text-xs rounded border bg-transparent"
             style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
@@ -71,7 +94,7 @@ export default function AgentNodeConfig({ data, onUpdate }: Props) {
             step="0.1"
             min="0"
             max="2"
-            value={data.temperature || 0.7}
+            value={data.temperature || DEFAULT_TEMPERATURE}
             onChange={e => onUpdate({ temperature: parseFloat(e.target.value) })}
             className="w-full px-2 py-1.5 text-xs rounded border bg-transparent"
             style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
@@ -101,6 +124,10 @@ export default function AgentNodeConfig({ data, onUpdate }: Props) {
         />
         Include chat history
       </label>
+
+      <div className="pt-1 text-[10px] rounded p-2" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-500)' }}>
+        Est. prompt tokens: ~{Math.ceil(((data.systemPrompt || '').length + (data.userPrompt || '').length) / 4)}
+      </div>
     </div>
   );
 }

@@ -72,18 +72,8 @@ export default defineConfig(({ mode }) => {
           port: 5173,
         },
         proxy: {
-          '/mimo-api': {
-            target: 'https://token-plan-sgp.xiaomimimo.com/v1',
-            changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/mimo-api/, ''),
-          },
-          '/mimo-direct-api': {
-            target: 'https://api.xiaomimimo.com/v1',
-            changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/mimo-direct-api/, ''),
-          },
           '/api': {
-            target: 'http://localhost:3001',
+            target: 'http://localhost:3005',
             changeOrigin: true,
           }
         }
@@ -93,12 +83,7 @@ export default defineConfig(({ mode }) => {
         tailwindcss(),
         pgsqlAstParserPlugin(),
       ],
-      define: {
-        'process.env.MIMO_API_KEY': JSON.stringify(env.MIMO_API_KEY),
-        'process.env.MIMO_BASE_URL': JSON.stringify(env.MIMO_BASE_URL),
-        'process.env.MIMO_DIRECT_API_KEY': JSON.stringify(env.MIMO_DIRECT_API_KEY),
-        'process.env.MIMO_DIRECT_BASE_URL': JSON.stringify(env.MIMO_DIRECT_BASE_URL),
-      },
+      define: {},
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

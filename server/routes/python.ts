@@ -18,7 +18,8 @@ function ensureFilesDir() {
 }
 
 function getProjectDir(projectId: string): string {
-  return join(FILES_DIR, projectId);
+  const sanitized = projectId.replace(/[^a-zA-Z0-9_-]/g, '');
+  return join(FILES_DIR, sanitized);
 }
 
 function ensureProjectDir(projectId: string): string {
@@ -30,6 +31,10 @@ function ensureProjectDir(projectId: string): string {
 function resolveFilePath(projectId: string, filename: string): string | null {
   const projectDir = getProjectDir(projectId);
   const filePath = join(projectDir, filename);
+  const normalizedProject = projectDir.replace(/[/\\]+$/, '');
+  if (!filePath.startsWith(normalizedProject + path.sep) && filePath !== normalizedProject) {
+    return null;
+  }
   if (!existsSync(filePath)) return null;
   return filePath;
 }

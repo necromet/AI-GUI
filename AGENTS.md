@@ -98,17 +98,18 @@ Some keys use `edward:labs_` prefix (`edward:labs_fontSize`, `edward:labs_defaul
 
 ### Triple lock passwords
 
-Each mode has its own password and `sessionStorage` key, checked in `components/ModeSelector.tsx`:
+Each mode has its own password (set in `.env` via `CHAT_PASSWORD`, `RAG_PASSWORD`, etc.) and `sessionStorage` key, checked in `components/ModeSelector.tsx`. Passwords are verified server-side via `POST /api/auth/verify`.
 
-| Mode | Password | Session key |
-|------|----------|-------------|
-| Chat | `thelordismyshepherd` | `edward:labs_chat_session` |
-| RAG | `herestoresmysoul` | `edward:labs_rag_session` |
-| Skema | `pathsofrighteousness` | `edward:labs_skema_session` |
-| Python | `mycuprunnethover` | `edward:labs_python_session` |
-| Library | `psalm23` | `edward:labs_library_session` |
-| Database | `heleadsmebesidequietwater` | `edward:labs_database_session` |
-| Agent Builder | `shepherdofmysoul` | `edward:labs_agent-builder_session` |
+| Mode | Session key |
+|------|-------------|
+| Chat | `edward:labs_chat_session` |
+| RAG | `edward:labs_rag_session` |
+| Skema | `edward:labs_skema_session` |
+| Python | `edward:labs_python_session` |
+| Library | `edward:labs_library_session` |
+| Database | `edward:labs_database_session` |
+| Agent Builder | `edward:labs_agent-builder_session` |
+| Notes | `edward:labs_notes_session` |
 
 ### Notifications via sonner
 

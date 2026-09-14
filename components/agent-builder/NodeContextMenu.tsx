@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { Copy, Unlink, Trash2, Settings } from 'lucide-react';
+import { SEMANTIC_COLORS } from './shared/colors';
 
 interface Props {
   x: number;
@@ -14,6 +15,18 @@ interface Props {
 
 export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onDisconnect, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [adjustedPos, setAdjustedPos] = useState({ x, y });
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    setAdjustedPos({
+      x: Math.min(x, vw - rect.width - 8),
+      y: Math.min(y, vh - rect.height - 8),
+    });
+  }, [x, y]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -31,29 +44,22 @@ export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onD
   const items = [
     { icon: Settings, label: 'Edit Settings', action: onEdit, color: 'var(--text-300)' },
     { icon: Copy, label: 'Duplicate', action: onDuplicate, color: 'var(--text-300)' },
-    { icon: Unlink, label: 'Disconnect All', action: onDisconnect, color: '#fbbf24' },
-    { icon: Trash2, label: 'Delete Node', action: onDelete, color: '#f87171' },
+    { icon: Unlink, label: 'Disconnect All', action: onDisconnect, color: SEMANTIC_COLORS.warning },
+    { icon: Trash2, label: 'Delete Node', action: onDelete, color: SEMANTIC_COLORS.danger },
   ];
 
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[180px] rounded-lg border shadow-xl overflow-hidden"
+      className="fixed z-50 min-w-[180px] rounded-lg border shadow-xl overflow-hidden ctx-menu-enter"
       style={{
-        left: x,
-        top: y,
+        left: adjustedPos.x,
+        top: adjustedPos.y,
         borderColor: 'var(--border-300)',
         backgroundColor: 'var(--bg-100)',
         backdropFilter: 'blur(12px)',
-        animation: 'ctxMenuIn 0.12s ease-out',
       }}
     >
-      <style>{`
-        @keyframes ctxMenuIn {
-          from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
       {items.map((item) => (
         <button
           key={item.label}

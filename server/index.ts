@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { randomBytes } from 'crypto';
 
 const envPath = resolve(process.cwd(), '.env');
 const envLocalPath = resolve(process.cwd(), '.env.local');
@@ -22,17 +23,20 @@ for (const file of [envPath, envLocalPath]) {
 }
 
 if (!process.env.SESSION_SECRET) {
-  console.warn('[server] SESSION_SECRET not set — using fallback (insecure, set in .env for production)');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[server] FATAL: SESSION_SECRET must be set in production');
+    process.exit(1);
+  }
+  console.warn('[server] SESSION_SECRET not set — using random secret (sessions will not persist across restarts)');
 }
 
-if (!process.env.DB_ENCRYPTION_KEY) {
-  console.warn('[server] DB_ENCRYPTION_KEY not set — database connection passwords stored as base64 (insecure)');
-}
+const sessionSecret = process.env.SESSION_SECRET || randomBytes(64).toString('hex');
 
 const { default: express } = await import('express');
 const { default: cors } = await import('cors');
 const { default: session } = await import('express-session');
 const { default: rateLimit } = await import('express-rate-limit');
+const { default: helmet } = await import('helmet');
 const { default: chatRoutes } = await import('./routes/chat');
 const { default: skemaRoutes } = await import('./routes/skema');
 const { default: ragRoutes } = await import('./routes/rag');
@@ -58,26 +62,53 @@ const { default: authRoutes } = await import('./routes/auth');
 const { requireModeAuth } = await import('./middleware/auth');
 const { initializeDatabaseWithRetry } = await import('./db');
 
+if (!process.env.DB_ENCRYPTION_KEY) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[server] FATAL: DB_ENCRYPTION_KEY must be set in production');
+    process.exit(1);
+  }
+  console.warn('[server] DB_ENCRYPTION_KEY not set — database connection passwords stored as base64 (insecure)');
+}
+
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
 
+app.set('trust proxy', 1);
+
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',').map(s => s.trim());
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://token-plan-sgp.xiaomimimo.com", "https://api.xiaomimimo.com", "https://api.openai.com", "https://api.deepseek.com"],
+      frameSrc: ["'self'", "blob:", "data:"],
+      fontSrc: ["'self'", "data:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 app.use(cors({
   origin: ALLOWED_ORIGINS,
   credentials: true,
+  maxAge: 86400,
 }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'edward-labs-fallback-secret-change-me',
+  secret: sessionSecret,
   name: 'edward.sid',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: 'auto',
-    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
     maxAge: 24 * 60 * 60 * 1000,
   },
 }));
@@ -100,28 +131,15 @@ const apiLimiter = rateLimit({
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const originalJson = res.json.bind(res);
   const originalEnd = res.end.bind(res);
-  let responseBody: any = null;
-
-  res.json = function (body: any) {
-    responseBody = body;
-    return originalJson(body);
-  };
 
   res.end = function (...args: any[]) {
     const duration = Date.now() - start;
-    const isStream = res.getHeader('Content-Type') === 'text/event-stream';
     const status = res.statusCode;
     const method = req.method;
     const url = req.originalUrl;
 
-    let log = `[api] ${method} ${url} → ${status} (${duration}ms)`;
-    if (responseBody && !isStream) {
-      const bodyStr = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
-      const truncated = bodyStr.length > 200 ? bodyStr.slice(0, 200) + '…' : bodyStr;
-      log += ` | ${truncated}`;
-    }
+    const log = `[api] ${method} ${url} → ${status} (${duration}ms)`;
 
     if (status >= 400) {
       console.error(log);
@@ -169,7 +187,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   console.error('[server] Unhandled error:', err);
   const status = err.status || 500;
   res.status(status).json({
-    error: status >= 500 ? 'Internal server error' : err.message,
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : (status >= 500 ? 'Internal server error' : err.message),
   });
 });
 

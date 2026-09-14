@@ -75,7 +75,7 @@ export async function executeMCPNode(
 }
 
 async function executeFirecrawlAction(action: string, params: any, apiKey: string): Promise<any> {
-  const baseUrl = 'https://api.firecrawl.dev/v1';
+  const baseUrl = process.env.FIRECRAWL_BASE_URL || 'https://api.firecrawl.dev/v1';
 
   try {
     if (action === 'scrape' || action === 'firecrawl_scrape') {

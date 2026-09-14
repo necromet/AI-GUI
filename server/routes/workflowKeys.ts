@@ -9,6 +9,9 @@ router.get('/config', async (_req, res) => {
     const keys = await workflowDB.getUserLLMKeys();
     const providers = keys.map(k => ({ provider: k.provider, hasKey: true, keyPrefix: k.key_prefix }));
     const envProviders = [
+      { provider: 'mimo', hasKey: !!process.env.MIMO_API_KEY, source: 'env' },
+      { provider: 'mimo-direct', hasKey: !!process.env.MIMO_DIRECT_API_KEY, source: 'env' },
+      { provider: 'deepseek', hasKey: !!process.env.DEEPSEEK_API_KEY, source: 'env' },
       { provider: 'anthropic', hasKey: !!process.env.ANTHROPIC_API_KEY, source: 'env' },
       { provider: 'openai', hasKey: !!process.env.OPENAI_API_KEY, source: 'env' },
       { provider: 'groq', hasKey: !!process.env.GROQ_API_KEY, source: 'env' },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileCode, Clock, Tag, ChevronRight } from 'lucide-react';
+import { CATEGORY_COLORS, DEFAULT_NODE_COLOR } from './shared/colors';
 
 interface Template {
   id: string;
@@ -18,14 +19,6 @@ interface Props {
   onClose: () => void;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  scraping: '#fbbf24',
-  ai: '#818cf8',
-  data: '#60a5fa',
-  workflow: '#ec4899',
-  logic: '#fb923c',
-};
-
 export default function TemplateGallery({ onSelect, onClose }: Props) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,9 +35,9 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
   const filtered = selectedCategory ? templates.filter(t => t.category === selectedCategory) : templates;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div
-        className="w-[700px] max-h-[80vh] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
+        className="w-[700px] max-w-[calc(100vw-32px)] max-h-[80vh] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
         style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-300)' }}>
@@ -72,8 +65,8 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
               onClick={() => setSelectedCategory(cat)}
               className="px-2 py-1 rounded text-[11px] cursor-pointer transition-colors capitalize"
               style={{
-                backgroundColor: selectedCategory === cat ? (CATEGORY_COLORS[cat] || '#6b7280') + '30' : 'var(--bg-200)',
-                color: selectedCategory === cat ? CATEGORY_COLORS[cat] || '#6b7280' : 'var(--text-300)',
+                backgroundColor: selectedCategory === cat ? (CATEGORY_COLORS[cat] || DEFAULT_NODE_COLOR) + '30' : 'var(--bg-200)',
+                color: selectedCategory === cat ? CATEGORY_COLORS[cat] || DEFAULT_NODE_COLOR : 'var(--text-300)',
               }}
             >
               {cat}
@@ -87,7 +80,7 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-xs" style={{ color: 'var(--text-500)' }}>No templates found</div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {filtered.map(template => (
                 <button
                   key={template.id}
@@ -97,7 +90,7 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <FileCode size={14} style={{ color: CATEGORY_COLORS[template.category] || '#6b7280' }} />
+                      <FileCode size={14} style={{ color: CATEGORY_COLORS[template.category] || DEFAULT_NODE_COLOR }} />
                       <span className="text-xs font-medium" style={{ color: 'var(--text-100)' }}>{template.name}</span>
                     </div>
                     <ChevronRight size={12} style={{ color: 'var(--text-500)' }} />

@@ -27,7 +27,7 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       nodes: [
         { id: 'start_1', type: 'start', position: { x: 0, y: 100 }, data: { nodeType: 'start', label: 'Start', color: '#34d399', icon: 'play', inputVariables: [{ name: 'url', type: 'string', required: true, description: 'URL to scrape' }] } },
         { id: 'scrape_1', type: 'mcp', position: { x: 250, y: 100 }, data: { nodeType: 'mcp', label: 'Scrape URL', color: '#fbbf24', icon: 'wrench', mcpAction: 'scrape', scrapeUrl: '{{url}}' } },
-        { id: 'agent_1', type: 'agent', position: { x: 500, y: 100 }, data: { nodeType: 'agent', label: 'Summarize', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'Summarize the following web content in a concise, informative way.', userPrompt: '{{lastOutput}}', maxTokens: 2048 } },
+        { id: 'agent_1', type: 'agent', position: { x: 500, y: 100 }, data: { nodeType: 'agent', label: 'Summarize', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Summarize the following web content in a concise, informative way.', userPrompt: '{{lastOutput}}', maxTokens: 2048 } },
         { id: 'end_1', type: 'end', position: { x: 750, y: 100 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
       ],
       edges: [
@@ -46,7 +46,7 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       tags: ['agent', 'firecrawl', 'mcp'],
       nodes: [
         { id: 'start_1', type: 'start', position: { x: 0, y: 100 }, data: { nodeType: 'start', label: 'Start', color: '#34d399', icon: 'play', inputVariables: [{ name: 'query', type: 'string', required: true, description: 'Research query' }] } },
-        { id: 'agent_1', type: 'agent', position: { x: 300, y: 100 }, data: { nodeType: 'agent', label: 'Research Agent', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'You are a research assistant. Use the available tools to find and analyze information. Provide comprehensive, well-sourced answers.', userPrompt: '{{query}}', maxTokens: 4096, mcpTools: [{ name: 'firecrawl_scrape', description: 'Scrape a URL', inputSchema: { type: 'object', properties: { url: { type: 'string' } } } }, { name: 'firecrawl_search', description: 'Search the web', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] } },
+        { id: 'agent_1', type: 'agent', position: { x: 300, y: 100 }, data: { nodeType: 'agent', label: 'Research Agent', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'You are a research assistant. Use the available tools to find and analyze information. Provide comprehensive, well-sourced answers.', userPrompt: '{{query}}', maxTokens: 4096, mcpTools: [{ name: 'firecrawl_scrape', description: 'Scrape a URL', inputSchema: { type: 'object', properties: { url: { type: 'string' } } } }, { name: 'firecrawl_search', description: 'Search the web', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] } },
         { id: 'end_1', type: 'end', position: { x: 600, y: 100 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
       ],
       edges: [
@@ -84,7 +84,7 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       tags: ['approval', 'human-in-the-loop'],
       nodes: [
         { id: 'start_1', type: 'start', position: { x: 0, y: 100 }, data: { nodeType: 'start', label: 'Start', color: '#34d399', icon: 'play', inputVariables: [{ name: 'topic', type: 'string', required: true, description: 'Content topic' }] } },
-        { id: 'agent_1', type: 'agent', position: { x: 250, y: 100 }, data: { nodeType: 'agent', label: 'Generate Content', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'Write a professional blog post about the given topic.', userPrompt: '{{topic}}', maxTokens: 4096 } },
+        { id: 'agent_1', type: 'agent', position: { x: 250, y: 100 }, data: { nodeType: 'agent', label: 'Generate Content', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Write a professional blog post about the given topic.', userPrompt: '{{topic}}', maxTokens: 4096 } },
         { id: 'approval_1', type: 'user-approval', position: { x: 500, y: 100 }, data: { nodeType: 'user-approval', label: 'Review', color: '#ec4899', icon: 'user-check', message: 'Review the generated content before publishing.' } },
         { id: 'end_1', type: 'end', position: { x: 750, y: 100 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
       ],
@@ -105,8 +105,8 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       nodes: [
         { id: 'start_1', type: 'start', position: { x: 0, y: 150 }, data: { nodeType: 'start', label: 'Start', color: '#34d399', icon: 'play', inputVariables: [{ name: 'input', type: 'string', required: true, description: 'Input to classify' }] } },
         { id: 'ifelse_1', type: 'if-else', position: { x: 250, y: 150 }, data: { nodeType: 'if-else', label: 'Classify', color: '#fb923c', icon: 'git-branch', condition: 'input.toLowerCase().includes("help") || input.includes("?")' } },
-        { id: 'agent_1', type: 'agent', position: { x: 500, y: 50 }, data: { nodeType: 'agent', label: 'Helpful Response', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'Provide a helpful, detailed response.', userPrompt: '{{input}}' } },
-        { id: 'agent_2', type: 'agent', position: { x: 500, y: 250 }, data: { nodeType: 'agent', label: 'General Response', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'Respond concisely.', userPrompt: '{{input}}' } },
+        { id: 'agent_1', type: 'agent', position: { x: 500, y: 50 }, data: { nodeType: 'agent', label: 'Helpful Response', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Provide a helpful, detailed response.', userPrompt: '{{input}}' } },
+        { id: 'agent_2', type: 'agent', position: { x: 500, y: 250 }, data: { nodeType: 'agent', label: 'General Response', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Respond concisely.', userPrompt: '{{input}}' } },
         { id: 'end_1', type: 'end', position: { x: 750, y: 150 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
       ],
       edges: [
@@ -131,7 +131,7 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
         { id: 'transform_1', type: 'transform', position: { x: 400, y: 150 }, data: { nodeType: 'transform', label: 'Extract URLs', color: '#60a5fa', icon: 'code', code: 'const results = Array.isArray(input) ? input : input?.data || [];\nreturn { urls: results.map((r: any) => r.url || r).slice(0, 5), index: 0 };' } },
         { id: 'while_1', type: 'while', position: { x: 600, y: 150 }, data: { nodeType: 'while', label: 'Loop', color: '#c084fc', icon: 'repeat', condition: '(variables.urls && variables.index < variables.urls.length)', maxIterations: 10 } },
         { id: 'mcp_2', type: 'mcp', position: { x: 800, y: 50 }, data: { nodeType: 'mcp', label: 'Scrape Page', color: '#fbbf24', icon: 'wrench', mcpAction: 'scrape', scrapeUrl: '{{urls[{{index}}]}}' } },
-        { id: 'agent_1', type: 'agent', position: { x: 1000, y: 150 }, data: { nodeType: 'agent', label: 'Synthesize', color: '#818cf8', icon: 'bot', model: 'claude-sonnet-4-20250514', systemPrompt: 'Synthesize the research into a comprehensive summary.', userPrompt: '{{lastOutput}}' } },
+        { id: 'agent_1', type: 'agent', position: { x: 1000, y: 150 }, data: { nodeType: 'agent', label: 'Synthesize', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Synthesize the research into a comprehensive summary.', userPrompt: '{{lastOutput}}' } },
         { id: 'end_1', type: 'end', position: { x: 1200, y: 150 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
       ],
       edges: [

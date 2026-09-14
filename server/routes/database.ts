@@ -5,17 +5,18 @@ import { query, getOne, getAll } from '../db/pg';
 
 const router = Router();
 
-const ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY;
+const ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY || process.env.SESSION_SECRET;
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
+function deriveKey(): Buffer {
+  const source = ENCRYPTION_KEY || 'insecure-fallback-key-do-not-use-in-production';
+  return crypto.scryptSync(source, 'db-pw-salt-v2', 32);
+}
+
 function encodePassword(pw: string): string {
-  if (!ENCRYPTION_KEY) {
-    if (process.env.NODE_ENV !== 'test') console.warn('[database] DB_ENCRYPTION_KEY not set — passwords stored as base64 (insecure)');
-    return Buffer.from(pw, 'utf-8').toString('base64');
-  }
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'db-pw-salt', 32);
+  const key = deriveKey();
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(pw, 'utf8'), cipher.final()]);
@@ -24,15 +25,12 @@ function encodePassword(pw: string): string {
 }
 
 function decodePassword(encoded: string): string {
-  if (!ENCRYPTION_KEY) {
-    return Buffer.from(encoded, 'base64').toString('utf-8');
-  }
   const data = Buffer.from(encoded, 'base64');
   if (data.length < IV_LENGTH + TAG_LENGTH + 1) {
     return Buffer.from(encoded, 'base64').toString('utf-8');
   }
   try {
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'db-pw-salt', 32);
+    const key = deriveKey();
     const iv = data.subarray(0, IV_LENGTH);
     const tag = data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
     const encrypted = data.subarray(IV_LENGTH + TAG_LENGTH);
@@ -47,6 +45,7 @@ function decodePassword(encoded: string): string {
 const poolCache = new Map<string, { pool: pg.Pool; lastUsed: number }>();
 const POOL_IDLE_MS = 5 * 60 * 1000;
 const MAX_ROWS = 1000;
+const MAX_CACHED_POOLS = 50;
 
 setInterval(() => {
   const now = Date.now();
@@ -64,6 +63,18 @@ function getPool(id: string, config: { host: string; port: number; database: str
     cached.lastUsed = Date.now();
     return cached.pool;
   }
+  if (poolCache.size >= MAX_CACHED_POOLS) {
+    let oldestId: string | null = null;
+    let oldestTime = Infinity;
+    for (const [k, v] of poolCache) {
+      if (v.lastUsed < oldestTime) { oldestTime = v.lastUsed; oldestId = k; }
+    }
+    if (oldestId) {
+      const entry = poolCache.get(oldestId);
+      entry?.pool.end().catch(() => {});
+      poolCache.delete(oldestId);
+    }
+  }
   const pool = new pg.Pool({
     host: config.host,
     port: config.port,
@@ -74,7 +85,7 @@ function getPool(id: string, config: { host: string; port: number; database: str
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
     statement_timeout: 30000,
-    ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    ssl: config.ssl ? { rejectUnauthorized: true } : undefined,
   });
   pool.on('error', () => {});
   poolCache.set(id, { pool, lastUsed: Date.now() });
@@ -191,7 +202,7 @@ router.post('/connections', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: name, host, database, user, password' });
       return;
     }
-    const id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const id = crypto.randomBytes(16).toString('hex');
     const encoded = encodePassword(password);
     await query(
       `INSERT INTO database_connections (id, name, host, port, database_name, username, password_encrypted, ssl)
@@ -255,7 +266,7 @@ router.post('/test', async (req: Request, res: Response) => {
       password,
       max: 1,
       connectionTimeoutMillis: 10000,
-      ssl: ssl ? { rejectUnauthorized: false } : undefined,
+      ssl: ssl ? { rejectUnauthorized: true } : undefined,
     });
     const client = await testPool.connect();
     const result = await client.query('SELECT version()');

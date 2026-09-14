@@ -14,6 +14,7 @@ interface AgentResult {
 }
 
 const MAX_TOOL_ITERATIONS = 10;
+const MAX_CHAT_HISTORY_MESSAGES = 20;
 
 export async function executeAgentNode(
   nodeData: Record<string, any>,
@@ -21,7 +22,7 @@ export async function executeAgentNode(
   apiKeys: Record<string, string> = {}
 ): Promise<AgentResult> {
   const {
-    model = 'claude-sonnet-4-20250514',
+    model = 'mimo-v2.5',
     systemPrompt = '',
     userPrompt = '',
     instructions = '',

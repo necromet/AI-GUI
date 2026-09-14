@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AUTO_SAVE_DELAY_MS } from '../constants';
 
 export function useAutoSave(
   workflowId: string | undefined,
@@ -26,7 +27,7 @@ export function useAutoSave(
         });
         lastSavedRef.current = current;
       } catch {}
-    }, 5000);
+    }, AUTO_SAVE_DELAY_MS);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);

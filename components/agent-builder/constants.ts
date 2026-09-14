@@ -1,4 +1,5 @@
 import type { WorkflowNodeType } from './types';
+import { NODE_COLORS } from './shared/colors';
 
 export interface NodeDefinition {
   type: WorkflowNodeType;
@@ -10,19 +11,29 @@ export interface NodeDefinition {
   defaults?: Record<string, any>;
 }
 
+export const DEFAULT_NODE_COLOR = '#6b7280';
+export const AUTO_SAVE_DELAY_MS = 5000;
+export const MAX_UNDO_STACK_SIZE = 50;
+export const APPROVAL_POLL_INTERVAL_MS = 3000;
+export const PANEL_MIN_WIDTH = 280;
+export const PANEL_MAX_WIDTH = 500;
+export const DEFAULT_AGENT_MODEL = 'mimo-v2.5';
+export const DEFAULT_MAX_TOKENS = 4096;
+export const DEFAULT_TEMPERATURE = 0.7;
+
 export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
-  start: { type: 'start', label: 'Start', color: '#34d399', icon: 'play', category: 'flow', description: 'Workflow entry point', defaults: { inputVariables: [] } },
-  end: { type: 'end', label: 'End', color: '#f87171', icon: 'square', category: 'flow', description: 'Workflow completion' },
-  agent: { type: 'agent', label: 'Agent', color: '#818cf8', icon: 'bot', category: 'ai', description: 'AI reasoning with LLM', defaults: { model: 'claude-sonnet-4-20250514', systemPrompt: '', userPrompt: '', maxTokens: 4096, temperature: 0.7 } },
-  mcp: { type: 'mcp', label: 'MCP Tool', color: '#fbbf24', icon: 'wrench', category: 'ai', description: 'External tool call (Firecrawl, APIs)', defaults: { serverId: '', toolName: '', arguments: {} } },
-  'if-else': { type: 'if-else', label: 'If/Else', color: '#fb923c', icon: 'git-branch', category: 'logic', description: 'Conditional branching', defaults: { condition: '' } },
-  while: { type: 'while', label: 'While Loop', color: '#c084fc', icon: 'repeat', category: 'logic', description: 'Iterate until condition', defaults: { condition: '', maxIterations: 10 } },
-  'user-approval': { type: 'user-approval', label: 'User Approval', color: '#ec4899', icon: 'user-check', category: 'logic', description: 'Human-in-the-loop gate', defaults: { message: 'Approve to continue?' } },
-  transform: { type: 'transform', label: 'Transform', color: '#60a5fa', icon: 'code', category: 'data', description: 'Run JavaScript to transform data', defaults: { code: 'return input;' } },
-  'set-state': { type: 'set-state', label: 'Set State', color: '#a78bfa', icon: 'database', category: 'data', description: 'Set workflow variables', defaults: { variables: {} } },
-  extract: { type: 'extract', label: 'Extract', color: '#2dd4bf', icon: 'file-text', category: 'data', description: 'Extract fields from data', defaults: { fields: [] } },
-  http: { type: 'http', label: 'HTTP Request', color: '#94a3b8', icon: 'globe', category: 'io', description: 'Make HTTP API calls', defaults: { method: 'GET', url: '', headers: {}, body: '' } },
-  note: { type: 'note', label: 'Note', color: '#fbbf24', icon: 'sticky-note', category: 'flow', description: 'Sticky note for documentation', defaults: { text: '' } },
+  start: { type: 'start', label: 'Start', color: NODE_COLORS.start, icon: 'play', category: 'flow', description: 'Workflow entry point', defaults: { inputVariables: [] } },
+  end: { type: 'end', label: 'End', color: NODE_COLORS.end, icon: 'square', category: 'flow', description: 'Workflow completion' },
+  agent: { type: 'agent', label: 'Agent', color: NODE_COLORS.agent, icon: 'bot', category: 'ai', description: 'AI reasoning with LLM', defaults: { model: DEFAULT_AGENT_MODEL, systemPrompt: '', userPrompt: '', maxTokens: DEFAULT_MAX_TOKENS, temperature: DEFAULT_TEMPERATURE } },
+  mcp: { type: 'mcp', label: 'MCP Tool', color: NODE_COLORS.mcp, icon: 'wrench', category: 'ai', description: 'External tool call (Firecrawl, APIs)', defaults: { serverId: '', toolName: '', arguments: {} } },
+  'if-else': { type: 'if-else', label: 'If/Else', color: NODE_COLORS['if-else'], icon: 'git-branch', category: 'logic', description: 'Conditional branching', defaults: { condition: '' } },
+  while: { type: 'while', label: 'While Loop', color: NODE_COLORS.while, icon: 'repeat', category: 'logic', description: 'Iterate until condition', defaults: { condition: '', maxIterations: 10 } },
+  'user-approval': { type: 'user-approval', label: 'User Approval', color: NODE_COLORS['user-approval'], icon: 'user-check', category: 'logic', description: 'Human-in-the-loop gate', defaults: { message: 'Approve to continue?' } },
+  transform: { type: 'transform', label: 'Transform', color: NODE_COLORS.transform, icon: 'code', category: 'data', description: 'Run JavaScript to transform data', defaults: { code: 'return input;' } },
+  'set-state': { type: 'set-state', label: 'Set State', color: NODE_COLORS['set-state'], icon: 'database', category: 'data', description: 'Set workflow variables', defaults: { variables: {} } },
+  extract: { type: 'extract', label: 'Extract', color: NODE_COLORS.extract, icon: 'file-text', category: 'data', description: 'Extract fields from data', defaults: { fields: [] } },
+  http: { type: 'http', label: 'HTTP Request', color: NODE_COLORS.http, icon: 'globe', category: 'io', description: 'Make HTTP API calls', defaults: { method: 'GET', url: '', headers: {}, body: '' } },
+  note: { type: 'note', label: 'Note', color: NODE_COLORS.note, icon: 'sticky-note', category: 'flow', description: 'Sticky note for documentation', defaults: { text: '' } },
 };
 
 export const NODE_CATEGORIES = [

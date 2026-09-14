@@ -135,7 +135,7 @@ function WorkflowCanvasView() {
     <div className="h-full relative">
       <button
         onClick={() => navigate('/agent-builder')}
-        className="absolute top-2 left-2 z-10 px-2 py-1 rounded text-xs font-medium cursor-pointer"
+        className="absolute top-2 left-2 z-20 px-2 py-1 rounded text-xs font-medium cursor-pointer backdrop-blur-sm"
         style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)', border: '1px solid var(--border-300)' }}
       >
         ← Back to workflows

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { APPROVAL_POLL_INTERVAL_MS } from '../constants';
 
 interface PendingApproval {
   approvalId: string;
@@ -44,7 +45,7 @@ export function useApprovalWatch(executionId: string | null) {
     };
 
     checkApproval();
-    intervalRef.current = setInterval(checkApproval, 3000);
+    intervalRef.current = setInterval(checkApproval, APPROVAL_POLL_INTERVAL_MS);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

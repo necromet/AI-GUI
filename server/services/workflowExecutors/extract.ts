@@ -20,7 +20,8 @@ export async function executeExtractNode(
 
   if (schema || extractConfig?.schema) {
     try {
-      const response = await fetch('https://api.firecrawl.dev/v1/extract', {
+      const firecrawlBase = process.env.FIRECRAWL_BASE_URL || 'https://api.firecrawl.dev/v1';
+      const response = await fetch(`${firecrawlBase}/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
