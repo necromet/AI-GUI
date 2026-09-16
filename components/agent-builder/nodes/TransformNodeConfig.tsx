@@ -1,18 +1,19 @@
 import Editor from '@monaco-editor/react';
+import { FIELD_STYLES, fieldClasses } from '../shared/formStyles';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
 
 export default function TransformNodeConfig({ data, onUpdate }: Props) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
-        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>
+        <label className={fieldClasses.label} style={FIELD_STYLES.label}>
           JavaScript Code
         </label>
-        <p className="text-[10px] mb-2" style={{ color: 'var(--text-500)' }}>
+        <p className="text-[10px] mb-2" style={FIELD_STYLES.helperText}>
           Available: input, lastOutput, state, variables
         </p>
-        <div className="rounded border overflow-hidden" style={{ borderColor: 'var(--border-300)' }}>
+        <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-300)' }}>
           <Editor
             height="160px"
             defaultLanguage="javascript"

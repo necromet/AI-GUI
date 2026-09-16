@@ -14,6 +14,8 @@ interface Props {
 export default function CommandPalette({ isOpen, onClose, onAddNode, recentNodes = [] }: Props) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<'enter' | 'visible' | 'exit'>('enter');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -49,11 +51,22 @@ export default function CommandPalette({ isOpen, onClose, onAddNode, recentNodes
 
   useEffect(() => {
     if (isOpen) {
+      setMounted(true);
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      requestAnimationFrame(() => setAnimState('visible'));
+    } else if (mounted) {
+      setAnimState('exit');
+      const t = setTimeout(() => { setMounted(false); setAnimState('enter'); }, 200);
+      return () => clearTimeout(t);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (animState === 'visible' && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [animState]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -80,13 +93,22 @@ export default function CommandPalette({ isOpen, onClose, onAddNode, recentNodes
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh]" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] transition-opacity duration-200"
+      style={{ opacity: animState === 'visible' ? 1 : 0 }}
+      onClick={onClose}
+    >
       <div
-        className="w-[420px] max-w-[calc(100vw-32px)] rounded-xl border shadow-2xl overflow-hidden"
-        style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
+        className="w-[420px] max-w-[calc(100vw-32px)] rounded-xl border shadow-2xl overflow-hidden transition-all duration-200"
+        style={{
+          borderColor: 'var(--border-300)',
+          backgroundColor: 'var(--bg-100, #111114)',
+          opacity: animState === 'visible' ? 1 : 0,
+          transform: animState === 'visible' ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(-4px)',
+        }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: 'var(--border-300)' }}>

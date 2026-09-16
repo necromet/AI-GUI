@@ -16,6 +16,12 @@ interface Props {
 export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onDisconnect, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
+  const [exiting, setExiting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setExiting(true);
+    setTimeout(() => onClose(), 120);
+  }, [onClose]);
 
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -30,16 +36,16 @@ export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onD
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (ref.current && !ref.current.contains(e.target as Node)) handleClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [onClose]);
+  }, [handleClose]);
 
   const items = [
     { icon: Settings, label: 'Edit Settings', action: onEdit, color: 'var(--text-300)' },
@@ -51,7 +57,7 @@ export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onD
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[180px] rounded-lg border shadow-xl overflow-hidden ctx-menu-enter"
+      className={`fixed z-50 min-w-[180px] rounded-lg border shadow-xl overflow-hidden ${exiting ? 'ctx-menu-exit' : 'ctx-menu-enter'}`}
       style={{
         left: adjustedPos.x,
         top: adjustedPos.y,
@@ -63,7 +69,7 @@ export default function NodeContextMenu({ x, y, nodeId, onEdit, onDuplicate, onD
       {items.map((item) => (
         <button
           key={item.label}
-          onClick={() => { item.action(); onClose(); }}
+          onClick={() => { item.action(); handleClose(); }}
           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors cursor-pointer"
           style={{ color: item.color }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}

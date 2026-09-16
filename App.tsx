@@ -287,19 +287,22 @@ const App: React.FC = () => {
           : conversations;
 
   useEffect(() => {
-    const initDb = async () => {
+    fetch('/api/health').then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    }).catch(() => {
+      toast.error('Backend server is not reachable. Chat, TTS, and ASR will not work.');
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isChatAuthenticated) return;
+    const loadChatData = async () => {
       try {
-        await db.getDatabase();
         await Promise.all([loadConversations(), loadModels()]);
       } catch (error) {
-        console.error('Database initialization error:', error);
+        console.error('Failed to load chat data:', error);
       }
-
       Promise.allSettled([
-        db.getSkemaProjects(),
-        db.getPythonProjects(),
-        db.getLibraryFolders(),
-        db.getLibraryComponents(),
         db.getOverallTokenStats(),
         db.getTokenStatsByModel(),
         db.getTokenStatsByConversation(20),
@@ -307,14 +310,23 @@ const App: React.FC = () => {
         listDocuments(),
       ]).catch(() => {});
     };
-    initDb();
+    loadChatData();
+  }, [isChatAuthenticated]);
 
-    fetch('/api/health').then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    }).catch(() => {
-      toast.error('Backend server is not reachable. Chat, TTS, and ASR will not work.');
-    });
-  }, []);
+  useEffect(() => {
+    if (!isSkemaAuthenticated) return;
+    db.getSkemaProjects().catch(() => {});
+  }, [isSkemaAuthenticated]);
+
+  useEffect(() => {
+    if (!isPythonAuthenticated) return;
+    db.getPythonProjects().catch(() => {});
+  }, [isPythonAuthenticated]);
+
+  useEffect(() => {
+    if (!isLibraryAuthenticated) return;
+    Promise.allSettled([db.getLibraryFolders(), db.getLibraryComponents()]).catch(() => {});
+  }, [isLibraryAuthenticated]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -69,7 +69,44 @@ export const catppuccinMocha: Record<string, React.CSSProperties> = {
   'bold': { fontWeight: 'bold' }, 'italic': { fontStyle: 'italic' },
 };
 
+function convertTsvToMarkdownTable(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let tsvBuffer: string[] = [];
+
+  const flushTsv = () => {
+    if (tsvBuffer.length === 0) return;
+    const parsed = tsvBuffer.map(l => l.split('\t'));
+    const maxCols = Math.max(...parsed.map(r => r.length));
+    if (maxCols < 2) { result.push(...tsvBuffer); tsvBuffer = []; return; }
+    const escape = (s: string) => s.replace(/\|/g, '\\|').trim();
+    const header = parsed[0];
+    while (header.length < maxCols) header.push('');
+    result.push('| ' + header.map(escape).join(' | ') + ' |');
+    result.push('| ' + header.map(() => '---').join(' | ') + ' |');
+    for (let i = 1; i < parsed.length; i++) {
+      const row = parsed[i];
+      while (row.length < maxCols) row.push('');
+      if (row.every(c => c.trim() === '')) continue;
+      result.push('| ' + row.map(escape).join(' | ') + ' |');
+    }
+    tsvBuffer = [];
+  };
+
+  let inCodeBlock = false;
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) { flushTsv(); inCodeBlock = !inCodeBlock; result.push(line); continue; }
+    if (inCodeBlock) { result.push(line); continue; }
+    const tabCount = (line.match(/\t/g) || []).length;
+    if (tabCount >= 2) { tsvBuffer.push(line); }
+    else { flushTsv(); result.push(line); }
+  }
+  flushTsv();
+  return result.join('\n');
+}
+
 export function preprocessMarkdown(content: string): string {
+  content = convertTsvToMarkdownTable(content);
   const lines = content.split('\n');
   const result: string[] = [];
   let inCodeBlock = false;
@@ -277,6 +314,15 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               }
               return '';
             };
+            const isInTable = (n: any): boolean => {
+              let current = n;
+              while (current) {
+                if (current.tagName === 'td' || current.tagName === 'th' || current.tagName === 'table') return true;
+                current = current.parent || current.parentNode;
+              }
+              return false;
+            };
+            if (isInTable(node)) return <p {...props}>{children}</p>;
             const text = getTextContent({ props: { children } });
             const arrowMatch = text.match(/\s*(?:→|->|-->)\s*/g);
             if (arrowMatch && arrowMatch.length >= 2) {

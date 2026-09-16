@@ -93,38 +93,41 @@ export default function WorkflowToolbar({
   const errors = validationIssues.filter(i => i.severity === 'error');
   const warnings = validationIssues.filter(i => i.severity === 'warning');
 
-  const btnBase = "p-1.5 rounded transition-colors cursor-pointer";
+  const btnBase = "p-1 rounded transition-colors cursor-pointer";
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 border-b overflow-hidden" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
+    <div className="flex items-center gap-1 px-2 py-1.5 border-b" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
       <input
         type="text"
         value={name}
         onChange={(e) => onNameChange(e.target.value)}
-        className="text-sm font-semibold bg-transparent border-none outline-none flex-1 min-w-[120px]"
+        className="text-sm font-semibold bg-transparent border-none outline-none min-w-0 w-[160px] max-w-[200px]"
         style={{ color: 'var(--text-100)' }}
         placeholder="Workflow name"
       />
 
+      <div className="w-px h-4 mx-1 flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
+
       <div className="flex items-center gap-0.5 flex-shrink-0">
         <button onClick={onUndo} disabled={!canUndo} className={btnBase} style={{ color: canUndo ? 'var(--text-300)' : 'var(--text-500)', opacity: canUndo ? 1 : 0.4 }} title="Undo (Ctrl+Z)">
-          <Undo2 size={14} />
+          <Undo2 size={13} />
         </button>
         <button onClick={onRedo} disabled={!canRedo} className={btnBase} style={{ color: canRedo ? 'var(--text-300)' : 'var(--text-500)', opacity: canRedo ? 1 : 0.4 }} title="Redo (Ctrl+Shift+Z)">
-          <Redo2 size={14} />
+          <Redo2 size={13} />
         </button>
         <button onClick={onFitView} className={btnBase} style={{ color: 'var(--text-300)' }} title="Fit View (F)">
-          <Maximize2 size={14} />
+          <Maximize2 size={13} />
         </button>
         <ShortcutButton onClick={onShowShortcuts} />
-        <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--border-300)' }} />
       </div>
 
+      <div className="w-px h-4 mx-1 flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
+
       {validationIssues.length > 0 && (
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button
             onClick={() => setShowValidation(!showValidation)}
-            className="flex items-center gap-1 px-1.5 py-1 rounded cursor-pointer"
+            className="flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer"
             style={{ color: errors.length > 0 ? SEMANTIC_COLORS.danger : SEMANTIC_COLORS.warning }}
             title="Validation issues"
           >
@@ -133,7 +136,7 @@ export default function WorkflowToolbar({
           </button>
           {showValidation && (
             <div
-              className="absolute top-full right-0 mt-1 w-[280px] rounded-lg border shadow-xl z-40 overflow-hidden transition-all duration-150"
+              className="absolute top-full left-0 mt-1 w-[280px] rounded-lg border shadow-xl z-40 overflow-hidden transition-all duration-150"
               style={{
                 borderColor: 'var(--border-300)',
                 backgroundColor: 'var(--bg-100, #111114)',
@@ -159,30 +162,31 @@ export default function WorkflowToolbar({
         </div>
       )}
       {validationIssues.length === 0 && nodes.length > 0 && (
-        <CheckCircle2 size={13} style={{ color: SEMANTIC_COLORS.success }} />
+        <CheckCircle2 size={13} className="flex-shrink-0" style={{ color: SEMANTIC_COLORS.success }} />
       )}
 
-      <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50" style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
-        <Save size={12} />
-        {saving ? 'Saving...' : 'Save'}
-      </button>
+      <div className="flex-1" />
 
-      <button onClick={handleExport} className="p-1.5 rounded hover:bg-[var(--bg-200)] cursor-pointer" style={{ color: 'var(--text-400)' }} title="Export JSON">
-        <Download size={14} />
-      </button>
-
-      {workflowId && (
-        <button onClick={handleExportCode} className="p-1.5 rounded hover:bg-[var(--bg-200)] cursor-pointer" style={{ color: 'var(--text-400)' }} title="Export as Code">
-          <Code size={14} />
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {onLoadTemplate && (
+          <button onClick={onLoadTemplate} className="flex items-center gap-1 px-2 py-1 rounded text-[11px] cursor-pointer" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }} title="Templates">
+            <FileCode size={12} />
+            Templates
+          </button>
+        )}
+        <button onClick={handleExport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export JSON">
+          <Download size={13} />
         </button>
-      )}
-
-      {onLoadTemplate && (
-        <button onClick={onLoadTemplate} className="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }} title="Templates">
-          <FileCode size={12} />
-          Templates
+        {workflowId && (
+          <button onClick={handleExportCode} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export as Code">
+            <Code size={13} />
+          </button>
+        )}
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-50" style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
+          <Save size={12} />
+          {saving ? 'Saving...' : 'Save'}
         </button>
-      )}
+      </div>
     </div>
   );
 }

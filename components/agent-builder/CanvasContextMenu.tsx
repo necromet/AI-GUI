@@ -1,4 +1,4 @@
-import { useEffect, useRef, useLayoutEffect, useState } from 'react';
+import { useEffect, useRef, useLayoutEffect, useState, useCallback } from 'react';
 import { NODE_CATEGORIES, NODE_DEFINITIONS } from './constants';
 import type { WorkflowNodeType } from './types';
 import { Circle } from 'lucide-react';
@@ -17,6 +17,12 @@ interface Props {
 export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDeleteSelected, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
+  const [exiting, setExiting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setExiting(true);
+    setTimeout(() => onClose(), 120);
+  }, [onClose]);
 
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -31,21 +37,21 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (ref.current && !ref.current.contains(e.target as Node)) handleClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [onClose]);
+  }, [handleClose]);
 
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden ctx-menu-enter"
+      className={`fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden ${exiting ? 'ctx-menu-exit' : 'ctx-menu-enter'}`}
       style={{
         left: adjustedPos.x,
         top: adjustedPos.y,
@@ -86,7 +92,7 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
 
       <div className="border-t" style={{ borderColor: 'var(--border-300)' }}>
         <button
-          onClick={() => { onSelectAll(); onClose(); }}
+          onClick={() => { onSelectAll(); handleClose(); }}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
           style={{ color: 'var(--text-300)' }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}
@@ -95,7 +101,7 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
           Select All
         </button>
         <button
-          onClick={() => { onDeleteSelected(); onClose(); }}
+          onClick={() => { onDeleteSelected(); handleClose(); }}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
           style={{ color: SEMANTIC_COLORS.danger }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}

@@ -29,6 +29,7 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerPos, setTriggerPos] = useState<number | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -103,7 +104,7 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
 
   const typeColor = (type: string) => VARIABLE_TYPE_COLORS[type] || VARIABLE_TYPE_COLORS.any;
 
-  const inputClasses = `w-full px-2 py-1.5 text-xs rounded border bg-transparent ${className || ''}`;
+  const inputClasses = `w-full px-2.5 py-2 text-xs rounded-lg border bg-transparent transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none ${className || ''}`;
 
   return (
     <div className="relative">
@@ -113,6 +114,8 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           className={`${inputClasses} font-mono min-h-[80px] resize-y`}
           style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
@@ -124,10 +127,21 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           className={inputClasses}
           style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
         />
+      )}
+
+      {isFocused && (
+        <div className="text-[9px] mt-1 flex items-center gap-1" style={{ color: 'var(--text-500)' }}>
+          <kbd className="px-1 py-0.5 rounded text-[8px]" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-500)' }}>
+            {'{{'}
+          </kbd>
+          <span>for variables</span>
+        </div>
       )}
 
       {showDropdown && filtered.length > 0 && (

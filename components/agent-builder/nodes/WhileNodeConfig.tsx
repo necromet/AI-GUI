@@ -1,16 +1,17 @@
 import Editor from '@monaco-editor/react';
+import { FIELD_STYLES, fieldClasses } from '../shared/formStyles';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
 
 export default function WhileNodeConfig({ data, onUpdate }: Props) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
-        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>Continue Condition (JavaScript)</label>
-        <p className="text-[10px] mb-2" style={{ color: 'var(--text-500)' }}>
+        <label className={fieldClasses.label} style={FIELD_STYLES.label}>Continue Condition (JavaScript)</label>
+        <p className="text-[10px] mb-2" style={FIELD_STYLES.helperText}>
           Returns true {'->'} loop, false {'->'} exit. Available: input, state, lastOutput, variables, iteration
         </p>
-        <div className="rounded border overflow-hidden" style={{ borderColor: 'var(--border-300)' }}>
+        <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-300)' }}>
           <Editor
             height="80px"
             defaultLanguage="javascript"
@@ -30,15 +31,15 @@ export default function WhileNodeConfig({ data, onUpdate }: Props) {
         </div>
       </div>
       <div>
-        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-300)' }}>Max Iterations</label>
+        <label className={fieldClasses.label} style={FIELD_STYLES.label}>Max Iterations</label>
         <input
           type="number"
           min={1}
           max={100}
           value={data.maxIterations || 10}
           onChange={e => onUpdate({ maxIterations: parseInt(e.target.value) })}
-          className="w-full px-2 py-1.5 text-xs rounded border bg-transparent"
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
+          className={fieldClasses.input}
+          style={FIELD_STYLES.input}
         />
       </div>
     </div>

@@ -21,7 +21,10 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
   const [pendingApproval, setPendingApproval] = useState<any>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [entered, setEntered] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => { requestAnimationFrame(() => setEntered(true)); }, []);
 
   const execute = useCallback(async () => {
     if (!workflowId || isExecuting) return;
@@ -167,6 +170,8 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
         borderColor: 'var(--border-300)',
         backgroundColor: 'var(--bg-100, #111114)',
         width: isExpanded ? 'min(560px, calc(100vw - 120px))' : 'min(340px, calc(100vw - 120px))',
+        opacity: entered ? 1 : 0,
+        transform: entered ? 'translateY(0)' : 'translateY(4px)',
       }}
     >
       <div

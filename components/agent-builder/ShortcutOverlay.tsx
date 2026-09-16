@@ -22,10 +22,23 @@ interface Props {
 
 export default function ShortcutOverlay({ isOpen, onClose }: Props) {
   const [isMac, setIsMac] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<'enter' | 'visible' | 'exit'>('enter');
 
   useEffect(() => {
     setIsMac(navigator.platform.toUpperCase().includes('MAC'));
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      requestAnimationFrame(() => setAnimState('visible'));
+    } else if (mounted) {
+      setAnimState('exit');
+      const t = setTimeout(() => { setMounted(false); setAnimState('enter'); }, 200);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -36,7 +49,7 @@ export default function ShortcutOverlay({ isOpen, onClose }: Props) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   const fmtKey = (k: string) => {
     if (isMac) {
@@ -49,10 +62,19 @@ export default function ShortcutOverlay({ isOpen, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center transition-opacity duration-200"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', opacity: animState === 'visible' ? 1 : 0 }}
+      onClick={onClose}
+    >
       <div
-        className="w-[380px] max-w-[calc(100vw-32px)] rounded-xl border shadow-2xl overflow-hidden"
-        style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
+        className="w-[380px] max-w-[calc(100vw-32px)] rounded-xl border shadow-2xl overflow-hidden transition-all duration-200"
+        style={{
+          borderColor: 'var(--border-300)',
+          backgroundColor: 'var(--bg-100, #111114)',
+          opacity: animState === 'visible' ? 1 : 0,
+          transform: animState === 'visible' ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(8px)',
+        }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-300)' }}>
