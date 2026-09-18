@@ -4,6 +4,7 @@ import type { WorkflowNodeType } from './types';
 import { Circle } from 'lucide-react';
 import { ICON_MAP } from './shared/icons';
 import { SEMANTIC_COLORS } from './shared/colors';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   x: number;
@@ -14,15 +15,11 @@ interface Props {
   onClose: () => void;
 }
 
+const ctxMenuTransition = { ease: [0.1, 0.1, 0.25, 1] as const, duration: 0.2 };
+
 export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDeleteSelected, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
-  const [exiting, setExiting] = useState(false);
-
-  const handleClose = useCallback(() => {
-    setExiting(true);
-    setTimeout(() => onClose(), 120);
-  }, [onClose]);
 
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -37,21 +34,25 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) handleClose();
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [handleClose]);
+  }, [onClose]);
 
   return (
-    <div
+    <motion.div
       ref={ref}
-      className={`fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden ${exiting ? 'ctx-menu-exit' : 'ctx-menu-enter'}`}
+      initial={{ opacity: 0, y: -6, scale: 1, filter: "blur(1px)" }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      exit={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(1px)" }}
+      transition={ctxMenuTransition}
+      className="fixed z-50 min-w-[200px] rounded-lg border shadow-xl overflow-hidden"
       style={{
         left: adjustedPos.x,
         top: adjustedPos.y,
@@ -60,14 +61,13 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
         backdropFilter: 'blur(12px)',
       }}
     >
-
       <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--border-300)' }}>
         <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>Add Node</span>
       </div>
 
       {NODE_CATEGORIES.map((cat) => (
         <div key={cat.id}>
-          <div className="px-3 py-1" style={{ borderTop: '1px solid var(--border-200)' }}>
+          <div className="px-3 py-1" style={{ borderTop: '1px solid var(--border-300)' }}>
             <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{cat.label}</span>
           </div>
           {cat.types.map((type) => {
@@ -77,9 +77,9 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
               <button
                 key={type}
                 onClick={() => onAddNode(type, x, y)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer active:scale-[0.98]"
                 style={{ color: 'var(--text-300)' }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 <Icon size={12} style={{ color: def.color }} />
@@ -92,24 +92,24 @@ export default function CanvasContextMenu({ x, y, onAddNode, onSelectAll, onDele
 
       <div className="border-t" style={{ borderColor: 'var(--border-300)' }}>
         <button
-          onClick={() => { onSelectAll(); handleClose(); }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
+          onClick={() => { onSelectAll(); onClose(); }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer active:scale-[0.98]"
           style={{ color: 'var(--text-300)' }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
           Select All
         </button>
         <button
-          onClick={() => { onDeleteSelected(); handleClose(); }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer"
+          onClick={() => { onDeleteSelected(); onClose(); }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer active:scale-[0.98]"
           style={{ color: SEMANTIC_COLORS.danger }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
           Delete Selected
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

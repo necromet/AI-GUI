@@ -15,4 +15,6 @@ export const fieldClasses = {
   select: 'w-full px-2.5 py-2 text-xs rounded-lg border bg-transparent transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none',
   label: 'text-xs font-medium block mb-1.5',
   sectionLabel: 'text-[10px] font-medium uppercase tracking-wider mb-2',
+  collapsibleTrigger: 'flex items-center gap-1.5 w-full text-[10px] font-medium uppercase tracking-wider cursor-pointer transition-colors',
+  tooltipIcon: 'inline-flex items-center justify-center w-3.5 h-3.5 rounded-full cursor-help transition-colors',
 } as const;

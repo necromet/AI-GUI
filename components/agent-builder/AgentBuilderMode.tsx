@@ -5,6 +5,8 @@ import WorkflowCanvas from './WorkflowCanvas';
 import TemplateGallery from './TemplateGallery';
 import { useWorkflow } from './useWorkflow';
 import { toast } from 'sonner';
+import type { WorkflowHeaderControls } from './types';
+export type { WorkflowHeaderControls };
 
 function WorkflowListView() {
   const navigate = useNavigate();
@@ -127,33 +129,28 @@ function WorkflowListView() {
   );
 }
 
-function WorkflowCanvasView() {
+function WorkflowCanvasView({ onHeaderControls }: { onHeaderControls?: (controls: WorkflowHeaderControls | null) => void }) {
   const { workflowId } = useParams<{ workflowId: string }>();
   const navigate = useNavigate();
 
   return (
     <div className="h-full relative">
-      <button
-        onClick={() => navigate('/agent-builder')}
-        className="absolute top-2 left-2 z-20 px-2 py-1 rounded text-xs font-medium cursor-pointer backdrop-blur-sm"
-        style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)', border: '1px solid var(--border-300)' }}
-      >
-        ← Back to workflows
-      </button>
       <WorkflowCanvas
         workflowId={workflowId}
         onWorkflowSaved={() => {}}
         onLoadTemplate={() => navigate('/agent-builder')}
+        onBack={() => navigate('/agent-builder')}
+        onHeaderControls={onHeaderControls}
       />
     </div>
   );
 }
 
-export default function AgentBuilderMode() {
+export default function AgentBuilderMode({ onHeaderControls }: { onHeaderControls?: (controls: WorkflowHeaderControls | null) => void }) {
   return (
     <Routes>
       <Route index element={<WorkflowListView />} />
-      <Route path=":workflowId" element={<WorkflowCanvasView />} />
+      <Route path=":workflowId" element={<WorkflowCanvasView onHeaderControls={onHeaderControls} />} />
     </Routes>
   );
 }

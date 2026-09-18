@@ -22,14 +22,16 @@ import WorkflowToolbar from './WorkflowToolbar';
 import NodeContextMenu from './NodeContextMenu';
 import CanvasContextMenu from './CanvasContextMenu';
 import CommandPalette from './CommandPalette';
+import EdgeLabelModal from './EdgeLabelModal';
 import OnboardingOverlay from './OnboardingOverlay';
 import ShortcutOverlay from './ShortcutOverlay';
-import { ExecutionStatusProvider } from './ExecutionStatusContext';
+import { ExecutionStatusProvider, useExecutionStatus } from './ExecutionStatusContext';
 import { NODE_DEFINITIONS, DEFAULT_NODE_COLOR } from './constants';
-import type { WorkflowNodeType } from './types';
+import type { WorkflowNodeType, WorkflowHeaderControls } from './types';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { validateWorkflow } from './validateWorkflow';
+import { cleanupInvalidEdges } from './edgeCleanup';
 
 const nodeTypes = { custom: CustomNode };
 
@@ -37,9 +39,11 @@ interface Props {
   workflowId?: string;
   onWorkflowSaved?: (id: string) => void;
   onLoadTemplate?: () => void;
+  onBack?: () => void;
+  onHeaderControls?: (controls: WorkflowHeaderControls | null) => void;
 }
 
-function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Props) {
+function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBack, onHeaderControls }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -47,7 +51,21 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Pr
   const [nodeContextMenu, setNodeContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const { getNodeStatus } = useExecutionStatus();
+
+  // Add animation classes to edges based on source node execution status
+  const animatedEdges = edges.map(edge => {
+    const sourceStatus = getNodeStatus(edge.source);
+    if (sourceStatus?.status === 'running') {
+      return { ...edge, className: 'ab-edge-active', animated: true };
+    }
+    if (sourceStatus?.status === 'completed') {
+      return { ...edge, className: '', animated: false };
+    }
+    return { ...edge, className: '', animated: edge.animated ?? true };
+  });
   const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
+  const [edgeLabelEdit, setEdgeLabelEdit] = useState<{ edgeId: string; label?: string; x: number; y: number } | null>(null);
   const [recentNodeTypes, setRecentNodeTypes] = useState<WorkflowNodeType[]>([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { fitView } = useReactFlow();
@@ -59,13 +77,14 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Pr
     fetch(`/api/workflows/${workflowId}`)
       .then(r => r.json())
       .then(data => {
-        if (data.nodes) setNodes(data.nodes.map((n: any) => ({
+        const loadedNodes = data.nodes ? data.nodes.map((n: any) => ({
           id: n.id,
           type: 'custom',
           position: n.position || { x: 0, y: 0 },
           data: n.data || { nodeType: n.type, label: n.type },
-        })));
-        if (data.edges) setEdges(data.edges);
+        })) : [];
+        if (data.nodes) setNodes(loadedNodes);
+        if (data.edges) setEdges(cleanupInvalidEdges(loadedNodes, data.edges));
         if (data.name) setWorkflowName(data.name);
       })
       .catch(console.error);
@@ -97,6 +116,15 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Pr
     setNodeContextMenu(null);
     setCanvasContextMenu(null);
   }, []);
+
+  const onEdgeClick = useCallback((_: any, edge: Edge) => {
+    setEdgeLabelEdit({ edgeId: edge.id, label: edge.label as string | undefined, x: _.clientX, y: _.clientY });
+  }, []);
+
+  const handleEdgeLabelUpdate = useCallback((edgeId: string, label: string) => {
+    undoRedo.pushSnapshot(nodes, edges, 'Update edge label');
+    setEdges(eds => eds.map(e => e.id === edgeId ? { ...e, label } : e));
+  }, [nodes, edges, undoRedo, setEdges]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -355,15 +383,18 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Pr
             onFitView={handleFitView}
             validationIssues={validationIssues}
             onShowShortcuts={() => setShortcutOverlayOpen(true)}
+            onBack={onBack}
+            onHeaderControls={onHeaderControls}
           />
           <div ref={reactFlowWrapper} className="flex-1">
             <ReactFlow
               nodes={nodes}
-              edges={edges}
+              edges={animatedEdges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onEdgeClick={onEdgeClick}
               onPaneClick={onPaneClick}
               onNodeContextMenu={onNodeContextMenu}
               onPaneContextMenu={onPaneContextMenu}
@@ -407,6 +438,16 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate }: Pr
                 onSelectAll={handleSelectAll}
                 onDeleteSelected={handleDeleteSelected}
                 onClose={() => setCanvasContextMenu(null)}
+              />
+            )}
+            {edgeLabelEdit && (
+              <EdgeLabelModal
+                edgeId={edgeLabelEdit.edgeId}
+                label={edgeLabelEdit.label}
+                x={edgeLabelEdit.x}
+                y={edgeLabelEdit.y}
+                onUpdateLabel={handleEdgeLabelUpdate}
+                onClose={() => setEdgeLabelEdit(null)}
               />
             )}
           </div>

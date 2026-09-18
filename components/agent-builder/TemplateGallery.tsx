@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileCode, Clock, Tag, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CATEGORY_COLORS, DEFAULT_NODE_COLOR } from './shared/colors';
 
 interface Template {
@@ -19,15 +20,12 @@ interface Props {
   onClose: () => void;
 }
 
+const modalSpring = { type: "spring" as const, damping: 25, stiffness: 300 };
+
 export default function TemplateGallery({ onSelect, onClose }: Props) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [animState, setAnimState] = useState<'enter' | 'visible' | 'exit'>('enter');
-
-  useEffect(() => {
-    requestAnimationFrame(() => setAnimState('visible'));
-  }, []);
 
   useEffect(() => {
     fetch('/api/workflows/templates')
@@ -36,27 +34,31 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
       .catch(() => setLoading(false));
   }, []);
 
-  const handleClose = () => {
-    setAnimState('exit');
-    setTimeout(() => onClose(), 200);
-  };
-
   const categories = [...new Set(templates.map(t => t.category))];
   const filtered = selectedCategory ? templates.filter(t => t.category === selectedCategory) : templates;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center transition-opacity duration-200"
-      style={{ backgroundColor: 'rgba(0,0,0,0.6)', opacity: animState === 'visible' ? 1 : 0 }}
-      onClick={handleClose}
+    <motion.div
+      key="template-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
     >
-      <div
-        className="w-[700px] max-w-[calc(100vw-32px)] max-h-[80vh] rounded-xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-200"
+      <motion.div
+        key="template-card"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={modalSpring}
+        className="w-[700px] max-w-[calc(100vw-32px)] max-h-[80vh] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
         style={{
-          borderColor: 'var(--border-300)',
+          borderColor: 'rgba(var(--neon-rgb), 0.3)',
           backgroundColor: 'var(--bg-100, #111114)',
-          opacity: animState === 'visible' ? 1 : 0,
-          transform: animState === 'visible' ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(8px)',
+          boxShadow: '0px 32px 40px 6px rgba(0,0,0,0.08), 0px 12px 32px 0px rgba(0,0,0,0.06)',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -65,7 +67,7 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-100)' }}>Template Gallery</h2>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-500)' }}>Start from a pre-built workflow template</p>
           </div>
-          <button onClick={handleClose} className="text-xs cursor-pointer" style={{ color: 'var(--text-500)' }}>✕</button>
+          <button onClick={onClose} className="text-xs cursor-pointer" style={{ color: 'var(--text-500)' }}>✕</button>
         </div>
 
         <div className="flex gap-2 px-6 py-3 border-b" style={{ borderColor: 'var(--border-300)' }}>
@@ -132,7 +134,7 @@ export default function TemplateGallery({ onSelect, onClose }: Props) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

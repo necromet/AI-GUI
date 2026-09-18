@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Square, CheckCircle2, XCircle, Clock, Loader2, ChevronUp, ChevronDown, Shield, RotateCcw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Node, Edge } from '@xyflow/react';
 import { parseSSEStream } from './shared/useSSEStream';
 import { useExecutionStatus } from './ExecutionStatusContext';
@@ -21,10 +22,7 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
   const [pendingApproval, setPendingApproval] = useState<any>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [entered, setEntered] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => { requestAnimationFrame(() => setEntered(true)); }, []);
 
   const execute = useCallback(async () => {
     if (!workflowId || isExecuting) return;
@@ -119,7 +117,11 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
       await fetch(`/api/workflows/${workflowId}/resume`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ executionId: pendingApproval.executionId, approved }),
+        body: JSON.stringify({
+          executionId: pendingApproval.executionId,
+          approved,
+          decision: approved ? 'approve' : 'reject',
+        }),
       });
       setPendingApproval(null);
     } catch (err: any) {
@@ -164,14 +166,16 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
   const hasRun = nodeStatuses.size > 0;
 
   return (
-    <div
-      className="rounded-t-lg border border-b-0 shadow-xl transition-all"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="rounded-t-lg border border-b-0 shadow-xl"
       style={{
         borderColor: 'var(--border-300)',
         backgroundColor: 'var(--bg-100, #111114)',
         width: isExpanded ? 'min(560px, calc(100vw - 120px))' : 'min(340px, calc(100vw - 120px))',
-        opacity: entered ? 1 : 0,
-        transform: entered ? 'translateY(0)' : 'translateY(4px)',
+        transition: 'width 0.2s ease',
       }}
     >
       <div
@@ -335,6 +339,6 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
         </>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

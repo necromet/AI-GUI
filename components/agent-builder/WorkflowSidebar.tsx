@@ -28,12 +28,12 @@ export default function WorkflowSidebar() {
     <div className="w-56 border-r flex flex-col overflow-y-auto flex-shrink-0" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
       <div className="px-3 pt-3 pb-2">
         <div className="relative">
-          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-500)' }} />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-500)' }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search nodes..."
-            className="w-full pl-7 pr-2 py-1.5 text-[11px] rounded-md border bg-transparent"
+            className="w-full pl-8 pr-2.5 py-2 text-xs rounded-lg border bg-transparent"
             style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
           />
         </div>
@@ -53,21 +53,21 @@ export default function WorkflowSidebar() {
           <div key={cat.id} className="mb-1">
             <button
               onClick={() => toggleCategory(cat.id)}
-              className="flex items-center justify-between w-full px-3 py-1.5 cursor-pointer"
+              className="flex items-center justify-between w-full px-3 py-2 cursor-pointer"
               style={{ color: 'var(--text-500)' }}
             >
-              <span className="text-[10px] font-medium uppercase tracking-wider">{cat.label}</span>
-              {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+              <span className="text-[11px] font-medium uppercase tracking-wider">{cat.label}</span>
+              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             </button>
             {!isCollapsed && (
-              <div className="flex flex-col gap-0.5 px-1 pb-1">
+              <div className="flex flex-col gap-1 px-1 pb-1">
                 {filteredTypes.map((type) => {
                   const def = NODE_DEFINITIONS[type];
                   const Icon = ICON_MAP[def.icon] || Circle;
                   return (
                     <div
                       key={type}
-                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab active:cursor-grabbing transition-all"
+                      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all hover:scale-[1.02] active:scale-[0.97]"
                       style={{ color: 'var(--text-300)' }}
                       draggable
                       onDragStart={(e) => onDragStart(e, type)}
@@ -80,14 +80,14 @@ export default function WorkflowSidebar() {
                       title={def.description}
                     >
                       <div
-                        className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                        className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
                         style={{ background: `${def.color}20` }}
                       >
-                        <Icon size={10} style={{ color: def.color }} />
+                        <Icon size={12} style={{ color: def.color }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="text-[11px] font-medium block">{def.label}</span>
-                        <span className="text-[9px] block truncate opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--text-500)' }}>
+                        <span className="text-xs font-medium block">{def.label}</span>
+                        <span className="text-[10px] block truncate opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--text-500)' }}>
                           {def.description}
                         </span>
                       </div>

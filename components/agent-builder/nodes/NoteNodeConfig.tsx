@@ -13,7 +13,7 @@ export default function NoteNodeConfig({ data, onUpdate }: Props) {
           placeholder="Add your notes here..."
           rows={4}
           className={fieldClasses.textarea}
-          style={FIELD_STYLES.input}
+          style={{ ...FIELD_STYLES.input, resize: 'vertical' }}
         />
       </div>
     </div>

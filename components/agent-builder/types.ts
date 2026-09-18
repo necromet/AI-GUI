@@ -2,7 +2,7 @@
 
 export type WorkflowNodeType =
   | 'start' | 'end'
-  | 'agent' | 'mcp'
+  | 'agent' | 'mcp' | 'guardrails'
   | 'if-else' | 'while' | 'user-approval'
   | 'transform' | 'set-state'
   | 'extract' | 'http' | 'note';
@@ -71,4 +71,35 @@ export interface WorkflowExecution {
   threadId?: string;
   startedAt: string;
   completedAt?: string;
+}
+
+export interface WorkflowHeaderControls {
+  name: string;
+  onNameChange: (name: string) => void;
+  nodes: any[];
+  edges: any[];
+  workflowId?: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onFitView: () => void;
+  validationIssues: any[];
+  onShowShortcuts: () => void;
+  onBack?: () => void;
+  // Handlers (managed by WorkflowToolbar)
+  handleSave: () => void;
+  saving: boolean;
+  handleExport: () => void;
+  handleExportCode: () => void;
+  handleExportMermaid: () => void;
+  handleShare: () => void;
+  onLoadTemplate?: () => void;
+  // Modal/popup state
+  showValidation: boolean;
+  setShowValidation: (v: boolean) => void;
+  showSaveAsTemplate: boolean;
+  setShowSaveAsTemplate: (v: boolean) => void;
+  showPublish: boolean;
+  setShowPublish: (v: boolean) => void;
 }

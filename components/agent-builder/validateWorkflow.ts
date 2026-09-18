@@ -22,6 +22,8 @@ export function validateWorkflow(nodes: Node[], edges: Edge[]): ValidationIssue[
     connectedNodeIds.add(edge.target);
   }
 
+  // Detect duplicate MCP credentials across nodes
+  const mcpCredMap = new Map<string, string[]>();
   for (const node of nodes) {
     const nodeType = node.data?.nodeType as WorkflowNodeType;
     if (nodeType === 'note') continue;
@@ -45,6 +47,21 @@ export function validateWorkflow(nodes: Node[], edges: Edge[]): ValidationIssue[
 
     if (nodeType === 'while') {
       if (!node.data?.condition) issues.push({ severity: 'warning', message: `While "${node.data?.label || node.id}" has no condition`, nodeId: node.id });
+    }
+
+    if (nodeType === 'mcp' && node.data?.serverId) {
+      const existing = mcpCredMap.get(node.data.serverId) || [];
+      existing.push(node.data?.label || node.id);
+      mcpCredMap.set(node.data.serverId, existing);
+    }
+  }
+
+  for (const [serverId, nodeNames] of mcpCredMap) {
+    if (nodeNames.length > 1) {
+      issues.push({
+        severity: 'warning',
+        message: `MCP server "${serverId}" is shared by ${nodeNames.length} nodes: ${nodeNames.join(', ')}`,
+      });
     }
   }
 

@@ -115,13 +115,13 @@ export function ShortcutButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="p-1.5 rounded transition-colors cursor-pointer"
+      className="p-1.5 rounded-md transition-colors cursor-pointer"
       style={{ color: 'var(--text-500)' }}
       title="Keyboard shortcuts (?)"
       onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-300)')}
       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
     >
-      <Keyboard size={14} />
+      <Keyboard size={16} />
     </button>
   );
 }

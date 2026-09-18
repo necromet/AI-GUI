@@ -26,6 +26,7 @@ export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
   end: { type: 'end', label: 'End', color: NODE_COLORS.end, icon: 'square', category: 'flow', description: 'Workflow completion' },
   agent: { type: 'agent', label: 'Agent', color: NODE_COLORS.agent, icon: 'bot', category: 'ai', description: 'AI reasoning with LLM', defaults: { model: DEFAULT_AGENT_MODEL, systemPrompt: '', userPrompt: '', maxTokens: DEFAULT_MAX_TOKENS, temperature: DEFAULT_TEMPERATURE } },
   mcp: { type: 'mcp', label: 'MCP Tool', color: NODE_COLORS.mcp, icon: 'wrench', category: 'ai', description: 'External tool call (Firecrawl, APIs)', defaults: { serverId: '', toolName: '', arguments: {} } },
+  guardrails: { type: 'guardrails', label: 'Guardrails', color: NODE_COLORS.guardrails, icon: 'shield', category: 'ai', description: 'Content safety checks (PII, moderation, jailbreak)', defaults: { checks: { pii: true, moderation: true, jailbreak: true }, action: 'block' } },
   'if-else': { type: 'if-else', label: 'If/Else', color: NODE_COLORS['if-else'], icon: 'git-branch', category: 'logic', description: 'Conditional branching', defaults: { condition: '' } },
   while: { type: 'while', label: 'While Loop', color: NODE_COLORS.while, icon: 'repeat', category: 'logic', description: 'Iterate until condition', defaults: { condition: '', maxIterations: 10 } },
   'user-approval': { type: 'user-approval', label: 'User Approval', color: NODE_COLORS['user-approval'], icon: 'user-check', category: 'logic', description: 'Human-in-the-loop gate', defaults: { message: 'Approve to continue?' } },
@@ -38,7 +39,7 @@ export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
 
 export const NODE_CATEGORIES = [
   { id: 'flow', label: 'Flow Control', types: ['start', 'end', 'note'] as WorkflowNodeType[] },
-  { id: 'ai', label: 'AI & Tools', types: ['agent', 'mcp'] as WorkflowNodeType[] },
+  { id: 'ai', label: 'AI & Tools', types: ['agent', 'mcp', 'guardrails'] as WorkflowNodeType[] },
   { id: 'logic', label: 'Logic', types: ['if-else', 'while', 'user-approval'] as WorkflowNodeType[] },
   { id: 'data', label: 'Data', types: ['transform', 'set-state', 'extract'] as WorkflowNodeType[] },
   { id: 'io', label: 'I/O', types: ['http'] as WorkflowNodeType[] },

@@ -17,7 +17,15 @@ const HINTS: Partial<Record<WorkflowNodeType, string>> = {
   extract: 'Click to set fields',
   mcp: 'Click to configure tool',
   'user-approval': 'Click to set message',
+  guardrails: 'Click to configure checks',
 };
+
+function getNodeExecClass(status?: string): string {
+  if (status === 'running') return 'ab-node-executing';
+  if (status === 'completed') return 'ab-node-completed';
+  if (status === 'failed') return 'ab-node-failed';
+  return '';
+}
 
 function CustomNodeInner({ data, id }: NodeProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -37,12 +45,13 @@ function CustomNodeInner({ data, id }: NodeProps) {
   const isEnd = nodeType === 'end';
   const isIfElse = nodeType === 'if-else';
   const isWhile = nodeType === 'while';
+  const isApproval = nodeType === 'user-approval';
   const isNote = nodeType === 'note';
 
   const hint = HINTS[nodeType];
   const isUnconfigured = hint && !isConfigured(nodeType, data);
 
-  const execBorderColor = execStatus?.status === 'running' ? STATUS_COLORS.running : execStatus?.status === 'completed' ? STATUS_COLORS.completed : execStatus?.status === 'failed' ? STATUS_COLORS.failed : undefined;
+  const execClass = getNodeExecClass(execStatus?.status);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,18 +68,23 @@ function CustomNodeInner({ data, id }: NodeProps) {
 
   return (
     <div
-      className="relative min-w-[160px] rounded-lg border shadow-lg ab-node-enter"
+      className={`relative min-w-[160px] rounded-lg border shadow-lg ab-node-enter ${execClass}`}
       style={{
-        borderColor: execBorderColor || (isHovered ? `${color}70` : `${color}40`),
+        borderColor: execStatus?.status === 'running'
+          ? STATUS_COLORS.running
+          : execStatus?.status === 'completed'
+            ? STATUS_COLORS.completed
+            : execStatus?.status === 'failed'
+              ? STATUS_COLORS.failed
+              : isHovered ? `${color}70` : `${color}40`,
         backgroundColor: 'var(--bg-100, #1a1a2e)',
         boxShadow: execStatus?.status === 'running'
           ? `0 0 20px ${color}50, 0 0 8px ${color}30, inset 0 0 12px ${color}10`
           : isHovered
             ? `0 0 24px ${color}35, 0 0 8px ${color}25`
             : `0 0 12px ${color}15`,
-        transform: isHovered ? 'scale(1.03)' : 'scale(1)',
+        transform: isHovered && !execStatus?.status ? 'scale(1.03)' : 'scale(1)',
         transition: 'all 0.15s ease',
-        ...(execStatus?.status === 'running' ? { animation: 'ab-node-enter 0.15s ease-out, ab-pulse-border 1.5s ease-in-out 0.15s infinite' } : {}),
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -188,19 +202,6 @@ function CustomNodeInner({ data, id }: NodeProps) {
         </div>
       </div>
 
-      {!isEnd && !isNote && !isIfElse && !isWhile && isHovered && (
-        <button
-          className="absolute -right-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center z-10 cursor-pointer transition-all hover:scale-110"
-          style={{ backgroundColor: 'var(--neon-color)', color: '#000', fontSize: '10px', lineHeight: 1 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            window.dispatchEvent(new CustomEvent('ab-quick-add', { detail: { sourceId: id, x: e.clientX, y: e.clientY } }));
-          }}
-        >
-          +
-        </button>
-      )}
-
       {!isNote && (
         <>
           {isIfElse ? (
@@ -220,6 +221,15 @@ function CustomNodeInner({ data, id }: NodeProps) {
               <Handle type="target" position={Position.Right} id="break-in" className="!w-3 !h-3 !border-2 !top-[70%] !opacity-0" style={{ borderColor: NODE_COLORS.mcp, backgroundColor: 'var(--bg-100, #1a1a2e)' }} />
               <div className="absolute -right-9 top-[28%] text-[9px] text-purple-400">loop</div>
               <div className="absolute -right-9 top-[68%] text-[9px] text-yellow-400">exit</div>
+            </>
+          ) : isApproval ? (
+            <>
+              <Handle type="source" position={Position.Right} id="approve" className="!w-3 !h-3 !border-2 !top-[30%]" style={{ borderColor: NODE_COLORS.start, backgroundColor: 'var(--bg-100, #1a1a2e)' }} />
+              <Handle type="target" position={Position.Right} id="approve-in" className="!w-3 !h-3 !border-2 !top-[30%] !opacity-0" style={{ borderColor: NODE_COLORS.start, backgroundColor: 'var(--bg-100, #1a1a2e)' }} />
+              <Handle type="source" position={Position.Right} id="reject" className="!w-3 !h-3 !border-2 !top-[70%]" style={{ borderColor: NODE_COLORS.end, backgroundColor: 'var(--bg-100, #1a1a2e)' }} />
+              <Handle type="target" position={Position.Right} id="reject-in" className="!w-3 !h-3 !border-2 !top-[70%] !opacity-0" style={{ borderColor: NODE_COLORS.end, backgroundColor: 'var(--bg-100, #1a1a2e)' }} />
+              <div className="absolute -right-9 top-[28%] text-[9px] text-green-400">ok</div>
+              <div className="absolute -right-9 top-[68%] text-[9px] text-red-400">no</div>
             </>
           ) : (
             <>
@@ -243,10 +253,6 @@ function CustomNodeInner({ data, id }: NodeProps) {
       {isNote && (
         <div className="absolute inset-0 rounded-lg opacity-10 pointer-events-none" style={{ backgroundColor: color }} />
       )}
-
-      {execStatus?.status === 'running' && (
-        <div className="absolute inset-0 rounded-lg pointer-events-none ab-node-running-ring" style={{ borderColor: color }} />
-      )}
     </div>
   );
 }
@@ -261,6 +267,7 @@ function isConfigured(nodeType: WorkflowNodeType, data: Record<string, any>): bo
     case 'set-state': return !!(data.variables && Object.keys(data.variables).length > 0);
     case 'extract': return !!(data.fields && data.fields.length > 0);
     case 'mcp': return !!(data.toolName);
+    case 'guardrails': return !!(data.checks && (data.checks.pii || data.checks.moderation || data.checks.jailbreak));
     case 'user-approval': return !!(data.message) && data.message !== 'Approve to continue?';
     default: return true;
   }

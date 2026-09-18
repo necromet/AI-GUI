@@ -1264,3 +1264,56 @@ html.dark .tiptap-popover::before {
 .node-settings-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--text-500);
 }
+
+/* Agent Builder — Collapsible animations */
+@keyframes collapsible-down {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+/* Agent Builder — Execution animations */
+.ab-edge-active {
+  stroke: var(--neon-color) !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 8 4;
+  animation: ab-edge-flow 1s linear infinite;
+}
+
+@keyframes ab-edge-flow {
+  to { stroke-dashoffset: -12; }
+}
+
+.ab-node-executing {
+  animation: ab-pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes ab-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--neon-rgb), 0.4),
+                0 0 20px 0 rgba(var(--neon-rgb), 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(var(--neon-rgb), 0),
+                0 0 30px 0 rgba(var(--neon-rgb), 0);
+  }
+}
+
+.ab-node-completed {
+  border-color: #34d399 !important;
+  transition: border-color 0.4s ease-out;
+}
+
+.ab-node-failed {
+  animation: ab-shake 0.4s ease-out;
+  border-color: #ef4444 !important;
+}
+
+@keyframes ab-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}

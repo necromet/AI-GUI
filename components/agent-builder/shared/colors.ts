@@ -3,6 +3,7 @@ export const NODE_COLORS = {
   end: '#f87171',
   agent: '#818cf8',
   mcp: '#fbbf24',
+  guardrails: '#10b981',
   'if-else': '#fb923c',
   while: '#c084fc',
   'user-approval': '#ec4899',
