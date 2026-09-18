@@ -14,7 +14,7 @@ interface TipTapDocument {
 }
 
 function parseInlineContent(text: string): TipTapNode[] {
-  if (!text) return [{ type: 'text', text: '' }];
+  if (!text) return [];
 
   const nodes: TipTapNode[] = [];
   let remaining = text;
@@ -99,13 +99,14 @@ function parseInlineContent(text: string): TipTapNode[] {
     }
   }
 
-  return nodes.length > 0 ? nodes : [{ type: 'text', text: '' }];
+  return nodes;
 }
 
 function makeParagraph(text: string): TipTapNode {
+  const inline = parseInlineContent(text);
   return {
     type: 'paragraph',
-    content: parseInlineContent(text),
+    ...(inline.length > 0 ? { content: inline } : {}),
   };
 }
 

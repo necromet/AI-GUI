@@ -1,4 +1,4 @@
-import { StateGraph, Annotation, START, END, MemorySaver } from '@langchain/langgraph';
+import { StateGraph, Annotation, START, END, MemorySaver, Send } from '@langchain/langgraph';
 import { executeAgentNode } from './workflowExecutors/agent.js';
 import { executeTransformNode, executeIfElseNode, executeWhileNode, executeUserApprovalNode } from './workflowExecutors/logic.js';
 import { executeMCPNode } from './workflowExecutors/mcp.js';
@@ -42,6 +42,48 @@ export interface ExecutorOptions {
   llmKeys?: Record<string, string>;
   threadId?: string;
   executionId?: string;
+}
+
+export function toMermaid(nodes: WorkflowNode[], edges: WorkflowEdge[]): string {
+  const lines: string[] = ['graph TD'];
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_]/g, '_');
+
+  for (const node of nodes) {
+    const id = sanitize(node.id);
+    const label = (node.data?.label || node.label || node.type).replace(/"/g, "'");
+    switch (node.type) {
+      case 'start':
+        lines.push(`  ${id}([${label}])`);
+        break;
+      case 'end':
+        lines.push(`  ${id}([${label}])`);
+        break;
+      case 'if-else':
+        lines.push(`  ${id}{${label}}`);
+        break;
+      case 'while':
+        lines.push(`  ${id}{${label}}`);
+        break;
+      default:
+        lines.push(`  ${id}[${label}]`);
+    }
+  }
+
+  for (const edge of edges) {
+    const src = sanitize(edge.source);
+    const tgt = sanitize(edge.target);
+    if (edge.label) {
+      lines.push(`  ${src} -->|"${edge.label.replace(/"/g, "'")}"| ${tgt}`);
+    } else if (edge.sourceHandle === 'if' || edge.sourceHandle === 'approve' || edge.sourceHandle === 'continue') {
+      lines.push(`  ${src} -->|${edge.sourceHandle}| ${tgt}`);
+    } else if (edge.sourceHandle === 'else' || edge.sourceHandle === 'reject' || edge.sourceHandle === 'break') {
+      lines.push(`  ${src} -->|${edge.sourceHandle}| ${tgt}`);
+    } else {
+      lines.push(`  ${src} --> ${tgt}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 export class WorkflowExecutor {
@@ -117,10 +159,7 @@ export class WorkflowExecutor {
     const startNode = this.nodes.find(n => n.type === 'start');
 
     if (startNode) {
-      const startTargets = this.edges.filter(e => e.source === startNode.id);
-      for (const edge of startTargets) {
-        graph.addEdge(START, edge.target);
-      }
+      graph.addEdge(START, startNode.id);
     }
 
     const edgesBySource = new Map<string, WorkflowEdge[]>();
@@ -161,10 +200,28 @@ export class WorkflowExecutor {
             break: outEdges.find(e => e.sourceHandle === 'break')?.target || END,
           }
         );
+      } else if (node.type === 'user-approval' && outEdges.some(e => e.sourceHandle === 'approve' || e.sourceHandle === 'reject')) {
+        graph.addConditionalEdges(
+          node.id,
+          (state: WorkflowState) => {
+            const result = state.nodeResults[node.id];
+            if (result?.output?.approved === false) return 'reject';
+            return 'approve';
+          },
+          {
+            approve: outEdges.find(e => e.sourceHandle === 'approve')?.target || END,
+            reject: outEdges.find(e => e.sourceHandle === 'reject')?.target || END,
+          }
+        );
       } else if (outEdges.length === 1) {
         graph.addEdge(node.id, outEdges[0].target);
       } else {
-        graph.addEdge(node.id, outEdges[0].target);
+        const targets = [...new Set(outEdges.map(e => e.target))];
+        graph.addConditionalEdges(
+          node.id,
+          (state: WorkflowState) => targets.map(t => new Send(t, state)),
+          targets.reduce((acc, t) => { acc[t] = t; return acc; }, {} as Record<string, string>)
+        );
       }
     }
 
@@ -214,6 +271,9 @@ export class WorkflowExecutor {
             break;
           case 'extract':
             output = await executeExtractNode(node.data, state, this.options.llmKeys || {});
+            break;
+          case 'guardrails':
+            output = await executeGuardrailsNode(node.data, state);
             break;
           case 'note':
             output = { message: node.data.note || node.data.text || '' };

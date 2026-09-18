@@ -1,4 +1,5 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 
 export interface FloatingToolbarState {
   active: boolean;
@@ -7,8 +8,15 @@ export interface FloatingToolbarState {
 
 export const floatingToolbarPluginKey = new PluginKey('floatingToolbar');
 
+const SUPPRESS_META = 'floatingToolbarSuppress';
+
+export function suppressFloatingToolbar(view: EditorView) {
+  view.dispatch(view.state.tr.setMeta(SUPPRESS_META, true));
+}
+
 export function createFloatingToolbarPlugin(onUpdate: (state: FloatingToolbarState) => void) {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let suppressUntil = 0;
 
   return new Plugin({
     key: floatingToolbarPluginKey,
@@ -19,6 +27,9 @@ export function createFloatingToolbarPlugin(onUpdate: (state: FloatingToolbarSta
       apply(tr, value): FloatingToolbarState {
         const meta = tr.getMeta(floatingToolbarPluginKey);
         if (meta) return meta;
+        if (tr.getMeta(SUPPRESS_META)) {
+          suppressUntil = Date.now() + 500;
+        }
         return value;
       },
     },
@@ -26,6 +37,8 @@ export function createFloatingToolbarPlugin(onUpdate: (state: FloatingToolbarSta
       const handleSelectionUpdate = () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
+          if (Date.now() < suppressUntil) return;
+
           const { selection } = editorView.state;
           const { empty } = selection;
 

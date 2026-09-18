@@ -2,13 +2,14 @@ export async function executeGuardrailsNode(
   data: Record<string, any>,
   state: any
 ): Promise<any> {
+  const checks = data.checks || {};
   const {
-    piiEnabled = false,
-    moderationEnabled = false,
-    jailbreakEnabled = false,
+    piiEnabled = checks.pii ?? false,
+    moderationEnabled = checks.moderation ?? false,
+    jailbreakEnabled = checks.jailbreak ?? false,
     hallucinationEnabled = false,
     guardrailType = 'moderation',
-    actionOnViolation = 'block',
+    actionOnViolation = data.action || 'block',
   } = data;
 
   const variables = state.variables || {};

@@ -42,15 +42,39 @@ export async function executeSetStateNode(
   data: Record<string, any>,
   state: any
 ): Promise<any> {
-  const { variables: varDefs = {} } = data;
+  const { variables: varDefs = {}, variableTypes = {} } = data;
   const updates: Record<string, any> = {};
   const variables = state.variables || {};
 
-  for (const [key, value] of Object.entries(varDefs)) {
+  for (const [key, rawValue] of Object.entries(varDefs)) {
+    const type = variableTypes[key] || 'string';
+    let value = rawValue;
+
+    // Apply variable substitution to string values
     if (typeof value === 'string') {
-      updates[key] = substituteVariables(value, state);
-    } else {
-      updates[key] = value;
+      value = substituteVariables(value, state);
+    }
+
+    // Parse based on declared type
+    switch (type) {
+      case 'number':
+        updates[key] = Number(value);
+        break;
+      case 'boolean':
+        updates[key] = value === true || value === 'true';
+        break;
+      case 'json':
+        try { updates[key] = typeof value === 'string' ? JSON.parse(value) : value; }
+        catch { updates[key] = value; }
+        break;
+      case 'expression':
+        try {
+          const exprFn = new Function('input', 'lastOutput', 'state', 'variables', `return ${value}`);
+          updates[key] = exprFn(variables.input, variables.lastOutput, state, variables);
+        } catch { updates[key] = value; }
+        break;
+      default:
+        updates[key] = value;
     }
   }
 

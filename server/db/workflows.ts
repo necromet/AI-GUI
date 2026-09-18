@@ -23,7 +23,7 @@ export async function createWorkflow(data: { name: string; nodes: string; edges:
   return getWorkflow(id);
 }
 
-export async function updateWorkflow(id: string, data: Partial<{ name: string; nodes: string; edges: string; description: string }>) {
+export async function updateWorkflow(id: string, data: Partial<{ name: string; nodes: string; edges: string; description: string; published: boolean; api_key: string | null; endpoint_url: string | null }>) {
   const sets: string[] = [];
   const params: any[] = [];
   let idx = 1;
@@ -31,6 +31,9 @@ export async function updateWorkflow(id: string, data: Partial<{ name: string; n
   if (data.nodes !== undefined) { sets.push(`nodes = $${idx++}`); params.push(data.nodes); }
   if (data.edges !== undefined) { sets.push(`edges = $${idx++}`); params.push(data.edges); }
   if (data.description !== undefined) { sets.push(`description = $${idx++}`); params.push(data.description); }
+  if (data.published !== undefined) { sets.push(`published = $${idx++}`); params.push(data.published); }
+  if (data.api_key !== undefined) { sets.push(`api_key = $${idx++}`); params.push(data.api_key); }
+  if (data.endpoint_url !== undefined) { sets.push(`endpoint_url = $${idx++}`); params.push(data.endpoint_url); }
   sets.push('updated_at = NOW()');
   params.push(id);
   await run(`UPDATE workflows SET ${sets.join(', ')} WHERE id = $${idx}`, params);

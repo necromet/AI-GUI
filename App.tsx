@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle, Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
@@ -10,6 +10,7 @@ import * as db from './services/apiDatabaseAdapter';
 import { listDocuments } from './services/ragService';
 import Sidebar, { type SidebarPanel } from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
+import FloatingFilePanel from './components/chat/FloatingFilePanel';
 import ModeSelector from './components/ModeSelector';
 import { catppuccinLatte, catppuccinMocha } from './components/chat/MarkdownRenderer';
 import { toast } from 'sonner';
@@ -24,6 +25,12 @@ import ASRPanel from './components/ASRPanel';
 import RAGChatPanel from './components/RAGChatPanel';
 import AgentChatPanel from './components/AgentChatPanel';
 import AgentBuilderMode from './components/agent-builder/AgentBuilderMode';
+import WorkflowToolbar from './components/agent-builder/WorkflowToolbar';
+import SaveAsTemplateModal from './components/agent-builder/SaveAsTemplateModal';
+import PublishModal from './components/agent-builder/PublishModal';
+import { ShortcutButton } from './components/agent-builder/ShortcutOverlay';
+import { SEMANTIC_COLORS } from './components/agent-builder/shared/colors';
+import type { WorkflowHeaderControls } from './components/agent-builder/AgentBuilderMode';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
@@ -71,11 +78,12 @@ interface ChatMessageListProps {
   onFeedback: (messageId: string, feedback: 'good' | 'bad') => void;
   onReattach: (data: string, name: string, mimeType: string) => void;
   onEdit: (messageId: string, newContent: string) => void;
+  onViewAttachment: (attachment: Attachment) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const ChatMessageList = React.memo(function ChatMessageList({
-  messages, isStreaming, onRegenerate, onFeedback, onReattach, onEdit, messagesEndRef,
+  messages, isStreaming, onRegenerate, onFeedback, onReattach, onEdit, onViewAttachment, messagesEndRef,
 }: ChatMessageListProps) {
   const lastId = messages[messages.length - 1]?.id;
   return (
@@ -88,6 +96,7 @@ const ChatMessageList = React.memo(function ChatMessageList({
           onFeedback={onFeedback}
           onReattach={onReattach}
           onEdit={onEdit}
+          onViewAttachment={onViewAttachment}
           isStreaming={isStreaming && msg.id === lastId}
         />
       ))}
@@ -119,13 +128,15 @@ async function processStreamResponse(
   const flush = () => {
     if (!dirty) return;
     dirty = false;
+    const hasTextArrived = fullText.length > 0;
+    const hasThinkingArrived = fullThinkingText.length > 0;
     setMessages(prev => prev.map(msg =>
       msg.id === aiMessageId ? {
         ...msg,
         content: fullText,
         thinkingContent: fullThinkingText,
-        isThinking: fullText.length === 0,
-        isSearching: searchAnnotations.length > 0 && fullText.length === 0,
+        isThinking: !hasTextArrived,
+        isSearching: searchAnnotations.length > 0 && !hasTextArrived && !hasThinkingArrived,
         usageMetadata,
         annotations: searchAnnotations.length > 0 ? searchAnnotations : undefined,
       } : msg
@@ -227,6 +238,8 @@ const App: React.FC = () => {
   const [dbSidebarControls, setDbSidebarControls] = useState<DatabaseSidebarControls | null>(null);
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
   const [notesControls, setNotesControls] = useState<NotesControls | null>(null);
+  const [workflowHeaderControls, setWorkflowHeaderControls] = useState<WorkflowHeaderControls | null>(null);
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
 
   useEffect(() => {
     if (!isDatabaseMode) {
@@ -234,6 +247,11 @@ const App: React.FC = () => {
       setDbSidebarControls(null);
     }
   }, [isDatabaseMode]);
+  useEffect(() => {
+    if (!isAgentBuilderMode) {
+      setWorkflowHeaderControls(null);
+    }
+  }, [isAgentBuilderMode]);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
     try { return localStorage.getItem('edward:labs_agentDockOpen') !== 'false'; } catch { return true; }
   });
@@ -272,6 +290,7 @@ const App: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const loadedConvRef = useRef<number | null>(null);
 
   const modelType = getModelType(currentModelId);
   const selectedModelConfig = models.find(m => m.id === currentModelId) || models[0];
@@ -332,8 +351,15 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  const isNearBottom = useCallback(() => {
+    const container = document.getElementById('scroll-container');
+    if (!container) return true;
+    return container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+  }, []);
+
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!isNearBottom()) return;
     if (scrollTimerRef.current) return;
     scrollTimerRef.current = setTimeout(() => {
       scrollTimerRef.current = null;
@@ -345,7 +371,7 @@ const App: React.FC = () => {
         scrollTimerRef.current = null;
       }
     };
-  }, [messages, scrollToBottom]);
+  }, [messages, scrollToBottom, isNearBottom]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -492,6 +518,7 @@ const App: React.FC = () => {
     
     const newConversationId = await db.createConversation(dbModel!.id!, null, type);
     setCurrentConversationId(newConversationId);
+    loadedConvRef.current = newConversationId;
     await loadConversations();
     return newConversationId;
   };
@@ -557,8 +584,15 @@ const App: React.FC = () => {
               if (result.truncated) {
                 toast.warning(`Document "${file.name}" was truncated to 50k characters.`);
               }
+              let fileData = '';
+              if (file.size <= 5 * 1024 * 1024) {
+                try {
+                  const att = await fileToAttachment(file);
+                  fileData = att.data;
+                } catch {}
+              }
               return {
-                data: '',
+                data: fileData,
                 mimeType: file.type || 'application/octet-stream',
                 name: file.name,
                 textContent: result.text,
@@ -632,7 +666,10 @@ const App: React.FC = () => {
           streamResult, aiMessageId, setMessages, abortController.signal,
         );
 
-        if (fullText) {
+        if (!fullText && !aborted) {
+          setMessages(prev => prev.filter(m => m.id !== aiMessageId));
+          toast.error('Received empty response from the model.');
+        } else if (fullText) {
           await saveMessageToDb(
             conversationId, 'assistant', fullText,
             usageMetadata?.totalTokens || null,
@@ -679,8 +716,9 @@ const App: React.FC = () => {
       setMsgs(prev => prev.filter(msg => msg.id !== aiMessageId));
       toast.error('Quota Exhausted: Your API quota has been reached. Please wait for it to reset or switch to a different model/API key in Settings.');
     } else {
+      const displayMsg = errorMsg.length > 500 ? errorMsg.substring(0, 500) + '...' : errorMsg;
       setMsgs(prev => prev.map(msg =>
-        msg.id === aiMessageId ? { ...msg, content: `**Error:** ${errorMsg}`, isThinking: false } : msg
+        msg.id === aiMessageId ? { ...msg, content: `**Error:** ${displayMsg}`, isThinking: false } : msg
       ));
     }
   }, []);
@@ -729,7 +767,10 @@ const App: React.FC = () => {
         streamResult, aiMessageId, setMessages, abortController.signal,
       );
 
-      if (fullText) {
+      if (!fullText && !aborted) {
+        setMessages(prev => prev.filter(m => m.id !== aiMessageId));
+        toast.error('Received empty response from the model.');
+      } else if (fullText) {
         await saveMessageToDb(
           conversationId, 'assistant', fullText,
           usageMetadata?.totalTokens || null,
@@ -814,7 +855,10 @@ const App: React.FC = () => {
         streamResult, aiMessageId, setMessages, abortController.signal,
       );
 
-      if (fullText) {
+      if (!fullText && !aborted) {
+        setMessages(prev => prev.filter(m => m.id !== aiMessageId));
+        toast.error('Received empty response from the model.');
+      } else if (fullText) {
         await saveMessageToDb(
           conversationId, 'assistant', fullText,
           usageMetadata?.totalTokens || null,
@@ -866,10 +910,12 @@ const App: React.FC = () => {
     const match = location.pathname.match(/^\/chat\/(\d+)$/);
     if (match) {
       const convId = parseInt(match[1], 10);
-      if (convId !== currentConversationId) {
+      if (convId !== currentConversationId && convId !== loadedConvRef.current) {
+        loadedConvRef.current = convId;
         loadConversation(convId);
       }
     } else if (location.pathname === '/chat') {
+      loadedConvRef.current = null;
       if (currentConversationId !== null) {
         setMessages([]);
         setInput('');
@@ -909,6 +955,28 @@ const App: React.FC = () => {
     }
     return null;
   }, [modelType, theme, selectedModelConfig, handleNotification]);
+
+  const chatContent = chatRouteElement || (messages.length === 0 ? (
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3rem)] p-8 text-center">
+      <div className="relative mb-8">
+        <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
+      </div>
+      <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
+        How can I help you today?
+      </h2>
+    </div>
+  ) : (
+    <ChatMessageList
+      messages={messages}
+      isStreaming={isStreaming}
+      onRegenerate={handleRegenerate}
+      onFeedback={handleFeedback}
+      onReattach={handleReattach}
+      onEdit={handleEditMessage}
+      onViewAttachment={setViewingAttachment}
+      messagesEndRef={messagesEndRef}
+    />
+  ));
 
   const ragPanel = (
     <div className="h-full relative">
@@ -1044,15 +1112,15 @@ const App: React.FC = () => {
         ) : (
         <>
         {(!isLibraryMode || libraryControls) && !isPythonMode && (
-        <div className="flex items-center px-2 py-1.5 md:px-3 md:py-1.5 sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-100)' }}>
+        <div className="flex items-center px-3 py-2 md:px-4 md:py-2 sticky top-0 z-10 relative" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen(true)}
-              className="h-8 w-8 mr-2 flex-shrink-0 text-[var(--text-500)] hover:text-[var(--text-100)]"
+              className="h-9 w-9 mr-2 flex-shrink-0 text-[var(--text-500)] hover:text-[var(--text-100)]"
             >
-              <PanelLeft size={18} />
+              <PanelLeft size={20} />
             </Button>
           )}
           {location.pathname.startsWith('/skema') && skemaControls ? (
@@ -1145,6 +1213,81 @@ const App: React.FC = () => {
                 )}
               </div>
             </>
+          ) : workflowHeaderControls ? (
+            (() => {
+              const w = workflowHeaderControls;
+              const errors = w.validationIssues.filter((i: any) => i.severity === 'error');
+              const warnings = w.validationIssues.filter((i: any) => i.severity === 'warning');
+              const btnBase = "p-1.5 rounded-md transition-colors cursor-pointer";
+              return (
+                <>
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    {w.onBack && (
+                      <button onClick={w.onBack} className="px-2.5 py-1.5 rounded-md text-sm font-medium cursor-pointer" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)', border: '1px solid var(--border-300)' }}>
+                        ← Back
+                      </button>
+                    )}
+                    <input type="text" value={w.name} onChange={(e) => w.onNameChange(e.target.value)} className="text-sm font-semibold bg-transparent border-none outline-none min-w-0 w-[180px] max-w-[220px]" style={{ color: 'var(--text-100)' }} placeholder="Workflow name" />
+                    <div className="w-px h-5 mx-1.5 flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={w.onUndo} disabled={!w.canUndo} className={btnBase} style={{ color: w.canUndo ? 'var(--text-300)' : 'var(--text-500)', opacity: w.canUndo ? 1 : 0.4 }} title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
+                      <button onClick={w.onRedo} disabled={!w.canRedo} className={btnBase} style={{ color: w.canRedo ? 'var(--text-300)' : 'var(--text-500)', opacity: w.canRedo ? 1 : 0.4 }} title="Redo (Ctrl+Shift+Z)"><Redo2 size={15} /></button>
+                      <button onClick={w.onFitView} className={btnBase} style={{ color: 'var(--text-300)' }} title="Fit View (F)"><Maximize2 size={15} /></button>
+                      <ShortcutButton onClick={w.onShowShortcuts} />
+                    </div>
+                    <div className="w-px h-5 mx-1.5 flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
+                    {w.validationIssues.length > 0 && (
+                      <div className="relative flex-shrink-0">
+                        <button onClick={() => w.setShowValidation(!w.showValidation)} className="flex items-center gap-1.5 px-1.5 py-1 rounded-md cursor-pointer" style={{ color: errors.length > 0 ? SEMANTIC_COLORS.danger : SEMANTIC_COLORS.warning }} title="Validation issues">
+                          <AlertTriangle size={15} />
+                          <span className="text-[11px] font-medium">{w.validationIssues.length}</span>
+                        </button>
+                        {w.showValidation && (
+                          <div className="absolute top-full left-0 mt-1 w-[280px] rounded-lg border shadow-xl z-50 overflow-hidden" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }} onClick={(e) => e.stopPropagation()}>
+                            <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}>Validation ({errors.length} errors, {warnings.length} warnings)</div>
+                            <div className="max-h-[200px] overflow-y-auto">
+                              {w.validationIssues.map((issue: any, i: number) => (
+                                <div key={i} className="flex items-start gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid var(--border-300)' }}>
+                                  <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" style={{ color: issue.severity === 'error' ? SEMANTIC_COLORS.danger : SEMANTIC_COLORS.warning }} />
+                                  <span className="text-[10px]" style={{ color: 'var(--text-300)' }}>{issue.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {w.validationIssues.length === 0 && w.nodes.length > 0 && (
+                      <CheckCircle2 size={15} className="flex-shrink-0" style={{ color: SEMANTIC_COLORS.success }} />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {w.onLoadTemplate && (
+                      <button onClick={w.onLoadTemplate} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs cursor-pointer" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }} title="Templates">
+                        <FileCode size={14} />Templates
+                      </button>
+                    )}
+                    {w.workflowId && w.nodes.length > 0 && (
+                      <button onClick={() => w.setShowSaveAsTemplate(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Save as Template"><BookmarkPlus size={15} /></button>
+                    )}
+                    <button onClick={w.handleExport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export JSON"><Download size={15} /></button>
+                    {w.workflowId && (<button onClick={w.handleExportCode} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export as Code"><Code size={15} /></button>)}
+                    {w.workflowId && (<button onClick={w.handleExportMermaid} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export Mermaid Diagram"><Network size={15} /></button>)}
+                    {w.workflowId && (<button onClick={() => w.setShowPublish(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Publish as API"><Globe size={15} /></button>)}
+                    <button onClick={w.handleShare} className={btnBase} style={{ color: 'var(--text-400)' }} title="Download Workflow"><Share2 size={15} /></button>
+                    <button onClick={w.handleSave} disabled={w.saving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer disabled:opacity-50" style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>
+                      <Save size={14} />{w.saving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  {w.showSaveAsTemplate && (
+                    <SaveAsTemplateModal workflowId={w.workflowId} name={w.name} nodes={w.nodes} edges={w.edges} onClose={() => w.setShowSaveAsTemplate(false)} />
+                  )}
+                  {w.showPublish && w.workflowId && (
+                    <PublishModal workflowId={w.workflowId} workflowName={w.name} onClose={() => w.setShowPublish(false)} />
+                  )}
+                </>
+              );
+            })()
           ) : (
             <>
               {htmlFullscreenCode ? (
@@ -1318,50 +1461,12 @@ const App: React.FC = () => {
               <Routes>
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
-                    {chatRouteElement || (messages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3rem)] p-8 text-center">
-                        <div className="relative mb-8">
-                          <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                        </div>
-                        <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                          How can I help you today?
-                        </h2>
-                      </div>
-                    ) : (
-                      <ChatMessageList
-                        messages={messages}
-                        isStreaming={isStreaming}
-                        onRegenerate={handleRegenerate}
-                        onFeedback={handleFeedback}
-                        onReattach={handleReattach}
-                        onEdit={handleEditMessage}
-                        messagesEndRef={messagesEndRef}
-                      />
-                    ))}
+                    {chatContent}
                   </RequireAuth>
                 } />
                 <Route path="/chat/:conversationId" element={
                   <RequireAuth isAuth={isChatAuthenticated}>
-                    {chatRouteElement || (messages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3rem)] p-8 text-center">
-                          <div className="relative mb-8">
-                            <div className="scale-150" style={{ color: 'var(--text-300)' }}>{CHATGPT_LOGO}</div>
-                          </div>
-                          <h2 className="text-2xl md:text-3xl font-semibold mb-8" style={{ color: 'var(--text-100)' }}>
-                            How can I help you today?
-                          </h2>
-                      </div>
-                    ) : (
-                      <ChatMessageList
-                        messages={messages}
-                        isStreaming={isStreaming}
-                        onRegenerate={handleRegenerate}
-                        onFeedback={handleFeedback}
-                        onReattach={handleReattach}
-                        onEdit={handleEditMessage}
-                        messagesEndRef={messagesEndRef}
-                      />
-                    ))}
+                    {chatContent}
                   </RequireAuth>
                 } />
                 <Route path="/rag" element={
@@ -1511,7 +1616,7 @@ const App: React.FC = () => {
                 <Route path="/agent-builder/*" element={
                   <RequireAuth isAuth={isAgentBuilderAuthenticated}>
                     <div className="h-full">
-                      <AgentBuilderMode />
+                      <AgentBuilderMode onHeaderControls={setWorkflowHeaderControls} />
                     </div>
                   </RequireAuth>
                 } />
@@ -1616,6 +1721,10 @@ const App: React.FC = () => {
         />
       )}
 
+      <FloatingFilePanel
+        attachment={viewingAttachment}
+        onClose={() => setViewingAttachment(null)}
+      />
 
     </div>
   );

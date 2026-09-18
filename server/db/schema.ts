@@ -308,6 +308,9 @@ CREATE TABLE IF NOT EXISTS workflows (
   edges JSONB NOT NULL DEFAULT '[]',
   is_template BOOLEAN NOT NULL DEFAULT FALSE,
   is_public BOOLEAN NOT NULL DEFAULT FALSE,
+  published BOOLEAN NOT NULL DEFAULT FALSE,
+  api_key TEXT,
+  endpoint_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -399,6 +402,11 @@ CREATE TABLE IF NOT EXISTS execution_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_exec_logs_execution ON execution_logs(execution_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_templates_category ON workflow_templates(category);
+
+-- Publish columns for workflows
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS api_key TEXT;
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS endpoint_url TEXT;
 `;
 
 export const SEED_SQL = `

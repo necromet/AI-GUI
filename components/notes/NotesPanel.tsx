@@ -142,7 +142,7 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ theme, onNotification, o
 
   if (!noteId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center">
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.12), rgba(var(--neon-rgb), 0.04))' }}>
           <StickyNote size={28} style={{ color: 'var(--neon-color)' }} />
         </div>
@@ -152,7 +152,7 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ theme, onNotification, o
         </p>
         <button
           onClick={() => handleCreateNote(null)}
-          className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+          className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all duration-200 hover:opacity-90 active:scale-[0.97]"
           style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}
         >
           Create a page
@@ -163,7 +163,7 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ theme, onNotification, o
 
   if (loadingNote) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="h-full flex items-center justify-center animate-fade-in">
         <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--neon-color)', borderTopColor: 'transparent' }} />
       </div>
     );
@@ -171,14 +171,14 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ theme, onNotification, o
 
   if (!selectedNote) {
     return (
-      <div className="h-full flex flex-col items-center justify-center">
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
         <p className="text-sm" style={{ color: 'var(--text-500)' }}>Note not found</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto animate-fade-in">
       <div className="max-w-3xl mx-auto px-6 py-8">
         {/* Cover image placeholder */}
         {selectedNote.coverUrl && (
@@ -199,7 +199,7 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ theme, onNotification, o
             </button>
             {showEmojiPicker && (
               <div
-                className="absolute left-0 top-full z-50 p-2 rounded-lg border shadow-lg grid grid-cols-10 gap-1"
+                className="absolute left-0 top-full z-50 p-2 rounded-lg border shadow-lg grid grid-cols-10 gap-1 animate-dropdown-in"
                 style={{ backgroundColor: 'var(--bg-100)', borderColor: 'var(--border-300)' }}
               >
                 {EMOJI_LIST.map(emoji => (

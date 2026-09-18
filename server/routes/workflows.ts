@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as workflowDB from '../db/workflows.js';
 import { nanoid } from 'nanoid';
 import { parseWorkflow, generateExportCode } from './workflowHelpers.js';
+import { toMermaid } from '../services/workflowExecutor.js';
 
 const router = Router();
 
@@ -106,6 +107,38 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ─── Publish / Unpublish ───
+
+router.post('/:id/publish', async (req, res) => {
+  try {
+    const workflow = await workflowDB.getWorkflow(req.params.id);
+    if (!workflow) { res.status(404).json({ error: 'Not found' }); return; }
+    const apiKey = `sk_wf_${nanoid(24)}`;
+    const endpointUrl = `${req.protocol}://${req.get('host')}/api/workflows/${req.params.id}/execute`;
+    await workflowDB.updateWorkflow(req.params.id, {
+      published: true,
+      api_key: apiKey,
+      endpoint_url: endpointUrl,
+    });
+    res.json({ published: true, endpointUrl, apiKey });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/unpublish', async (req, res) => {
+  try {
+    await workflowDB.updateWorkflow(req.params.id, {
+      published: false,
+      api_key: null,
+      endpoint_url: null,
+    });
+    res.json({ published: false });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Export / Import ───
 
 router.post('/:id/export-code', async (req, res) => {
@@ -115,6 +148,18 @@ router.post('/:id/export-code', async (req, res) => {
     const parsed = parseWorkflow(workflow);
     const code = generateExportCode(parsed);
     res.json({ code, language: 'typescript' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/export-mermaid', async (req, res) => {
+  try {
+    const workflow = await workflowDB.getWorkflow(req.params.id);
+    if (!workflow) { res.status(404).json({ error: 'Not found' }); return; }
+    const parsed = parseWorkflow(workflow);
+    const mermaid = toMermaid(parsed.nodes, parsed.edges);
+    res.json({ mermaid, language: 'mermaid' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -76,8 +76,13 @@ const suggestionConfig: Omit<SuggestionOptions, 'editor'> = {
       },
 
       onExit() {
-        popup?.[0]?.destroy();
+        if (popup?.[0]) {
+          if (typeof popup[0].destroy === 'function') popup[0].destroy();
+          else if (typeof popup[0].hide === 'function') popup[0].hide();
+        }
         component?.destroy();
+        popup = null;
+        component = null;
       },
     };
   },

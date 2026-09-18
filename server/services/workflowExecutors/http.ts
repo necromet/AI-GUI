@@ -18,6 +18,18 @@ export async function executeHTTPNode(
     headers[interpolate(k, variables)] = interpolate(v as string, variables);
   }
 
+  // Apply auth headers
+  const authType = data.authType || 'none';
+  if (authType === 'bearer' && data.authToken) {
+    headers['Authorization'] = `Bearer ${interpolate(data.authToken, variables)}`;
+  } else if (authType === 'api-key' && data.apiKey) {
+    const headerName = data.apiKeyHeader || 'X-API-Key';
+    headers[headerName] = interpolate(data.apiKey, variables);
+  } else if (authType === 'basic' && data.basicUser) {
+    const creds = btoa(`${interpolate(data.basicUser, variables)}:${interpolate(data.basicPassword || '', variables)}`);
+    headers['Authorization'] = `Basic ${creds}`;
+  }
+
   let body: string | undefined;
   if (rawBody && method !== 'GET') {
     body = typeof rawBody === 'string' ? interpolate(rawBody, variables) : JSON.stringify(rawBody);

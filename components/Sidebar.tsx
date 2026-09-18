@@ -461,7 +461,7 @@ const NoteSidebarItem: React.FC<{
           className="w-4 h-4 flex items-center justify-center flex-shrink-0"
           style={{ color: 'var(--text-500)', visibility: hasChildren ? 'visible' : 'hidden' }}
         >
-          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <ChevronDown size={12} className={`transition-transform duration-200 ${expanded ? '' : '-rotate-90'}`} />
         </button>
 
         <span className="text-sm flex-shrink-0 w-5 text-center">{note.icon}</span>
@@ -723,17 +723,17 @@ const Sidebar: React.FC<SidebarProps> = ({
               </Button>
             )}
             <div className="flex items-center gap-2.5">
-              <div className="sidebar-brand-mark flex items-center justify-center w-7 h-7 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.15), rgba(var(--neon-rgb), 0.05))' }}>
-                <span className="text-xs font-bold" style={{ color: 'var(--neon-color)' }}>e</span>
+              <div className="sidebar-brand-mark flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.15), rgba(var(--neon-rgb), 0.05))' }}>
+                <span className="text-sm font-bold" style={{ color: 'var(--neon-color)' }}>e</span>
               </div>
               <div className="flex flex-col leading-tight">
-                <span className="font-semibold text-[13px] tracking-tight text-[var(--text-100)]">edward:labs</span>
-                <span className="text-[10px] tabular-nums tracking-wide text-[var(--text-500)]">{gmt7Time}</span>
+                <span className="font-semibold text-[14px] tracking-tight text-[var(--text-100)]">edward:labs</span>
+                <span className="text-[11px] tabular-nums tracking-wide text-[var(--text-500)]">{gmt7Time}</span>
               </div>
             </div>
             <Badge
               variant="outline"
-              className="text-[10px] font-semibold border-0 px-1.5 py-0.5 ml-0.5"
+              className="text-[11px] font-semibold border-0 px-2 py-0.5 ml-0.5"
               style={{
                 backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
                 color: 'var(--neon-color)',
@@ -747,9 +747,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className="h-7 w-7 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
+              className="h-8 w-8 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
             >
-              <PanelLeftClose size={15} />
+              <PanelLeftClose size={16} />
             </Button>
           </div>
         </div>
@@ -1069,11 +1069,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         ) : currentMode === 'notes' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             {notesControls ? (
-              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 flex flex-col overflow-hidden animate-fade-in">
                 <div className="px-3 pt-3 pb-2">
                   <button
                     onClick={() => notesControls.onCreateNote(null)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer hover:scale-[0.98] active:scale-[0.96]"
                     style={{
                       background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
                       border: '1px solid rgba(var(--neon-rgb), 0.12)',
@@ -1091,7 +1091,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 <ScrollArea className="flex-1 px-3 pt-2">
-                  {/* Favorites */}
                   {(() => {
                     const collectFavorites = (notes: typeof notesControls.notes): typeof notesControls.notes => {
                       const result: typeof notesControls.notes = [];
@@ -1102,52 +1101,69 @@ const Sidebar: React.FC<SidebarProps> = ({
                       return result;
                     };
                     const favorites = collectFavorites(notesControls.notes);
-                    return favorites.length > 0 ? (
-                    <div className="mb-2">
-                      <div className="px-2 pb-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
-                          Favorites
-                        </span>
-                      </div>
-                      {favorites.map(note => (
-                        <NoteSidebarItem
-                          key={note.id}
-                          note={note}
-                          depth={0}
-                          selectedNoteId={notesControls.selectedNoteId}
-                          controls={notesControls}
-                        />
-                      ))}
-                    </div>
-                    ) : null;
-                  })()}
+                    const favoriteIds = new Set(favorites.map(f => f.id));
+                    const rootPages = notesControls.notes.filter(n => !n.parentId && !favoriteIds.has(n.id));
+                    const hasAnyNotes = notesControls.notes.filter(n => !n.parentId).length > 0;
 
-                  {/* All pages */}
-                  <div>
-                    <div className="px-2 pb-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
-                        Pages
-                      </span>
-                    </div>
-                    {notesControls.notes.filter(n => !n.parentId).length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
-                          <FileText size={18} className="text-[var(--text-500)]" />
+                    return (
+                      <>
+                        {/* Favorites */}
+                        {favorites.length > 0 && (
+                          <div className="mb-3">
+                            <div className="px-2 pb-1.5 flex items-center gap-1.5">
+                              <Star size={10} fill="var(--neon-color)" style={{ color: 'var(--neon-color)' }} />
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
+                                Favorites
+                              </span>
+                            </div>
+                            {favorites.map(note => (
+                              <NoteSidebarItem
+                                key={note.id}
+                                note={note}
+                                depth={0}
+                                selectedNoteId={notesControls.selectedNoteId}
+                                controls={notesControls}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Divider between sections */}
+                        {favorites.length > 0 && hasAnyNotes && (
+                          <div className="h-px mx-2 mb-2" style={{ backgroundColor: 'var(--border-300)', opacity: 0.5 }} />
+                        )}
+
+                        {/* All pages (excluding favorites) */}
+                        <div>
+                          <div className="px-2 pb-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-500)' }}>
+                              Pages
+                            </span>
+                          </div>
+                          {!hasAnyNotes ? (
+                            <div className="flex flex-col items-center justify-center py-8">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: 'var(--bg-200)' }}>
+                                <StickyNote size={18} className="text-[var(--text-500)]" />
+                              </div>
+                              <p className="text-xs font-medium text-[var(--text-500)]">No pages yet</p>
+                            </div>
+                          ) : rootPages.length === 0 ? (
+                            <p className="px-2 py-3 text-xs text-[var(--text-500)]">All pages are in Favorites</p>
+                          ) : (
+                            rootPages.map(note => (
+                              <NoteSidebarItem
+                                key={note.id}
+                                note={note}
+                                depth={0}
+                                selectedNoteId={notesControls.selectedNoteId}
+                                controls={notesControls}
+                              />
+                            ))
+                          )}
                         </div>
-                        <p className="text-xs font-medium text-[var(--text-500)]">No pages yet</p>
-                      </div>
-                    ) : (
-                      notesControls.notes.filter(n => !n.parentId).map(note => (
-                        <NoteSidebarItem
-                          key={note.id}
-                          note={note}
-                          depth={0}
-                          selectedNoteId={notesControls.selectedNoteId}
-                          controls={notesControls}
-                        />
-                      ))
-                    )}
-                  </div>
+                      </>
+                    );
+                  })()}
                 </ScrollArea>
               </div>
             ) : (
@@ -1165,21 +1181,21 @@ const Sidebar: React.FC<SidebarProps> = ({
         ) : isAgentBuilderMode ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-3 pb-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)] px-1">Nodes</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)] px-1">Nodes</span>
             </div>
             <ScrollArea className="flex-1 px-3">
               {NODE_CATEGORIES.map((cat) => (
                 <div key={cat.id} className="mb-3">
                   <div className="px-2 mb-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{cat.label}</span>
+                    <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{cat.label}</span>
                   </div>
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-1">
                     {cat.types.map((type) => {
                       const def = NODE_DEFINITIONS[type];
                       return (
                         <div
                           key={type}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab active:cursor-grabbing transition-colors"
+                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-colors"
                           style={{ color: 'var(--text-300)' }}
                           draggable
                           onDragStart={(e) => {
@@ -1191,10 +1207,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                           title={def.description}
                         >
                           <div
-                            className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                            className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
                             style={{ background: `${def.color}20`, color: def.color }}
                           >
-                            <span className="text-[9px] font-bold">{def.label.charAt(0)}</span>
+                            <span className="text-[11px] font-bold">{def.label.charAt(0)}</span>
                           </div>
                           <span className="text-xs">{def.label}</span>
                         </div>
@@ -1287,25 +1303,25 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <Popover>
             <PopoverTrigger asChild>
-              <button className="sidebar-user-card w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)]">
+              <button className="sidebar-user-card w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)]">
                 <div className="sidebar-user-avatar relative">
-                  <Avatar className="h-8 w-8 ring-2 ring-transparent transition-all duration-200">
+                  <Avatar className="h-9 w-9 ring-2 ring-transparent transition-all duration-200">
                     <AvatarFallback
-                      className="text-xs font-bold"
+                      className="text-sm font-bold"
                       style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.2), rgba(var(--neon-rgb), 0.08))', color: 'var(--neon-color)' }}
                     >
                       E
                     </AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2" style={{ backgroundColor: '#34d399', borderColor: 'var(--bg-100)' }} />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2" style={{ backgroundColor: '#34d399', borderColor: 'var(--bg-100)' }} />
                 </div>
                 <div className="flex flex-col min-w-0 flex-1 text-left">
-                  <span className="font-semibold text-[13px] truncate text-[var(--text-100)]">Edward</span>
-                  <span className="text-[10px] truncate text-[var(--text-500)]">
+                  <span className="font-semibold text-[14px] truncate text-[var(--text-100)]">Edward</span>
+                  <span className="text-[11px] truncate text-[var(--text-500)]">
                     {currentModelName || 'MiMo V2.5'}
                   </span>
                 </div>
-                <ChevronUp size={14} className="text-[var(--text-500)] flex-shrink-0" />
+                <ChevronUp size={16} className="text-[var(--text-500)] flex-shrink-0" />
               </button>
             </PopoverTrigger>
 
