@@ -122,7 +122,7 @@ export default function WorkflowToolbar({
     toast.success('Workflow file downloaded');
   }, [name, nodes, edges]);
 
-  // Use a ref to hold the latest controls to avoid stale closures
+  // Use refs to avoid triggering the effect on any reference changes
   const controlsRef = useRef({
     name, onNameChange, nodes, edges, workflowId,
     canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
@@ -136,12 +136,25 @@ export default function WorkflowToolbar({
     showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
   };
 
-  // Only notify parent when data values change (not callback refs)
+  const onHeaderControlsRef = useRef(onHeaderControls);
+  onHeaderControlsRef.current = onHeaderControls;
+
+  // Store prev values to do a shallow equality check
+  const prevDataRef = useRef({ name, nodes, edges, workflowId, canUndo, canRedo, saving, showValidation, showSaveAsTemplate, showPublish, onBack });
+
   useEffect(() => {
-    if (!onHeaderControls) return;
-    onHeaderControls(controlsRef.current);
-  }, [name, nodes, edges, workflowId, canUndo, canRedo, validationIssues, onBack, onHeaderControls, saving,
-      showValidation, showSaveAsTemplate, showPublish]);
+    const prev = prevDataRef.current;
+    const changed = (
+      prev.name !== name || prev.nodes !== nodes || prev.edges !== edges ||
+      prev.workflowId !== workflowId || prev.canUndo !== canUndo || prev.canRedo !== canRedo ||
+      prev.saving !== saving || prev.showValidation !== showValidation ||
+      prev.showSaveAsTemplate !== showSaveAsTemplate || prev.showPublish !== showPublish ||
+      prev.onBack !== onBack
+    );
+    if (!changed) return;
+    prevDataRef.current = { name, nodes, edges, workflowId, canUndo, canRedo, saving, showValidation, showSaveAsTemplate, showPublish, onBack };
+    onHeaderControlsRef.current?.(controlsRef.current);
+  });
 
   const errors = validationIssues.filter(i => i.severity === 'error');
   const warnings = validationIssues.filter(i => i.severity === 'warning');
