@@ -358,7 +358,6 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   const validationIssues = validateWorkflow(nodes, edges);
 
   return (
-    <ExecutionStatusProvider>
       <div className="flex h-full w-full">
         <OnboardingOverlay
           onNewWorkflow={() => {
@@ -474,14 +473,15 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
           onClose={() => setShortcutOverlayOpen(false)}
         />
       </div>
-    </ExecutionStatusProvider>
   );
 }
 
 export default function WorkflowCanvas(props: Props) {
   return (
-    <ReactFlowProvider>
-      <WorkflowCanvasInner {...props} />
-    </ReactFlowProvider>
+    <ExecutionStatusProvider>
+      <ReactFlowProvider>
+        <WorkflowCanvasInner {...props} />
+      </ReactFlowProvider>
+    </ExecutionStatusProvider>
   );
 }
