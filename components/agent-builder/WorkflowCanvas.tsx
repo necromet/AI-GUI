@@ -385,7 +385,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
             onBack={onBack}
             onHeaderControls={onHeaderControls}
           />
-          <div ref={reactFlowWrapper} className="flex-1">
+          <div ref={reactFlowWrapper} className="flex-1 min-h-0">
             <ReactFlow
               nodes={nodes}
               edges={animatedEdges}

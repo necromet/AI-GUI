@@ -122,7 +122,7 @@ export default function WorkflowToolbar({
     toast.success('Workflow file downloaded');
   }, [name, nodes, edges]);
 
-  // Use refs to avoid triggering the effect on any reference changes
+  // Ref always holds the latest values — callbacks read from here, never from stale closures
   const controlsRef = useRef({
     name, onNameChange, nodes, edges, workflowId,
     canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
@@ -139,20 +139,26 @@ export default function WorkflowToolbar({
   const onHeaderControlsRef = useRef(onHeaderControls);
   onHeaderControlsRef.current = onHeaderControls;
 
-  // Store prev values to do a shallow equality check
-  const prevDataRef = useRef({ name, nodes, edges, workflowId, canUndo, canRedo, saving, showValidation, showSaveAsTemplate, showPublish, onBack });
+  // Push controls to the parent header when data changes.
+  // Uses JSON.stringify for nodes/edges/prevNodes/prevEdges to avoid false positives from
+  // unstable object references (e.g. React Flow returning new arrays each render).
+  const prevSerializedRef = useRef<string>('');
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    const prev = prevDataRef.current;
-    const changed = (
-      prev.name !== name || prev.nodes !== nodes || prev.edges !== edges ||
-      prev.workflowId !== workflowId || prev.canUndo !== canUndo || prev.canRedo !== canRedo ||
-      prev.saving !== saving || prev.showValidation !== showValidation ||
-      prev.showSaveAsTemplate !== showSaveAsTemplate || prev.showPublish !== showPublish ||
-      prev.onBack !== onBack
-    );
-    if (!changed) return;
-    prevDataRef.current = { name, nodes, edges, workflowId, canUndo, canRedo, saving, showValidation, showSaveAsTemplate, showPublish, onBack };
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      // Push once on mount so the parent gets initial controls
+      onHeaderControlsRef.current?.(controlsRef.current);
+      return;
+    }
+
+    const serialized = JSON.stringify({ name, workflowId, canUndo, canRedo, saving, showValidation, showSaveAsTemplate, showPublish })
+      + '|' + nodes.length + ':' + nodes.map(n => n.id + (n.data as any)?.label).join(',')
+      + '|' + edges.length + ':' + edges.map(e => e.id + e.source + e.target + (e.label || '')).join(',');
+
+    if (serialized === prevSerializedRef.current) return;
+    prevSerializedRef.current = serialized;
     onHeaderControlsRef.current?.(controlsRef.current);
   });
 

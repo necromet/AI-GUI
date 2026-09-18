@@ -1112,7 +1112,7 @@ const App: React.FC = () => {
         ) : (
         <>
         {(!isLibraryMode || libraryControls) && !isPythonMode && (
-        <div className="flex items-center px-3 py-2 md:px-4 md:py-2 sticky top-0 z-10 relative" style={{ backgroundColor: 'var(--bg-100)' }}>
+        <div className="flex items-center px-3 py-2 md:px-4 md:py-2 sticky top-0 z-10 relative shrink-0" style={{ backgroundColor: 'var(--bg-100)' }}>
           {!isSidebarOpen && (
             <Button
               variant="ghost"
@@ -1457,7 +1457,7 @@ const App: React.FC = () => {
         ) : (
           <>
             {/* Content area */}
-            <div className={`flex-1 relative scroll-smooth ${location.pathname.startsWith('/database') ? 'overflow-hidden' : 'overflow-y-auto'}`} id="scroll-container">
+            <div className={`flex-1 relative scroll-smooth min-h-0 ${(location.pathname.startsWith('/database') || location.pathname.startsWith('/agent-builder')) ? 'overflow-hidden' : 'overflow-y-auto'}`} id="scroll-container">
               <Routes>
                 <Route path="/chat" element={
                   <RequireAuth isAuth={isChatAuthenticated}>

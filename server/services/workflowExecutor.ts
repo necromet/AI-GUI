@@ -98,24 +98,24 @@ export class WorkflowExecutor {
   }
 
   async *executeStream(input: Record<string, any> = {}) {
-    const graph = this.buildGraph();
-    const checkpointer = new MemorySaver();
-    const compiled = graph.compile({ checkpointer });
-
-    const config = {
-      configurable: { thread_id: this.options.threadId || `thread_${Date.now()}` },
-    };
-
-    const initialState: Partial<WorkflowState> = {
-      variables: { input },
-      currentNodeId: '',
-      nodeResults: {},
-      chatHistory: [],
-      pendingAuth: null,
-      loopResults: [],
-    };
-
     try {
+      const graph = this.buildGraph();
+      const checkpointer = new MemorySaver();
+      const compiled = graph.compile({ checkpointer });
+
+      const config = {
+        configurable: { thread_id: this.options.threadId || `thread_${Date.now()}` },
+      };
+
+      const initialState: Partial<WorkflowState> = {
+        variables: { input },
+        currentNodeId: '',
+        nodeResults: {},
+        chatHistory: [],
+        pendingAuth: null,
+        loopResults: [],
+      };
+
       const stream = await compiled.stream(initialState, {
         ...config,
         streamMode: 'updates',
@@ -149,14 +149,31 @@ export class WorkflowExecutor {
     }
   }
 
+  /** Resolve a target node ID — map user "end" nodes to LangGraph's END constant.
+   *  Checks both node.type and node.data.nodeType because auto-save stores
+   *  React Flow nodes with type='custom' and data.nodeType='end'. */
+  private resolveTarget(targetId: string): string {
+    const targetNode = this.nodes.find(n => n.id === targetId);
+    if (!targetNode) return targetId;
+    if (this.getNodeType(targetNode) === 'end') return END;
+    return targetId;
+  }
+
+  /** Get the logical node type, checking data.nodeType first (auto-saved nodes have type='custom'). */
+  private getNodeType(node: WorkflowNode): string {
+    return (node.data as any)?.nodeType || node.type;
+  }
+
   private buildGraph() {
     const graph = new StateGraph(WorkflowStateAnnotation);
 
+    // Add all non-end nodes (end nodes are represented by LangGraph's built-in END)
     for (const node of this.nodes) {
+      if (this.getNodeType(node) === 'end') continue;
       graph.addNode(node.id, this.createNodeExecutor(node));
     }
 
-    const startNode = this.nodes.find(n => n.type === 'start');
+    const startNode = this.nodes.find(n => this.getNodeType(n) === 'start');
 
     if (startNode) {
       graph.addEdge(START, startNode.id);
@@ -169,12 +186,12 @@ export class WorkflowExecutor {
     }
 
     for (const node of this.nodes) {
-      if (node.type === 'end') continue;
+      if (this.getNodeType(node) === 'end') continue;
       const outEdges = edgesBySource.get(node.id) || [];
 
       if (outEdges.length === 0) {
         graph.addEdge(node.id, END);
-      } else if (node.type === 'if-else') {
+      } else if (this.getNodeType(node) === 'if-else') {
         graph.addConditionalEdges(
           node.id,
           (state: WorkflowState) => {
@@ -183,11 +200,11 @@ export class WorkflowExecutor {
             return 'if';
           },
           {
-            if: outEdges.find(e => e.sourceHandle === 'if')?.target || END,
-            else: outEdges.find(e => e.sourceHandle === 'else')?.target || END,
+            if: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'if')?.target || '') || END,
+            else: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'else')?.target || '') || END,
           }
         );
-      } else if (node.type === 'while') {
+      } else if (this.getNodeType(node) === 'while') {
         graph.addConditionalEdges(
           node.id,
           (state: WorkflowState) => {
@@ -196,11 +213,11 @@ export class WorkflowExecutor {
             return 'break';
           },
           {
-            continue: outEdges.find(e => e.sourceHandle === 'continue')?.target || END,
-            break: outEdges.find(e => e.sourceHandle === 'break')?.target || END,
+            continue: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'continue')?.target || '') || END,
+            break: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'break')?.target || '') || END,
           }
         );
-      } else if (node.type === 'user-approval' && outEdges.some(e => e.sourceHandle === 'approve' || e.sourceHandle === 'reject')) {
+      } else if (this.getNodeType(node) === 'user-approval' && outEdges.some(e => e.sourceHandle === 'approve' || e.sourceHandle === 'reject')) {
         graph.addConditionalEdges(
           node.id,
           (state: WorkflowState) => {
@@ -209,18 +226,18 @@ export class WorkflowExecutor {
             return 'approve';
           },
           {
-            approve: outEdges.find(e => e.sourceHandle === 'approve')?.target || END,
-            reject: outEdges.find(e => e.sourceHandle === 'reject')?.target || END,
+            approve: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'approve')?.target || '') || END,
+            reject: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'reject')?.target || '') || END,
           }
         );
       } else if (outEdges.length === 1) {
-        graph.addEdge(node.id, outEdges[0].target);
+        graph.addEdge(node.id, this.resolveTarget(outEdges[0].target));
       } else {
-        const targets = [...new Set(outEdges.map(e => e.target))];
+        const resolvedTargets = [...new Set(outEdges.map(e => this.resolveTarget(e.target)))];
         graph.addConditionalEdges(
           node.id,
-          (state: WorkflowState) => targets.map(t => new Send(t, state)),
-          targets.reduce((acc, t) => { acc[t] = t; return acc; }, {} as Record<string, string>)
+          (state: WorkflowState) => resolvedTargets.map(t => new Send(t, state)),
+          resolvedTargets.reduce((acc, t) => { acc[t] = t; return acc; }, {} as Record<string, string>)
         );
       }
     }
@@ -238,7 +255,7 @@ export class WorkflowExecutor {
       try {
         let output: any;
 
-        switch (node.type) {
+        switch (this.getNodeType(node)) {
           case 'start':
             output = { message: 'Workflow started', input: state.variables.input };
             break;
