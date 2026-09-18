@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { Node, Edge } from '@xyflow/react';
 import { useWorkflow } from './useWorkflow';
@@ -122,17 +122,26 @@ export default function WorkflowToolbar({
     toast.success('Workflow file downloaded');
   }, [name, nodes, edges]);
 
+  // Use a ref to hold the latest controls to avoid stale closures
+  const controlsRef = useRef({
+    name, onNameChange, nodes, edges, workflowId,
+    canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
+    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, onLoadTemplate,
+    showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
+  });
+  controlsRef.current = {
+    name, onNameChange, nodes, edges, workflowId,
+    canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
+    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, onLoadTemplate,
+    showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
+  };
+
+  // Only notify parent when data values change (not callback refs)
   useEffect(() => {
     if (!onHeaderControls) return;
-    onHeaderControls({
-      name, onNameChange, nodes, edges, workflowId,
-      canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
-      handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, onLoadTemplate,
-      showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
-    });
-  }, [name, nodes, edges, workflowId, canUndo, canRedo, validationIssues, onBack, onHeaderControls, onNameChange,
-      onLoadTemplate, onUndo, onRedo, onFitView, onShowShortcuts, handleSave, saving, handleExport,
-      handleExportCode, handleExportMermaid, handleShare, showValidation, showSaveAsTemplate, showPublish]);
+    onHeaderControls(controlsRef.current);
+  }, [name, nodes, edges, workflowId, canUndo, canRedo, validationIssues, onBack, onHeaderControls, saving,
+      showValidation, showSaveAsTemplate, showPublish]);
 
   const errors = validationIssues.filter(i => i.severity === 'error');
   const warnings = validationIssues.filter(i => i.severity === 'warning');
