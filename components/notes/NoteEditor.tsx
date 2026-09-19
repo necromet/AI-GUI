@@ -23,6 +23,7 @@ import {
   createLinkPopoverPlugin,
   createImagePopoverPlugin,
   createFloatingToolbarPlugin,
+  suppressFloatingToolbar,
   LinkPopover,
   ImagePopover,
   FloatingToolbar,
@@ -78,6 +79,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onSave }) => {
       StarterKit.configure({
         codeBlock: false,
         heading: { levels: [1, 2, 3] },
+        link: false,
+        underline: false,
       }),
       Placeholder.configure({
         placeholder: "Type '/' for commands...",
@@ -133,6 +136,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onSave }) => {
       isSettingContentRef.current = true;
       const content = getInitialContent();
       editor.commands.setContent(content);
+      suppressFloatingToolbar(editor.view);
       isSettingContentRef.current = false;
     }
   }, [note.id, editor, getInitialContent]);

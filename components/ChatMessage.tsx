@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
-import { Role, Message } from '../types';
+import { Role, Message, Attachment } from '../types';
 import { Paperclip, Pencil, X, Check, UserRound, FlaskConical, FileText, Table } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +8,7 @@ import ThinkingIndicator from './chat/ThinkingIndicator';
 import MarkdownRenderer from './chat/MarkdownRenderer';
 import SearchCitations from './chat/SearchCitations';
 import MessageActions from './chat/MessageActions';
+import FileViewer from './chat/FileViewer';
 
 interface ChatMessageProps {
   message: Message;
@@ -22,6 +23,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
   const isUser = message.role === Role.User;
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
+  const [selectedDocAttachment, setSelectedDocAttachment] = useState<Attachment | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -192,9 +194,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         )}
                       </div>
                     ) : (
-                      <div
+                      <button
                         key={idx}
-                        className="flex items-center gap-2.5 h-10 px-3 rounded-lg transition-all duration-200"
+                        onClick={() => onViewAttachment?.(att)}
+                        className="flex items-center gap-2.5 h-10 px-3 rounded-lg transition-all duration-200 cursor-pointer hover:scale-[1.02]"
                         style={{ background: 'var(--bg-200)', border: '1px solid var(--border-300)' }}
                       >
                         {(() => {
@@ -206,7 +209,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeed
                         <span className="text-[10px] uppercase px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-300)', color: 'var(--text-500)' }}>
                           {att.name.split('.').pop()?.toLowerCase() || 'file'}
                         </span>
-                      </div>
+                      </button>
                     )
                   ))}
                 </div>

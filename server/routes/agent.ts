@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import express from 'express';
 import {
   chatCompletion,
   detectLanguage,
@@ -19,7 +20,7 @@ import { buildSystemPrompt, sendSSEError } from '../lib/sseHelpers';
 const router = Router();
 const MAX_AGENT_ITERATIONS = 5;
 
-router.post('/chat', async (req: Request, res: Response) => {
+router.post('/chat', express.json({ limit: '5mb' }), async (req: Request, res: Response) => {
   try {
     const { messages, tools = [], model, provider, systemInstruction, stream = true, max_tokens, context, systemPromptAppend } = req.body;
 

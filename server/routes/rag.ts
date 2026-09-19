@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import {
   streamChatCompletion,
   chatCompletion,
@@ -10,9 +11,28 @@ import {
 import { addDocument, listDocuments, deleteDocument, retrieveRelevantChunks, buildRAGSystemPrompt } from '../services/ragService';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'text/html', 'application/json'];
+    if (allowed.includes(file.mimetype) || file.mimetype.startsWith('text/')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+    }
+  },
+});
 
-router.post('/documents', upload.single('file'), async (req: Request, res: Response) => {
+const ragUploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many uploads. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post('/documents', ragUploadLimiter, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'Missing file' });

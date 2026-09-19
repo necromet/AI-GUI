@@ -69,7 +69,44 @@ export const catppuccinMocha: Record<string, React.CSSProperties> = {
   'bold': { fontWeight: 'bold' }, 'italic': { fontStyle: 'italic' },
 };
 
+function convertTsvToMarkdownTable(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let tsvBuffer: string[] = [];
+
+  const flushTsv = () => {
+    if (tsvBuffer.length === 0) return;
+    const parsed = tsvBuffer.map(l => l.split('\t'));
+    const maxCols = Math.max(...parsed.map(r => r.length));
+    if (maxCols < 2) { result.push(...tsvBuffer); tsvBuffer = []; return; }
+    const escape = (s: string) => s.replace(/\|/g, '\\|').trim();
+    const header = parsed[0];
+    while (header.length < maxCols) header.push('');
+    result.push('| ' + header.map(escape).join(' | ') + ' |');
+    result.push('| ' + header.map(() => '---').join(' | ') + ' |');
+    for (let i = 1; i < parsed.length; i++) {
+      const row = parsed[i];
+      while (row.length < maxCols) row.push('');
+      if (row.every(c => c.trim() === '')) continue;
+      result.push('| ' + row.map(escape).join(' | ') + ' |');
+    }
+    tsvBuffer = [];
+  };
+
+  let inCodeBlock = false;
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) { flushTsv(); inCodeBlock = !inCodeBlock; result.push(line); continue; }
+    if (inCodeBlock) { result.push(line); continue; }
+    const tabCount = (line.match(/\t/g) || []).length;
+    if (tabCount >= 2) { tsvBuffer.push(line); }
+    else { flushTsv(); result.push(line); }
+  }
+  flushTsv();
+  return result.join('\n');
+}
+
 export function preprocessMarkdown(content: string): string {
+  content = convertTsvToMarkdownTable(content);
   const lines = content.split('\n');
   const result: string[] = [];
   let inCodeBlock = false;
@@ -195,7 +232,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               );
             }
             return (
-              <div className="relative my-6 mt-10 rounded-lg transition-all duration-300 min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
+              <div className="my-6 rounded-lg transition-all duration-300 min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
                 <pre {...props} className="neon-code-block-container">{children}</pre>
               </div>
             );
@@ -223,42 +260,42 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleFullscreenHtml(codeString)} title="Fullscreen"><Maximize2 size={13} /></Button>
                     </div>
                   </div>
-                  <SyntaxHighlighter language="html" style={codeTheme} customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 17px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
+                  <SyntaxHighlighter language="html" style={codeTheme} customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
                 </div>
               );
             }
             if (isBlock && language) {
               return (
-                <>
-                  <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
+                <div className="my-4 rounded-lg overflow-hidden min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
+                  <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
                     <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>{language}</span>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyCode(codeString, language)} title="Copy code">
                       {isCopied ? <Check size={13} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={13} />}
                     </Button>
                   </div>
-                  <SyntaxHighlighter language={language} style={codeTheme} customStyle={{ margin: 0, padding: '1rem', paddingTop: '1.5rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
-                </>
+                  <SyntaxHighlighter language={language} style={codeTheme} customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
+                </div>
               );
             }
             if (isBlock) {
               return (
-                <>
-                  <div className={`absolute -top-0 left-0 right-0 h-10 flex items-center justify-between px-4 ${headerBg} backdrop-blur-sm`}>
+                <div className="my-4 rounded-lg overflow-hidden min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
+                  <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
                     <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>text</span>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyCode(codeString, 'text')} title="Copy code">
                       {isCopied ? <Check size={13} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={13} />}
                     </Button>
                   </div>
-                  <pre style={{ margin: 0, padding: '1rem', paddingTop: '1.5rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: isDark ? '#cdd6f4' : '#4c4f69', overflow: 'auto' }}>
+                  <pre style={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: isDark ? '#cdd6f4' : '#4c4f69', overflow: 'auto' }}>
                     <code style={{ fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>{codeString}</code>
                   </pre>
-                </>
+                </div>
               );
             }
             return <code className={className} {...props}>{children}</code>;
           },
           table: ({ node, ...props }) => (<div className="my-4 overflow-x-auto rounded-lg" style={{ border: '1px solid var(--border-300)' }}><table className="w-full text-sm border-collapse" {...props} /></div>),
-          thead: ({ node, ...props }) => (<thead style={{ background: 'var(--surface-hover)' }} {...props} />),
+          thead: ({ node, ...props }) => (<thead style={{ background: 'var(--bg-200, rgba(255,255,255,0.03))' }} {...props} />),
           tbody: ({ node, ...props }) => (<tbody className="divide-y" style={{ borderColor: 'var(--border-200)' }} {...props} />),
           tr: ({ node, ...props }) => (<tr className="transition-colors" style={{ borderBottom: '1px solid var(--border-200)' }} {...props} />),
           th: ({ node, ...props }) => (<th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-300)' }} {...props} />),
@@ -277,6 +314,15 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               }
               return '';
             };
+            const isInTable = (n: any): boolean => {
+              let current = n;
+              while (current) {
+                if (current.tagName === 'td' || current.tagName === 'th' || current.tagName === 'table') return true;
+                current = current.parent || current.parentNode;
+              }
+              return false;
+            };
+            if (isInTable(node)) return <p {...props}>{children}</p>;
             const text = getTextContent({ props: { children } });
             const arrowMatch = text.match(/\s*(?:→|->|-->)\s*/g);
             if (arrowMatch && arrowMatch.length >= 2) {

@@ -168,11 +168,13 @@
 
 :root {
   --bg-100: #ffffff;
+  --bg-100-rgb: 255, 255, 255;
   --bg-200: #f7f7f8;
   --bg-300: #ececec;
   --bg-400: #d4d4d4;
   --text-100: #1a1a1a;
   --text-300: #4a4a4a;
+  --text-400: #6a6a6a;
   --text-500: #8a8a8a;
   --border-300: rgba(0,0,0,0.08);
   --border-200: rgba(0,0,0,0.04);
@@ -211,11 +213,13 @@
 
 html.dark {
   --bg-100: #0e0e0e;
+  --bg-100-rgb: 14, 14, 14;
   --bg-200: #1a1a1a;
   --bg-300: #252525;
   --bg-400: #303030;
   --text-100: #ececec;
   --text-300: #b4b4b4;
+  --text-400: #9a9a9a;
   --text-500: #7a7a7a;
   --border-300: rgba(255,255,255,0.08);
   --border-200: rgba(255,255,255,0.04);
@@ -1206,4 +1210,110 @@ html.dark .tiptap-popover::before {
   outline: 2px solid var(--neon-color);
   outline-offset: 2px;
   border-radius: 0.5rem;
+}
+
+/* Agent Builder animations */
+@keyframes ab-node-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ab-pulse-border {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.ab-node-enter {
+  animation: ab-node-enter 0.15s ease-out;
+}
+
+.ab-node-running-ring {
+  animation: ab-pulse-border 1.5s ease-in-out infinite;
+  border: 2px solid;
+  border-radius: 0.5rem;
+}
+
+@keyframes ctx-menu-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.ctx-menu-enter {
+  animation: ctx-menu-in 0.12s ease-out;
+}
+
+@keyframes ctx-menu-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+.ctx-menu-exit {
+  animation: ctx-menu-out 0.12s ease-in forwards;
+}
+
+.node-settings-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.node-settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.node-settings-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-300);
+  border-radius: 2px;
+}
+.node-settings-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-500);
+}
+
+/* Agent Builder — Collapsible animations */
+@keyframes collapsible-down {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+/* Agent Builder — Execution animations */
+.ab-edge-active {
+  stroke: var(--neon-color) !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 8 4;
+  animation: ab-edge-flow 1s linear infinite;
+}
+
+@keyframes ab-edge-flow {
+  to { stroke-dashoffset: -12; }
+}
+
+.ab-node-executing {
+  animation: ab-pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes ab-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--neon-rgb), 0.4),
+                0 0 20px 0 rgba(var(--neon-rgb), 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(var(--neon-rgb), 0),
+                0 0 30px 0 rgba(var(--neon-rgb), 0);
+  }
+}
+
+.ab-node-completed {
+  border-color: #34d399 !important;
+  transition: border-color 0.4s ease-out;
+}
+
+.ab-node-failed {
+  animation: ab-shake 0.4s ease-out;
+  border-color: #ef4444 !important;
+}
+
+@keyframes ab-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
 }

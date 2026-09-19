@@ -4,6 +4,7 @@ import * as skemaLibrary from './skemaLibraryService';
 import type { ProjectFile } from '../../types';
 import { toolWebBrowse, toolSearchWeb } from './tools/webTools';
 import { toolExecuteCode } from './tools/codeTools';
+import { isAllowedUrl } from '../lib/urlSafety';
 import { toolEditHtml, toolGenerateHtml, toolGenerateSpec, toolEditSpec, LAYOUT_DIMS, type EditOperation } from './tools/htmlTools';
 import { buildToolPrompt } from '../lib/formatToolPrompt';
 
@@ -19,10 +20,11 @@ export async function analyzeImages(images: any[], model?: string, provider?: st
       let imageUrl = img.url;
 
       if (!imageUrl.startsWith('data:')) {
+        if (!isAllowedUrl(imageUrl)) continue;
         try {
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 10000);
-          const resp = await fetch(imageUrl, { signal: controller.signal });
+          const resp = await fetch(imageUrl, { signal: controller.signal, redirect: 'manual' });
           clearTimeout(timeout);
 
           if (!resp.ok) continue;

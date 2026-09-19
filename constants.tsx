@@ -179,6 +179,8 @@ export const DEFAULT_MODELS: ModelConfig[] = [
   },
 ];
 
+export const CHAT_MODELS = DEFAULT_MODELS.filter(m => m.modelType === 'chat');
+
 export const CHATGPT_LOGO = (
   <TestTubeDiagonal size={24} />
 );

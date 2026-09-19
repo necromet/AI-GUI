@@ -6,6 +6,7 @@ import { Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { GridComponent, ResolutionConfig, ProjectFile } from './types';
 import { SECTION_TYPES, COLORS } from './constants';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -155,7 +156,7 @@ export const CanvasExportModal: React.FC<CanvasExportModalProps> = ({
               color: 'var(--text-300)',
               border: '1px solid var(--border-200)',
             }}
-            dangerouslySetInnerHTML={{ __html: highlightedCode }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(highlightedCode) }}
           />
         </div>
 

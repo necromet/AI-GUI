@@ -5,7 +5,7 @@ export { createLinkPopoverPlugin, linkPopoverPluginKey, closeLinkPopover } from 
 export type { LinkPopoverState } from './LinkPopoverPlugin';
 export { createImagePopoverPlugin, imagePopoverPluginKey } from './ImagePopoverPlugin';
 export type { ImagePopoverState } from './ImagePopoverPlugin';
-export { createFloatingToolbarPlugin, floatingToolbarPluginKey } from './FloatingToolbarPlugin';
+export { createFloatingToolbarPlugin, floatingToolbarPluginKey, suppressFloatingToolbar } from './FloatingToolbarPlugin';
 export type { FloatingToolbarState } from './FloatingToolbarPlugin';
 export { LinkPopover } from './LinkPopover';
 export { ImagePopover } from './ImagePopover';
