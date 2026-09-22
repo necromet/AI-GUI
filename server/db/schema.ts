@@ -326,7 +326,11 @@ CREATE TABLE IF NOT EXISTS executions (
   output JSONB,
   error TEXT,
   thread_id TEXT,
+  checkpoint_thread_id TEXT,
+  workflow_snapshot JSONB,
+  pending_action JSONB,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resumed_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ
 );
 
@@ -407,6 +411,10 @@ CREATE INDEX IF NOT EXISTS idx_workflow_templates_category ON workflow_templates
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS api_key TEXT;
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS endpoint_url TEXT;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS checkpoint_thread_id TEXT;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS workflow_snapshot JSONB;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS pending_action JSONB;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS resumed_at TIMESTAMPTZ;
 `;
 
 export const SEED_SQL = `

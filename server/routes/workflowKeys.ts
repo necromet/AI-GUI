@@ -16,6 +16,7 @@ router.get('/config', async (_req, res) => {
       { provider: 'openai', hasKey: !!process.env.OPENAI_API_KEY, source: 'env' },
       { provider: 'groq', hasKey: !!process.env.GROQ_API_KEY, source: 'env' },
       { provider: 'firecrawl', hasKey: !!process.env.FIRECRAWL_API_KEY, source: 'env' },
+      { provider: 'arcade', hasKey: !!process.env.ARCADE_API_KEY, source: 'env' },
     ];
     res.json({ providers: [...providers, ...envProviders] });
   } catch (err: any) {
@@ -42,7 +43,16 @@ router.post('/keys', async (req, res) => {
       encryptedKey: Buffer.from(apiKey).toString('base64'),
       keyPrefix: apiKey.slice(0, 8) + '...',
     });
-    res.json(key);
+    res.json({ id: key.id, provider: key.provider, keyPrefix: key.key_prefix, isActive: key.is_active });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/keys/:id', async (req, res) => {
+  try {
+    await workflowDB.deleteUserLLMKey(req.params.id);
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

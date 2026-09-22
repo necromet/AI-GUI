@@ -91,7 +91,8 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       edges: [
         { id: 'e1', source: 'start_1', target: 'agent_1' },
         { id: 'e2', source: 'agent_1', target: 'approval_1' },
-        { id: 'e3', source: 'approval_1', target: 'end_1' },
+        { id: 'e3', source: 'approval_1', target: 'end_1', sourceHandle: 'approve', label: 'approve' },
+        { id: 'e4', source: 'approval_1', target: 'end_1', sourceHandle: 'reject', label: 'reject' },
       ],
     },
     {
@@ -128,8 +129,8 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       nodes: [
         { id: 'start_1', type: 'start', position: { x: 0, y: 150 }, data: { nodeType: 'start', label: 'Start', color: '#34d399', icon: 'play', inputVariables: [{ name: 'topic', type: 'string', required: true, description: 'Research topic' }] } },
         { id: 'mcp_1', type: 'mcp', position: { x: 200, y: 150 }, data: { nodeType: 'mcp', label: 'Search', color: '#fbbf24', icon: 'wrench', mcpAction: 'search', searchQuery: '{{topic}}' } },
-        { id: 'transform_1', type: 'transform', position: { x: 400, y: 150 }, data: { nodeType: 'transform', label: 'Extract URLs', color: '#60a5fa', icon: 'code', code: 'const results = Array.isArray(input) ? input : input?.data || [];\nreturn { urls: results.map((r: any) => r.url || r).slice(0, 5), index: 0 };' } },
-        { id: 'while_1', type: 'while', position: { x: 600, y: 150 }, data: { nodeType: 'while', label: 'Loop', color: '#c084fc', icon: 'repeat', condition: '(variables.urls && variables.index < variables.urls.length)', maxIterations: 10 } },
+        { id: 'transform_1', type: 'transform', position: { x: 400, y: 150 }, data: { nodeType: 'transform', label: 'Extract URLs', color: '#60a5fa', icon: 'code', code: 'const results = Array.isArray(input) ? input : input?.data || [];\nreturn { urls: results.map((r) => r.url || r).slice(0, 5), index: 0 };' } },
+        { id: 'while_1', type: 'while', position: { x: 600, y: 150 }, data: { nodeType: 'while', label: 'Loop', color: '#c084fc', icon: 'repeat', condition: 'iteration < (variables.urls || []).length', maxIterations: 10 } },
         { id: 'mcp_2', type: 'mcp', position: { x: 800, y: 50 }, data: { nodeType: 'mcp', label: 'Scrape Page', color: '#fbbf24', icon: 'wrench', mcpAction: 'scrape', scrapeUrl: '{{urls[{{index}}]}}' } },
         { id: 'agent_1', type: 'agent', position: { x: 1000, y: 150 }, data: { nodeType: 'agent', label: 'Synthesize', color: '#818cf8', icon: 'bot', model: 'mimo-v2.5', systemPrompt: 'Synthesize the research into a comprehensive summary.', userPrompt: '{{lastOutput}}' } },
         { id: 'end_1', type: 'end', position: { x: 1200, y: 150 }, data: { nodeType: 'end', label: 'End', color: '#f87171', icon: 'square' } },
@@ -141,6 +142,25 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
         { id: 'e4', source: 'while_1', target: 'mcp_2', sourceHandle: 'continue', label: 'continue' },
         { id: 'e5', source: 'while_1', target: 'agent_1', sourceHandle: 'break', label: 'break' },
         { id: 'e6', source: 'agent_1', target: 'end_1' },
+        { id: 'e7', source: 'mcp_2', target: 'while_1' },
+      ],
+    },
+    {
+      id: 'tpl_arcade_google_doc',
+      name: 'Publish to Google Docs',
+      description: 'Create a Google Doc through Arcade with resumable authorization',
+      category: 'automation',
+      difficulty: 'intermediate',
+      estimatedTime: '4 min',
+      tags: ['arcade', 'google-docs', 'authorization'],
+      nodes: [
+        { id: 'start_1', type: 'start', position: { x: 0, y: 100 }, data: { nodeType: 'start', label: 'Start', inputVariables: [{ name: 'title', type: 'string', required: true, description: 'Document title' }, { name: 'content', type: 'string', required: true, description: 'Document content' }, { name: 'user_id', type: 'string', required: true, description: 'Stable Arcade authorization user ID' }] } },
+        { id: 'arcade_1', type: 'arcade', position: { x: 280, y: 100 }, data: { nodeType: 'arcade', label: 'Create Google Doc', arcadeTool: 'GoogleDocs.CreateDocumentFromText@4.3.1', arcadeUserId: '{{input.user_id}}', arcadeInput: { title: '{{input.title}}', text_content: '{{input.content}}' } } },
+        { id: 'end_1', type: 'end', position: { x: 560, y: 100 }, data: { nodeType: 'end', label: 'End' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start_1', target: 'arcade_1' },
+        { id: 'e2', source: 'arcade_1', target: 'end_1' },
       ],
     },
   ];

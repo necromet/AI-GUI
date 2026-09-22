@@ -243,7 +243,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const codeString = String(children).replace(/\n$/, '');
             const isBlock = !match ? codeString.includes('\n') : true;
             const isCopied = copiedCode === language || (!language && copiedCode === 'text');
-            const headerBg = isDark ? 'bg-[#1a1a1a]/95' : 'bg-[#dce0e8]/95';
+            const headerBg = isDark ? 'bg-[var(--bg-200)]/95' : 'bg-[var(--bg-300)]/95';
             const blockBg = isDark ? '#1e1e2e' : '#eff1f5';
             const codeTheme = isDark ? catppuccinMocha : catppuccinLatte;
 

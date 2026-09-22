@@ -31,7 +31,9 @@ import type { WorkflowNodeType, WorkflowHeaderControls } from './types';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { validateWorkflow } from './validateWorkflow';
-import { cleanupInvalidEdges } from './edgeCleanup';
+import dagre from 'dagre';
+import { normalizeWorkflowGraph } from '../../lib/workflow/graph';
+import { toast } from 'sonner';
 
 const nodeTypes = { custom: CustomNode };
 
@@ -48,8 +50,9 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
+  const [workflowLoaded, setWorkflowLoaded] = useState(false);
   const [nodeContextMenu, setNodeContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
-  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; sourceNodeId?: string; sourceHandle?: 'if' | 'else' } | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const { getNodeStatus } = useExecutionStatus();
 
@@ -68,41 +71,63 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   const [edgeLabelEdit, setEdgeLabelEdit] = useState<{ edgeId: string; label?: string; x: number; y: number } | null>(null);
   const [recentNodeTypes, setRecentNodeTypes] = useState<WorkflowNodeType[]>([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition, setCenter } = useReactFlow();
 
   const undoRedo = useUndoRedo();
 
   useEffect(() => {
     if (!workflowId) return;
+    setWorkflowLoaded(false);
     fetch(`/api/workflows/${workflowId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Could not load workflow (HTTP ${r.status})`);
+        return r.json();
+      })
       .then(data => {
-        const loadedNodes = data.nodes ? data.nodes.map((n: any) => ({
+        const normalized = normalizeWorkflowGraph(data.nodes || [], data.edges || []);
+        const loadedNodes = normalized.nodes.map((n: any) => ({
           id: n.id,
           type: 'custom',
           position: n.position || { x: 0, y: 0 },
-          data: n.data || { nodeType: n.type, label: n.type },
-        })) : [];
-        if (data.nodes) setNodes(loadedNodes);
-        if (data.edges) setEdges(cleanupInvalidEdges(loadedNodes, data.edges));
+          data: { ...(n.data || {}), nodeType: n.type, label: n.data?.label || n.label || n.type },
+        }));
+        setNodes(loadedNodes);
+        setEdges(normalized.edges);
         if (data.name) setWorkflowName(data.name);
+        setWorkflowLoaded(true);
       })
-      .catch(console.error);
+      .catch(error => toast.error(error.message));
   }, [workflowId]);
 
-  useAutoSave(workflowId, nodes, edges, true);
+  const handleAutosaveError = useCallback((message: string) => toast.error(message), []);
+  useAutoSave(workflowId, workflowName, nodes, edges, workflowLoaded, handleAutosaveError);
 
   const onConnect = useCallback(
     (params: Connection) => {
       if (params.source === params.target) return;
+      const sourceNode = nodes.find(node => node.id === params.source);
+      const targetNode = nodes.find(node => node.id === params.target);
+      const sourceType = sourceNode?.data?.nodeType;
+      const targetType = targetNode?.data?.nodeType;
+      if (!sourceNode || !targetNode || sourceType === 'end' || targetType === 'start' || sourceType === 'note' || targetType === 'note') {
+        toast.error('That connection is not allowed');
+        return;
+      }
       const isDuplicate = edges.some(e =>
         e.source === params.source &&
         e.target === params.target &&
         e.sourceHandle === params.sourceHandle
       );
       if (isDuplicate) return;
+      if (['if-else', 'while', 'user-approval'].includes(String(sourceType)) && edges.some(edge => edge.source === params.source && edge.sourceHandle === params.sourceHandle)) {
+        toast.error('Each branch handle can have one destination');
+        return;
+      }
       undoRedo.pushSnapshot(nodes, edges, 'Connect nodes');
-      setEdges((eds) => addEdge({ ...params, animated: true }, eds));
+      const branchLabel = sourceType === 'if-else'
+        ? params.sourceHandle === 'else' ? String(sourceNode.data?.falseLabel || 'False') : String(sourceNode.data?.trueLabel || 'True')
+        : undefined;
+      setEdges((eds) => addEdge({ ...params, animated: true, label: branchLabel }, eds));
     },
     [setEdges, nodes, edges, undoRedo]
   );
@@ -123,8 +148,14 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
 
   const handleEdgeLabelUpdate = useCallback((edgeId: string, label: string) => {
     undoRedo.pushSnapshot(nodes, edges, 'Update edge label');
+    const edge = edges.find(item => item.id === edgeId);
     setEdges(eds => eds.map(e => e.id === edgeId ? { ...e, label } : e));
-  }, [nodes, edges, undoRedo, setEdges]);
+    if (edge && ['if', 'else'].includes(String(edge.sourceHandle))) {
+      const key = edge.sourceHandle === 'if' ? 'trueLabel' : 'falseLabel';
+      setNodes(current => current.map(node => node.id === edge.source ? { ...node, data: { ...node.data, [key]: label } } : node));
+      setSelectedNode(current => current?.id === edge.source ? { ...current, data: { ...current.data, [key]: label } } : current);
+    }
+  }, [nodes, edges, undoRedo, setEdges, setNodes]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -149,6 +180,10 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   }, []);
 
   const addNode = useCallback((type: WorkflowNodeType, position: { x: number; y: number }) => {
+    if (type === 'start' && nodes.some(node => node.data?.nodeType === 'start')) {
+      toast.error('A workflow can only have one Start node');
+      return nodes.find(node => node.data?.nodeType === 'start')!;
+    }
     undoRedo.pushSnapshot(nodes, edges, `Add ${NODE_DEFINITIONS[type]?.label || type}`);
     const newNode = createNode(type, position);
     setNodes((nds) => [...nds, newNode]);
@@ -162,17 +197,11 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       const type = event.dataTransfer.getData('application/reactflow') as WorkflowNodeType;
       if (!type) return;
 
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
-
-      const position = {
-        x: event.clientX - bounds.left - 75,
-        y: event.clientY - bounds.top - 25,
-      };
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
       addNode(type, position);
     },
-    [addNode]
+    [addNode, screenToFlowPosition]
   );
 
   const updateNodeData = useCallback(
@@ -183,14 +212,21 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       setSelectedNode((prev) =>
         prev && prev.id === nodeId ? { ...prev, data: { ...prev.data, ...data } } : prev
       );
+      if (data.trueLabel !== undefined || data.falseLabel !== undefined) {
+        setEdges(current => current.map(edge => {
+          if (edge.source !== nodeId) return edge;
+          if (edge.sourceHandle === 'if' && data.trueLabel !== undefined) return { ...edge, label: data.trueLabel || 'True' };
+          if (edge.sourceHandle === 'else' && data.falseLabel !== undefined) return { ...edge, label: data.falseLabel || 'False' };
+          return edge;
+        }));
+      }
     },
-    [setNodes]
+    [setNodes, setEdges]
   );
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
     setNodeContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
-    setSelectedNode(node);
   }, []);
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent | MouseEvent) => {
@@ -224,11 +260,31 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   }, [nodes, edges, undoRedo, setNodes, setEdges, selectedNode]);
 
   const handleAddNodeAtPosition = useCallback((type: WorkflowNodeType, clientX: number, clientY: number) => {
-    const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-    if (!bounds) return;
-    const position = { x: clientX - bounds.left - 75, y: clientY - bounds.top - 25 };
+    if (canvasContextMenu?.sourceNodeId && canvasContextMenu.sourceHandle) {
+      if (type === 'start' || type === 'note') {
+        toast.error(`${NODE_DEFINITIONS[type]?.label || type} cannot be a branch destination`);
+        return;
+      }
+      const source = nodes.find(node => node.id === canvasContextMenu.sourceNodeId);
+      if (!source) return;
+      if (edges.some(edge => edge.source === source.id && edge.sourceHandle === canvasContextMenu.sourceHandle)) {
+        toast.error('This branch already has a destination');
+        return;
+      }
+      undoRedo.pushSnapshot(nodes, edges, `Add ${NODE_DEFINITIONS[type]?.label || type} to branch`);
+      const yOffset = canvasContextMenu.sourceHandle === 'if' ? -90 : 90;
+      const newNode = createNode(type, { x: source.position.x + 260, y: source.position.y + yOffset });
+      const label = canvasContextMenu.sourceHandle === 'if' ? String(source.data?.trueLabel || 'True') : String(source.data?.falseLabel || 'False');
+      setNodes(current => [...current, newNode]);
+      setEdges(current => addEdge({ id: `edge_${source.id}_${canvasContextMenu.sourceHandle}_${newNode.id}`, source: source.id, sourceHandle: canvasContextMenu.sourceHandle, target: newNode.id, label, animated: true }, current));
+      setRecentNodeTypes(prev => [type, ...prev.filter(item => item !== type)].slice(0, 5));
+      setCanvasContextMenu(null);
+      requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
+      return;
+    }
+    const position = screenToFlowPosition({ x: clientX, y: clientY });
     addNode(type, position);
-  }, [addNode]);
+  }, [addNode, screenToFlowPosition, canvasContextMenu, nodes, edges, undoRedo, createNode, setNodes, setEdges, fitView]);
 
   const handleCommandPaletteAdd = useCallback((type: WorkflowNodeType) => {
     const viewport = reactFlowWrapper.current?.getBoundingClientRect();
@@ -268,19 +324,52 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
     fitView({ padding: 0.2, duration: 300 });
   }, [fitView]);
 
+  const handleAutoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    undoRedo.pushSnapshot(nodes, edges, 'Auto layout');
+    const graph = new dagre.graphlib.Graph();
+    graph.setDefaultEdgeLabel(() => ({}));
+    graph.setGraph({ rankdir: 'LR', ranksep: 120, nodesep: 70, marginx: 40, marginy: 40 });
+    nodes.forEach(node => graph.setNode(node.id, { width: 180, height: 72 }));
+    edges.forEach(edge => {
+      if (nodes.some(node => node.id === edge.source) && nodes.some(node => node.id === edge.target)) graph.setEdge(edge.source, edge.target);
+    });
+    dagre.layout(graph);
+    setNodes(current => current.map(node => {
+      const point = graph.node(node.id);
+      return point ? { ...node, position: { x: point.x - 90, y: point.y - 36 } } : node;
+    }));
+    requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
+  }, [nodes, edges, undoRedo, setNodes, fitView]);
+
+  const handleFocusIssue = useCallback((nodeId?: string) => {
+    if (!nodeId) return;
+    const node = nodes.find(item => item.id === nodeId);
+    if (!node) return;
+    setNodes(current => current.map(item => ({ ...item, selected: item.id === nodeId })));
+    setSelectedNode(node);
+    setCenter(node.position.x + 90, node.position.y + 36, { zoom: 1.25, duration: 300 });
+  }, [nodes, setNodes, setCenter]);
+
   useEffect(() => {
     const handleQuickAdd = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       setCanvasContextMenu({ x: detail.x, y: detail.y });
+    };
+    const handleBranchQuickAdd = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setCanvasContextMenu({ x: detail.x, y: detail.y, sourceNodeId: detail.nodeId, sourceHandle: detail.sourceHandle });
     };
     const handleRename = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       updateNodeData(detail.nodeId, { label: detail.label });
     };
     window.addEventListener('ab-quick-add', handleQuickAdd);
+    window.addEventListener('ab-branch-quick-add', handleBranchQuickAdd);
     window.addEventListener('ab-rename-node', handleRename);
     return () => {
       window.removeEventListener('ab-quick-add', handleQuickAdd);
+      window.removeEventListener('ab-branch-quick-add', handleBranchQuickAdd);
       window.removeEventListener('ab-rename-node', handleRename);
     };
   }, [updateNodeData]);
@@ -306,17 +395,17 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        undoRedo.undo(setNodes, setEdges);
+        undoRedo.undo(nodes, edges, setNodes, setEdges);
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
-        undoRedo.redo(setNodes, setEdges);
+        undoRedo.redo(nodes, edges, setNodes, setEdges);
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
         e.preventDefault();
-        undoRedo.redo(setNodes, setEdges);
+        undoRedo.redo(nodes, edges, setNodes, setEdges);
         return;
       }
 
@@ -353,7 +442,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, shortcutOverlayOpen, undoRedo, setNodes, setEdges, handleSelectAll, handleDeleteSelected, handleDuplicateSelected, handleFitView]);
+  }, [commandPaletteOpen, shortcutOverlayOpen, undoRedo, nodes, edges, setNodes, setEdges, handleSelectAll, handleDeleteSelected, handleDuplicateSelected, handleFitView]);
 
   const validationIssues = validateWorkflow(nodes, edges);
 
@@ -366,7 +455,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
           }}
           onOpenTemplates={onLoadTemplate || (() => {})}
         />
-        <div className="flex-1 flex flex-col relative">
+        <div className="flex-1 flex flex-col relative min-w-0">
           <WorkflowToolbar
             name={workflowName}
             onNameChange={setWorkflowName}
@@ -377,9 +466,11 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
             onLoadTemplate={onLoadTemplate}
             canUndo={undoRedo.canUndo}
             canRedo={undoRedo.canRedo}
-            onUndo={() => undoRedo.undo(setNodes, setEdges)}
-            onRedo={() => undoRedo.redo(setNodes, setEdges)}
+            onUndo={() => undoRedo.undo(nodes, edges, setNodes, setEdges)}
+            onRedo={() => undoRedo.redo(nodes, edges, setNodes, setEdges)}
             onFitView={handleFitView}
+            onAutoLayout={handleAutoLayout}
+            onFocusIssue={handleFocusIssue}
             validationIssues={validationIssues}
             onShowShortcuts={() => setShortcutOverlayOpen(true)}
             onBack={onBack}
@@ -399,22 +490,23 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
               onPaneContextMenu={onPaneContextMenu}
               onDragOver={onDragOver}
               onDrop={onDrop}
+              onNodeDragStart={() => undoRedo.pushSnapshot(nodes, edges, 'Move node')}
               nodeTypes={nodeTypes}
               fitView
               colorMode="dark"
               multiSelectionKeyCode="Shift"
               deleteKeyCode={null}
             >
-              <Background color="rgba(255,255,255,0.03)" gap={20} />
+              <Background color="rgba(255,255,255,0.04)" gap={20} />
               <Controls showInteractive={false} position="top-left" />
               <MiniMap
                 nodeColor={(n) => n.data?.color || DEFAULT_NODE_COLOR}
-                className="!bg-[#111114] !border-[#2a2a30]"
+                style={{ background: 'var(--bg-0)', border: '1px solid var(--border-300)' }}
                 pannable
                 zoomable
               />
               <Panel position="bottom-center">
-                <ExecutionPanel nodes={nodes} edges={edges} workflowId={workflowId} />
+                <ExecutionPanel nodes={nodes} edges={edges} workflowId={workflowId} validationIssues={validationIssues} onFocusIssue={handleFocusIssue} />
               </Panel>
             </ReactFlow>
             {nodeContextMenu && (
@@ -457,7 +549,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
             onUpdate={(data) => updateNodeData(selectedNode.id, data)}
             onClose={() => setSelectedNode(null)}
             upstreamNodes={nodes
-              .filter(n => n.id !== selectedNode.id && (n.data?.nodeType as string) !== 'note')
+              .filter(n => n.id !== selectedNode.id && !['note', 'start'].includes(n.data?.nodeType as string))
               .map(n => ({ id: n.id, label: (n.data?.label as string) || (n.data?.nodeType as string) || n.id }))
             }
           />

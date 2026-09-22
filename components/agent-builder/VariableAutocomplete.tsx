@@ -147,7 +147,7 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
       {showDropdown && filtered.length > 0 && (
         <div
           className="absolute z-40 left-0 right-0 mt-1 rounded-lg border shadow-xl max-h-[180px] overflow-y-auto"
-          style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
+          style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #1a1a1a)' }}
         >
           {filtered.map((s, i) => (
             <button

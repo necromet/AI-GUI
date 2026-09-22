@@ -2,6 +2,7 @@ export { default as StartNodeConfig } from './StartNodeConfig';
 export { default as AgentNodeConfig } from './AgentNodeConfig';
 export { default as MCPNodeConfig } from './MCPNodeConfig';
 export { default as GuardrailsNodeConfig } from './GuardrailsNodeConfig';
+export { default as ArcadeNodeConfig } from './ArcadeNodeConfig';
 export { default as TransformNodeConfig } from './TransformNodeConfig';
 export { default as IfElseNodeConfig } from './IfElseNodeConfig';
 export { default as WhileNodeConfig } from './WhileNodeConfig';

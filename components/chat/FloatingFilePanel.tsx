@@ -26,7 +26,7 @@ export default function FloatingFilePanel({ attachment, onClose }: Props) {
     >
       <div
         className="relative max-w-[90vw] max-h-[85vh] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
-        style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
+        style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #1a1a1a)' }}
         onClick={e => e.stopPropagation()}
       >
         <div

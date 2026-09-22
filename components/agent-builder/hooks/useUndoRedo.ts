@@ -30,6 +30,8 @@ export function useUndoRedo() {
   }, []);
 
   const undo = useCallback((
+    currentNodes: Node[],
+    currentEdges: Edge[],
     setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void,
     setEdges: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void,
   ) => {
@@ -42,12 +44,18 @@ export function useUndoRedo() {
       toast.success(`Undo: ${snapshot.label}`, { duration: 1500 });
       return {
         undoStack: prev.undoStack.slice(0, -1),
-        redoStack: [...prev.redoStack, snapshot],
+        redoStack: [...prev.redoStack, {
+          nodes: JSON.parse(JSON.stringify(currentNodes)),
+          edges: JSON.parse(JSON.stringify(currentEdges)),
+          label: snapshot.label,
+        }],
       };
     });
   }, []);
 
   const redo = useCallback((
+    currentNodes: Node[],
+    currentEdges: Edge[],
     setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void,
     setEdges: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void,
   ) => {
@@ -59,7 +67,11 @@ export function useUndoRedo() {
       setEdges(snapshot.edges);
       toast.success(`Redo: ${snapshot.label}`, { duration: 1500 });
       return {
-        undoStack: [...prev.undoStack, snapshot],
+        undoStack: [...prev.undoStack, {
+          nodes: JSON.parse(JSON.stringify(currentNodes)),
+          edges: JSON.parse(JSON.stringify(currentEdges)),
+          label: snapshot.label,
+        }],
         redoStack: prev.redoStack.slice(0, -1),
       };
     });

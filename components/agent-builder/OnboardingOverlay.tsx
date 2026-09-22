@@ -44,7 +44,7 @@ export default function OnboardingOverlay({ onNewWorkflow, onOpenTemplates }: Pr
             className="w-[440px] max-w-[calc(100vw-32px)] rounded-2xl border p-8 text-center"
             style={{
               borderColor: 'rgba(var(--neon-rgb), 0.3)',
-              backgroundColor: 'var(--bg-100, #111114)',
+              backgroundColor: 'var(--bg-100, #1a1a1a)',
               boxShadow: '0px 32px 40px 6px rgba(0,0,0,0.08), 0px 12px 32px 0px rgba(0,0,0,0.06)',
             }}
           >

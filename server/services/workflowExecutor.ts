@@ -1,12 +1,29 @@
-import { StateGraph, Annotation, START, END, MemorySaver, Send } from '@langchain/langgraph';
+import {
+  StateGraph,
+  Annotation,
+  START,
+  END,
+  Command,
+  interrupt,
+  isGraphInterrupt,
+  type BaseCheckpointSaver,
+} from '@langchain/langgraph';
 import { executeAgentNode } from './workflowExecutors/agent.js';
-import { executeTransformNode, executeIfElseNode, executeWhileNode, executeUserApprovalNode } from './workflowExecutors/logic.js';
+import { executeIfElseNode, executeWhileNode } from './workflowExecutors/logic.js';
+import { executeTransformNode } from './workflowExecutors/transform.js';
 import { executeMCPNode } from './workflowExecutors/mcp.js';
-import { substituteVariables, executeSetStateNode } from './workflowExecutors/variables.js';
+import { executeSetStateNode } from './workflowExecutors/variables.js';
 import { executeHTTPNode } from './workflowExecutors/http.js';
 import { executeExtractNode } from './workflowExecutors/extract.js';
 import { executeGuardrailsNode } from './workflowExecutors/tools.js';
-import type { WorkflowNode, WorkflowEdge, NodeExecutionResult } from '../../components/agent-builder/types';
+import { executeArcadeNode } from './workflowExecutors/arcade.js';
+import {
+  getWorkflowNodeType,
+  normalizeHandle,
+  normalizeWorkflowGraph,
+  resolveIfElseBranch,
+} from '../../lib/workflow/graph.js';
+import type { NodeExecutionResult, WorkflowEdge, WorkflowNode } from '../../lib/workflow/types.js';
 
 const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
@@ -17,22 +34,12 @@ const WorkflowStateAnnotation = Annotation.Root({
     reducer: (prev, next) => [...prev, ...next],
     default: () => [],
   }),
-  currentNodeId: Annotation<string>({
-    reducer: (_, next) => next,
-    default: () => '',
-  }),
+  currentNodeId: Annotation<string>({ reducer: (_, next) => next, default: () => '' }),
   nodeResults: Annotation<Record<string, NodeExecutionResult>>({
     reducer: (prev, next) => ({ ...prev, ...next }),
     default: () => ({}),
   }),
-  pendingAuth: Annotation<any>({
-    reducer: (_, next) => next,
-    default: () => null,
-  }),
-  loopResults: Annotation<any[]>({
-    reducer: (prev, next) => [...prev, ...next],
-    default: () => [],
-  }),
+  loopResults: Annotation<any[]>({ reducer: (prev, next) => [...prev, ...next], default: () => [] }),
 });
 
 type WorkflowState = typeof WorkflowStateAnnotation.State;
@@ -42,47 +49,29 @@ export interface ExecutorOptions {
   llmKeys?: Record<string, string>;
   threadId?: string;
   executionId?: string;
+  checkpointer?: BaseCheckpointSaver;
+  signal?: AbortSignal;
 }
 
-export function toMermaid(nodes: WorkflowNode[], edges: WorkflowEdge[]): string {
+export interface WorkflowStreamOptions {
+  resume?: Record<string, any>;
+}
+
+export function toMermaid(rawNodes: WorkflowNode[], rawEdges: WorkflowEdge[]): string {
+  const { nodes, edges } = normalizeWorkflowGraph(rawNodes, rawEdges);
   const lines: string[] = ['graph TD'];
-  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_]/g, '_');
-
+  const sanitize = (value: string) => value.replace(/[^a-zA-Z0-9_]/g, '_');
   for (const node of nodes) {
+    if (getWorkflowNodeType(node) === 'note') continue;
     const id = sanitize(node.id);
-    const label = (node.data?.label || node.label || node.type).replace(/"/g, "'");
-    switch (node.type) {
-      case 'start':
-        lines.push(`  ${id}([${label}])`);
-        break;
-      case 'end':
-        lines.push(`  ${id}([${label}])`);
-        break;
-      case 'if-else':
-        lines.push(`  ${id}{${label}}`);
-        break;
-      case 'while':
-        lines.push(`  ${id}{${label}}`);
-        break;
-      default:
-        lines.push(`  ${id}[${label}]`);
-    }
+    const label = String(node.data?.label || node.label || node.type).replace(/"/g, "'");
+    const type = getWorkflowNodeType(node);
+    lines.push(type === 'if-else' || type === 'while' ? `  ${id}{${label}}` : `  ${id}[${label}]`);
   }
-
   for (const edge of edges) {
-    const src = sanitize(edge.source);
-    const tgt = sanitize(edge.target);
-    if (edge.label) {
-      lines.push(`  ${src} -->|"${edge.label.replace(/"/g, "'")}"| ${tgt}`);
-    } else if (edge.sourceHandle === 'if' || edge.sourceHandle === 'approve' || edge.sourceHandle === 'continue') {
-      lines.push(`  ${src} -->|${edge.sourceHandle}| ${tgt}`);
-    } else if (edge.sourceHandle === 'else' || edge.sourceHandle === 'reject' || edge.sourceHandle === 'break') {
-      lines.push(`  ${src} -->|${edge.sourceHandle}| ${tgt}`);
-    } else {
-      lines.push(`  ${src} --> ${tgt}`);
-    }
+    const label = edge.label || edge.sourceHandle;
+    lines.push(`  ${sanitize(edge.source)} -->${label ? `|${String(label).replace(/"/g, "'")}|` : ''} ${sanitize(edge.target)}`);
   }
-
   return lines.join('\n');
 }
 
@@ -91,263 +80,212 @@ export class WorkflowExecutor {
   private edges: WorkflowEdge[];
   private options: ExecutorOptions;
 
-  constructor(nodes: WorkflowNode[], edges: WorkflowEdge[], options: ExecutorOptions = {}) {
-    this.nodes = nodes;
-    this.edges = edges;
+  constructor(rawNodes: WorkflowNode[], rawEdges: WorkflowEdge[], options: ExecutorOptions = {}) {
+    const normalized = normalizeWorkflowGraph(rawNodes, rawEdges);
+    this.nodes = normalized.nodes.filter(node => getWorkflowNodeType(node) !== 'note');
+    this.edges = normalized.edges.filter(edge => this.nodes.some(node => node.id === edge.source) && this.nodes.some(node => node.id === edge.target));
     this.options = options;
   }
 
-  async *executeStream(input: Record<string, any> = {}) {
+  async *executeStream(input: Record<string, any> = {}, streamOptions: WorkflowStreamOptions = {}) {
+    const threadId = this.options.threadId || this.options.executionId || `thread_${Date.now()}`;
     try {
-      const graph = this.buildGraph();
-      const checkpointer = new MemorySaver();
-      const compiled = graph.compile({ checkpointer });
-
-      const config = {
-        configurable: { thread_id: this.options.threadId || `thread_${Date.now()}` },
-      };
-
+      const checkpointer = this.options.checkpointer || await (await import('./workflowCheckpointer.js')).getWorkflowCheckpointer();
+      const compiled = this.buildGraph().compile({ checkpointer });
+      const config = { configurable: { thread_id: threadId }, recursionLimit: 250 };
       const initialState: Partial<WorkflowState> = {
-        variables: { input },
+        variables: { input, lastOutput: input },
         currentNodeId: '',
         nodeResults: {},
         chatHistory: [],
-        pendingAuth: null,
         loopResults: [],
       };
+      const graphInput = streamOptions.resume ? new Command({ resume: streamOptions.resume }) : initialState;
 
-      const stream = await compiled.stream(initialState, {
-        ...config,
-        streamMode: 'updates',
-      });
+      yield { type: streamOptions.resume ? 'workflow_resumed' : 'workflow_started', threadId, executionId: this.options.executionId };
+      const stream = await compiled.stream(graphInput as any, { ...config, streamMode: 'updates', signal: this.options.signal });
 
       for await (const chunk of stream) {
-        for (const [nodeName, update] of Object.entries(chunk)) {
-          if (nodeName === '__start__' || nodeName === '__end__') continue;
+        const interruptEntry = (chunk as any).__interrupt__;
+        if (interruptEntry) {
+          const first = Array.isArray(interruptEntry) ? interruptEntry[0] : interruptEntry;
+          const pendingAction = first?.value || first;
+          yield { type: 'workflow_paused', pendingAction, threadId, executionId: this.options.executionId };
+          return;
+        }
 
-          const state = update as Partial<WorkflowState>;
-          if (state.currentNodeId) {
-            this.options.onNodeUpdate?.(state.currentNodeId, 'running');
-          }
-          if (state.nodeResults) {
-            for (const [nodeId, result] of Object.entries(state.nodeResults)) {
-              this.options.onNodeUpdate?.(nodeId, result.status, result);
-            }
-          }
-          if (state.pendingAuth) {
-            yield { type: 'paused', pendingAuth: state.pendingAuth };
-            return;
-          }
-
-          yield { type: 'state_update', state };
+        for (const [nodeId, update] of Object.entries(chunk as Record<string, any>)) {
+          if (nodeId.startsWith('__')) continue;
+          yield { type: 'state_update', nodeId, state: update };
         }
       }
 
-      yield { type: 'completed' };
-    } catch (err: any) {
-      yield { type: 'error', error: err.message };
+      const finalState = await compiled.getState(config);
+      yield { type: 'workflow_completed', threadId, executionId: this.options.executionId, state: finalState.values };
+    } catch (error: any) {
+      yield { type: 'error', error: error?.message || 'Workflow execution failed', threadId, executionId: this.options.executionId };
     }
-  }
-
-  /** Resolve a target node ID — map user "end" nodes to LangGraph's END constant.
-   *  Checks both node.type and node.data.nodeType because auto-save stores
-   *  React Flow nodes with type='custom' and data.nodeType='end'. */
-  private resolveTarget(targetId: string): string {
-    const targetNode = this.nodes.find(n => n.id === targetId);
-    if (!targetNode) return targetId;
-    if (this.getNodeType(targetNode) === 'end') return END;
-    return targetId;
-  }
-
-  /** Get the logical node type, checking data.nodeType first (auto-saved nodes have type='custom'). */
-  private getNodeType(node: WorkflowNode): string {
-    return (node.data as any)?.nodeType || node.type;
   }
 
   private buildGraph() {
     const graph = new StateGraph(WorkflowStateAnnotation);
-
-    // Add all non-end nodes (end nodes are represented by LangGraph's built-in END)
-    for (const node of this.nodes) {
-      if (this.getNodeType(node) === 'end') continue;
-      graph.addNode(node.id, this.createNodeExecutor(node));
-    }
-
-    const startNode = this.nodes.find(n => this.getNodeType(n) === 'start');
-
-    if (startNode) {
-      graph.addEdge(START, startNode.id);
-    }
-
     const edgesBySource = new Map<string, WorkflowEdge[]>();
-    for (const edge of this.edges) {
-      if (!edgesBySource.has(edge.source)) edgesBySource.set(edge.source, []);
-      edgesBySource.get(edge.source)!.push(edge);
-    }
+    for (const edge of this.edges) edgesBySource.set(edge.source, [...(edgesBySource.get(edge.source) || []), edge]);
 
     for (const node of this.nodes) {
-      if (this.getNodeType(node) === 'end') continue;
-      const outEdges = edgesBySource.get(node.id) || [];
+      const directTargets = (edgesBySource.get(node.id) || []).map(edge => edge.target);
+      const pathTargets = getWorkflowNodeType(node) === 'if-else'
+        ? (['if', 'else'] as const).map(handle => resolveIfElseBranch(node, handle, this.nodes, this.edges).targetId).filter(Boolean) as string[]
+        : [];
+      const possibleEnds = [...new Set([...directTargets, ...pathTargets])];
+      graph.addNode(node.id, this.createNodeExecutor(node), possibleEnds.length > 1 ? { ends: possibleEnds as any } : undefined);
+    }
 
-      if (outEdges.length === 0) {
-        graph.addEdge(node.id, END);
-      } else if (this.getNodeType(node) === 'if-else') {
+    const startNode = this.nodes.find(node => getWorkflowNodeType(node) === 'start');
+    if (startNode) graph.addEdge(START, startNode.id as any);
+
+    for (const node of this.nodes) {
+      const type = getWorkflowNodeType(node);
+      const outgoing = edgesBySource.get(node.id) || [];
+      if (type === 'end') {
+        graph.addEdge(node.id as any, END);
+        continue;
+      }
+      if (type === 'if-else') {
+        const ifTarget = resolveIfElseBranch(node, 'if', this.nodes, this.edges).targetId || END;
+        const elseTarget = resolveIfElseBranch(node, 'else', this.nodes, this.edges).targetId || END;
         graph.addConditionalEdges(
-          node.id,
-          (state: WorkflowState) => {
-            const result = state.nodeResults[node.id];
-            if (result?.output?.branch === 'else') return 'else';
-            return 'if';
-          },
-          {
-            if: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'if')?.target || '') || END,
-            else: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'else')?.target || '') || END,
-          }
+          node.id as any,
+          (state: WorkflowState) => state.nodeResults[node.id]?.output?.branch === 'else' ? 'else' : 'if',
+          { if: ifTarget, else: elseTarget } as any,
         );
-      } else if (this.getNodeType(node) === 'while') {
-        graph.addConditionalEdges(
-          node.id,
-          (state: WorkflowState) => {
-            const result = state.nodeResults[node.id];
-            if (result?.output?.shouldContinue) return 'continue';
-            return 'break';
-          },
-          {
-            continue: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'continue')?.target || '') || END,
-            break: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'break')?.target || '') || END,
-          }
-        );
-      } else if (this.getNodeType(node) === 'user-approval' && outEdges.some(e => e.sourceHandle === 'approve' || e.sourceHandle === 'reject')) {
-        graph.addConditionalEdges(
-          node.id,
-          (state: WorkflowState) => {
-            const result = state.nodeResults[node.id];
-            if (result?.output?.approved === false) return 'reject';
-            return 'approve';
-          },
-          {
-            approve: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'approve')?.target || '') || END,
-            reject: this.resolveTarget(outEdges.find(e => e.sourceHandle === 'reject')?.target || '') || END,
-          }
-        );
-      } else if (outEdges.length === 1) {
-        graph.addEdge(node.id, this.resolveTarget(outEdges[0].target));
+      } else if (type === 'while') {
+        graph.addConditionalEdges(node.id as any, (state: WorkflowState) => state.nodeResults[node.id]?.output?.shouldContinue ? 'continue' : 'break', branchMap(outgoing, ['continue', 'break']) as any);
+      } else if (type === 'user-approval') {
+        graph.addConditionalEdges(node.id as any, (state: WorkflowState) => state.nodeResults[node.id]?.output?.approved === false ? 'reject' : 'approve', branchMap(outgoing, ['approve', 'reject']) as any);
       } else {
-        const resolvedTargets = [...new Set(outEdges.map(e => this.resolveTarget(e.target)))];
-        graph.addConditionalEdges(
-          node.id,
-          (state: WorkflowState) => resolvedTargets.map(t => new Send(t, state)),
-          resolvedTargets.reduce((acc, t) => { acc[t] = t; return acc; }, {} as Record<string, string>)
-        );
+        for (const edge of outgoing) graph.addEdge(node.id as any, edge.target as any);
       }
     }
-
     return graph;
   }
 
   private createNodeExecutor(node: WorkflowNode) {
     return async (state: WorkflowState): Promise<Partial<WorkflowState>> => {
-      this.options.onNodeUpdate?.(node.id, 'running');
-
-      const startTime = new Date().toISOString();
-      let result: NodeExecutionResult;
-
+      const startedAt = new Date().toISOString();
+      this.options.onNodeUpdate?.(node.id, 'started', { nodeId: node.id, status: 'running', startedAt });
       try {
+        const type = getWorkflowNodeType(node);
         let output: any;
-
-        switch (this.getNodeType(node)) {
-          case 'start':
-            output = { message: 'Workflow started', input: state.variables.input };
-            break;
-          case 'end':
-            output = { message: 'Workflow completed', finalOutput: state.variables };
-            break;
-          case 'agent':
-            output = await executeAgentNode(node.data, state, this.options.llmKeys || {});
-            break;
-          case 'mcp':
-            output = await executeMCPNode(node.data, state, this.options.llmKeys || {});
-            break;
-          case 'transform':
-            output = await executeTransformNode(node.data, state);
-            break;
-          case 'if-else':
-            output = await executeIfElseNode(node.data, state);
-            break;
-          case 'while':
-            output = await executeWhileNode(node.data, state);
-            break;
-          case 'user-approval':
-            output = await executeUserApprovalNode(node.data, state);
-            break;
-          case 'set-state':
-            output = await executeSetStateNode(node.data, state);
-            break;
-          case 'http':
-            output = await executeHTTPNode(node.data, state);
-            break;
-          case 'extract':
-            output = await executeExtractNode(node.data, state, this.options.llmKeys || {});
-            break;
-          case 'guardrails':
-            output = await executeGuardrailsNode(node.data, state);
-            break;
-          case 'note':
-            output = { message: node.data.note || node.data.text || '' };
-            break;
-          default:
-            output = { message: `Node ${node.type} not implemented` };
+        if (type === 'user-approval') {
+          const approvalId = `approval_${this.options.executionId || 'workflow'}_${node.id}`;
+          const decision = interrupt({
+            kind: 'approval', approvalId, nodeId: node.id,
+            message: node.data.message || node.data.approvalMessage || 'Approve to continue?',
+            executionId: this.options.executionId,
+            threadId: this.options.threadId,
+          }) as { approved?: boolean; data?: any };
+          output = { approved: decision?.approved !== false, data: decision?.data };
+        } else {
+          output = await this.executeNode(node, state);
+          if (output?.__arcadePendingAuth) {
+            const authorization = interrupt({
+              kind: 'arcade-authorization', approvalId: output.authId, nodeId: node.id,
+              message: output.message, authUrl: output.authUrl, toolName: output.toolName,
+              executionId: this.options.executionId, threadId: this.options.threadId,
+            }) as { approved?: boolean };
+            if (authorization?.approved === false) throw new Error(`Authorization rejected for ${output.toolName}`);
+            output = await this.executeNode(node, state);
+            if (output?.__arcadePendingAuth) throw new Error(`Authorization for ${output.toolName} is not complete yet`);
+          }
         }
 
-        result = {
+        if (output?.error) throw new Error(output.error);
+        const result: NodeExecutionResult = {
           nodeId: node.id,
           status: 'completed',
-          output,
-          startedAt: startTime,
+          output: output?.output ?? output?.result ?? output,
+          toolCalls: output?.toolCalls || output?.__agentToolCalls,
+          startedAt,
           completedAt: new Date().toISOString(),
         };
-      } catch (err: any) {
-        result = {
-          nodeId: node.id,
-          status: 'failed',
-          error: err.message,
-          startedAt: startTime,
-          completedAt: new Date().toISOString(),
+        this.options.onNodeUpdate?.(node.id, 'completed', result);
+
+        const actualOutput = result.output;
+        const variables: Record<string, any> = { lastOutput: actualOutput, [node.id]: actualOutput, [`${node.id}_output`]: actualOutput };
+        if (actualOutput && typeof actualOutput === 'object' && !Array.isArray(actualOutput)) Object.assign(variables, actualOutput);
+        const nodeName = node.data?.nodeName || node.data?.name;
+        if (nodeName) variables[nodeName] = actualOutput;
+        Object.assign(variables, output?.variableUpdates || output?.stateUpdates || output?.__variableUpdates || {});
+        if (type === 'while' && output?.__iteration !== undefined) variables[`${node.id}__iteration`] = output.__iteration;
+
+        return {
+          currentNodeId: node.id,
+          nodeResults: { [node.id]: result },
+          variables,
+          chatHistory: output?.chatHistoryUpdates || output?.__chatHistoryUpdates || [],
         };
+      } catch (error: any) {
+        if (isGraphInterrupt(error)) throw error;
+        const result: NodeExecutionResult = { nodeId: node.id, status: 'failed', error: error?.message || 'Node execution failed', startedAt, completedAt: new Date().toISOString() };
+        this.options.onNodeUpdate?.(node.id, 'failed', result);
+        throw error;
       }
-
-      this.options.onNodeUpdate?.(node.id, result.status, result);
-
-      const updates: Partial<WorkflowState> = {
-        currentNodeId: node.id,
-        nodeResults: { [node.id]: result },
-      };
-
-      if (result.output?.__pendingApproval) {
-        updates.pendingAuth = result.output;
-      }
-
-      if (result.output?.__chatHistoryUpdates) {
-        updates.chatHistory = result.output.__chatHistoryUpdates;
-      }
-
-      if (result.output?.stateUpdates) {
-        updates.variables = result.output.stateUpdates;
-      }
-
-      if (result.output?.variableUpdates) {
-        updates.variables = result.output.variableUpdates;
-      }
-
-      // Store output as lastOutput for downstream nodes
-      if (result.output && typeof result.output === 'object' && !result.output.error) {
-        const outputVal = result.output.output ?? result.output.result ?? result.output.data ?? result.output;
-        if (!updates.variables) updates.variables = {};
-        updates.variables.lastOutput = outputVal;
-        updates.variables[`${node.id}_output`] = outputVal;
-      }
-
-      return updates;
     };
   }
+
+  private async executeNode(node: WorkflowNode, state: WorkflowState): Promise<any> {
+    const type = getWorkflowNodeType(node);
+    const keys = this.options.llmKeys || {};
+    switch (type) {
+      case 'start': return { input: state.variables.input };
+      case 'end': return { finalOutput: state.variables.lastOutput };
+      case 'agent': return executeAgentNode(await this.hydrateAgentTools(node.data), state, keys);
+      case 'mcp': return executeMCPNode(await this.hydrateMCPNode(node.data), state, keys);
+      case 'arcade': return executeArcadeNode(node.data, state, keys);
+      case 'guardrails': return executeGuardrailsNode(node.data, state);
+      case 'if-else': return executeIfElseNode(node.data, state);
+      case 'while': return executeWhileNode({ ...node.data, __iteration: state.variables[`${node.id}__iteration`] || 0 }, state);
+      case 'transform': return executeTransformNode(node.data, state);
+      case 'set-state': return executeSetStateNode(node.data, state);
+      case 'http': return executeHTTPNode(node.data, state);
+      case 'extract': return executeExtractNode(node.data, state, keys);
+      default: throw new Error(`Unsupported workflow node type: ${type}`);
+    }
+  }
+
+  private async hydrateAgentTools(data: Record<string, any>): Promise<Record<string, any>> {
+    const ids = Array.isArray(data.mcpServerIds) ? data.mcpServerIds : [];
+    if (ids.length === 0) return data;
+    const workflowDB = await import('../db/workflows.js');
+    const servers = (await Promise.all(ids.map((id: string) => workflowDB.getMCPServer(id)))).filter(Boolean) as any[];
+    const mcpTools = servers.flatMap(server => {
+      const tools = Array.isArray(server.tools) ? server.tools : [];
+      return tools.map((tool: any) => ({
+        name: typeof tool === 'string' ? tool : tool.name,
+        description: typeof tool === 'string' ? `${server.name}: ${tool}` : tool.description,
+        inputSchema: typeof tool === 'string' ? { type: 'object', properties: {} } : (tool.inputSchema || tool.input_schema),
+        serverUrl: server.url,
+        accessToken: server.access_token,
+        headers: server.headers || {},
+      }));
+    });
+    return { ...data, mcpTools };
+  }
+
+  private async hydrateMCPNode(data: Record<string, any>): Promise<Record<string, any>> {
+    if (!data.serverId) return data;
+    const workflowDB = await import('../db/workflows.js');
+    const server = await workflowDB.getMCPServer(data.serverId);
+    return server ? { ...data, serverUrl: server.url, accessToken: server.access_token, headers: server.headers || {} } : data;
+  }
+}
+
+function branchMap(edges: WorkflowEdge[], handles: string[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const handle of handles) {
+    const edge = edges.find(item => normalizeHandle(item.sourceHandle || item.label) === handle);
+    if (edge) result[handle] = edge.target;
+  }
+  return result;
 }

@@ -22,6 +22,9 @@ router.get('/templates', async (_req, res) => {
     const templates = await workflowDB.getWorkflowTemplates();
     res.json(templates.map(t => ({
       ...t,
+      estimatedTime: t.estimated_time,
+      isPublic: t.is_public,
+      createdAt: t.created_at,
       nodes: typeof t.nodes === 'string' ? JSON.parse(t.nodes) : t.nodes,
       edges: typeof t.edges === 'string' ? JSON.parse(t.edges) : t.edges,
       tags: typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags,

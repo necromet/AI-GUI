@@ -1,23 +1,62 @@
+import vm from 'node:vm';
+import {
+  evaluateConditionRule,
+  resolveConditionMode,
+  validateConditionNode,
+} from '../../../lib/workflow/conditions.js';
+import type { ConditionalNodeData } from '../../../lib/workflow/types.js';
+
 export async function executeIfElseNode(
   data: Record<string, any>,
   state: any
 ): Promise<any> {
-  const { condition = 'true' } = data;
   const variables = state.variables || {};
+  const conditionData = data as ConditionalNodeData;
+  const mode = resolveConditionMode(conditionData);
+  const validationError = validateConditionNode(conditionData);
+
+  if (!mode || validationError) {
+    return {
+      branch: 'else',
+      conditionResult: false,
+      conditionSource: mode || 'simple',
+      conditionSummary: mode === 'expression' ? String(data.condition || '') : 'Set condition',
+      evaluationError: validationError || 'Condition is incomplete',
+    };
+  }
+
+  if (mode === 'simple') {
+    const evaluation = evaluateConditionRule(conditionData.conditionRule!, state);
+    return {
+      branch: evaluation.branch,
+      conditionResult: evaluation.result,
+      conditionSource: evaluation.source,
+      conditionSummary: evaluation.summary,
+      leftValue: evaluation.leftValue,
+      rightValue: evaluation.rightValue,
+      evaluationError: evaluation.error,
+    };
+  }
+
+  const condition = String(conditionData.condition || '').trim();
 
   try {
-    const evalFn = new Function('input', 'state', 'lastOutput', 'variables', `return ${condition}`);
-    const result = evalFn(variables.input, state, variables.lastOutput, variables);
+    const result = vm.runInNewContext(`Boolean(${condition})`, evaluationContext(state, variables, 0), { timeout: 1000 });
     return {
       branch: result ? 'if' : 'else',
       conditionResult: Boolean(result),
+      conditionSource: 'expression',
+      conditionSummary: condition,
       evaluatedExpression: condition,
     };
   } catch (err: any) {
     return {
       branch: 'else',
       conditionResult: false,
-      error: `Condition evaluation failed: ${err.message}`,
+      conditionSource: 'expression',
+      conditionSummary: condition,
+      evaluatedExpression: condition,
+      evaluationError: `Condition evaluation failed: ${err.message}`,
     };
   }
 }
@@ -32,10 +71,9 @@ export async function executeWhileNode(
   const variables = state.variables || {};
 
   try {
-    const evalFn = new Function('input', 'state', 'lastOutput', 'variables', 'iteration', `return ${condition}`);
-    const iteration = variables.__iteration || 0;
+    const iteration = Number(data.__iteration ?? variables.__iteration ?? 0);
     const shouldContinue = Boolean(
-      evalFn(variables.input, state, variables.lastOutput, variables, iteration)
+      vm.runInNewContext(`Boolean(${condition})`, evaluationContext(state, variables, iteration), { timeout: 1000 })
     );
 
     if (!shouldContinue) {
@@ -59,6 +97,7 @@ export async function executeWhileNode(
     return {
       shouldContinue: true,
       condition: true,
+      index: iteration,
       iteration: iteration + 1,
       __iteration: iteration + 1,
     };
@@ -70,6 +109,21 @@ export async function executeWhileNode(
       stoppedReason: 'error',
     };
   }
+}
+
+function evaluationContext(state: any, variables: Record<string, any>, iteration: number) {
+  return {
+    input: safeClone(variables.input),
+    state: safeClone(state),
+    lastOutput: safeClone(variables.lastOutput),
+    variables: safeClone(variables),
+    iteration,
+  };
+}
+
+function safeClone<T>(value: T): T {
+  try { return structuredClone(value); }
+  catch { return JSON.parse(JSON.stringify(value)); }
 }
 
 export async function executeUserApprovalNode(
@@ -87,21 +141,4 @@ export async function executeUserApprovalNode(
     createdAt: new Date().toISOString(),
     timeoutMinutes: timeoutMinutes || undefined,
   };
-}
-
-export async function executeTransformNode(
-  data: Record<string, any>,
-  state: any
-): Promise<any> {
-  const { code = 'return input;', transformScript } = data;
-  const script = transformScript || code;
-  const variables = state.variables || {};
-
-  try {
-    const fn = new Function('input', 'lastOutput', 'state', 'variables', script);
-    const result = fn(variables.lastOutput || variables.input, variables.lastOutput, state, variables);
-    return typeof result === 'object' ? result : { result };
-  } catch (err: any) {
-    return { error: `Transform failed: ${err.message}` };
-  }
 }

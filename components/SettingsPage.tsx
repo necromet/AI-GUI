@@ -160,10 +160,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
           {THEME_PRESETS.map((preset) => {
             const isActive = themePreset === preset.id;
             const previewColors = preset.id === 'default'
-              ? (mode === 'dark' ? ['#0e0e0e', '#1a1a1a', '#f87171'] : ['#ffffff', '#f7f7f8', '#f87171'])
+              ? (mode === 'dark' ? ['#1a1a1a', '#242424', '#f87171'] : ['#fcfcfc', '#f3f3f3', '#f87171'])
               : preset.neon
-                ? [preset[mode]['--bg-100'] || (mode === 'dark' ? '#0e0e0e' : '#fff'), preset[mode]['--bg-200'] || (mode === 'dark' ? '#1a1a1a' : '#f7f7f8'), preset.neon[mode].primary.tailwind]
-                : [preset[mode]['--bg-100'] || '#fff', preset[mode]['--bg-200'] || '#f7f7f8', 'var(--neon-color)'];
+                ? [preset[mode]['--bg-100'] || (mode === 'dark' ? '#1a1a1a' : '#fcfcfc'), preset[mode]['--bg-200'] || (mode === 'dark' ? '#242424' : '#f3f3f3'), preset.neon[mode].primary.tailwind]
+                : [preset[mode]['--bg-100'] || '#fcfcfc', preset[mode]['--bg-200'] || '#f3f3f3', 'var(--neon-color)'];
             return (
               <button
                 key={preset.id}

@@ -6,7 +6,7 @@ import type { LibraryComponentFile, LibraryFolder } from '../types';
 import type { LibraryControls } from './LibraryPanel';
 import type { CanvasSidebarControls } from './canvas';
 import type { DatabaseSidebarControls } from './DatabasePanel';
-import { NODE_CATEGORIES, NODE_DEFINITIONS } from './agent-builder/constants';
+import WorkflowSidebar from './agent-builder/WorkflowSidebar';
 import type { NotesControls } from './notes/NotesPanel';
 import DatabaseSchemaBrowser from './DatabaseSchemaBrowser';
 import type { SectionType, ProjectFile, GridComponent, ResolutionConfig } from './canvas/types';
@@ -1179,48 +1179,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         ) : isAgentBuilderMode ? (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-3 pt-3 pb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-500)] px-1">Nodes</span>
-            </div>
-            <ScrollArea className="flex-1 px-3">
-              {NODE_CATEGORIES.map((cat) => (
-                <div key={cat.id} className="mb-3">
-                  <div className="px-2 mb-1.5">
-                    <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{cat.label}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {cat.types.map((type) => {
-                      const def = NODE_DEFINITIONS[type];
-                      return (
-                        <div
-                          key={type}
-                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-colors"
-                          style={{ color: 'var(--text-300)' }}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('application/reactflow', type);
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-200)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                          title={def.description}
-                        >
-                          <div
-                            className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
-                            style={{ background: `${def.color}20`, color: def.color }}
-                          >
-                            <span className="text-[11px] font-bold">{def.label.charAt(0)}</span>
-                          </div>
-                          <span className="text-xs">{def.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </ScrollArea>
-          </div>
+          <WorkflowSidebar embedded />
         ) : (
           <>
             {/* New Chat */}

@@ -13,6 +13,9 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
   const [published, setPublished] = useState(false);
   const [endpointUrl, setEndpointUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [testInput, setTestInput] = useState('Hello from Agent Builder');
+  const [testResult, setTestResult] = useState<any>(null);
+  const [testing, setTesting] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,10 +81,29 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
   -H "Content-Type: application/json" \\
   ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '{"input": "your input here"}'`;
 
-  const curlStreamExample = `curl -X POST ${endpointUrl} \\
+  const curlStreamExample = `curl -X POST ${endpointUrl.replace(/\/execute$/, '/execute-stream')} \\
   -H "Content-Type: application/json" \\
   -H "Accept: text/event-stream" \\
   ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '{"input": "your input here", "stream": true}'`;
+
+  const handleTest = useCallback(async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: testInput }),
+      });
+      const body = await response.json();
+      setTestResult(body);
+      if (!response.ok) throw new Error(body.error || 'Test failed');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setTesting(false);
+    }
+  }, [workflowId, testInput]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -194,6 +216,15 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
                     <Copy size={10} />
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-300)' }}>Test endpoint</label>
+                <div className="flex gap-2">
+                  <input value={testInput} onChange={event => setTestInput(event.target.value)} className="flex-1 px-3 py-2 text-xs rounded-lg border bg-transparent" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }} />
+                  <button onClick={handleTest} disabled={testing} className="px-3 py-2 rounded-lg text-xs cursor-pointer disabled:opacity-40" style={{ backgroundColor: 'var(--neon-color)', color: '#000' }}>{testing ? 'Running…' : 'Run'}</button>
+                </div>
+                {testResult && <pre className="mt-2 px-3 py-2 text-[10px] rounded-lg border font-mono overflow-auto max-h-40" style={{ borderColor: 'var(--border-300)', color: 'var(--text-300)', backgroundColor: 'var(--bg-200)' }}>{JSON.stringify(testResult, null, 2)}</pre>}
               </div>
 
               <button

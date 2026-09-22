@@ -12,6 +12,7 @@ import {
   AgentNodeConfig,
   MCPNodeConfig,
   GuardrailsNodeConfig,
+  ArcadeNodeConfig,
   TransformNodeConfig,
   IfElseNodeConfig,
   WhileNodeConfig,
@@ -35,6 +36,7 @@ const CONFIG_PANELS: Record<string, React.ComponentType<{ data: Record<string, a
   agent: AgentNodeConfig,
   mcp: MCPNodeConfig,
   guardrails: GuardrailsNodeConfig,
+  arcade: ArcadeNodeConfig,
   transform: TransformNodeConfig,
   'data-transform': TransformNodeConfig,
   'if-else': IfElseNodeConfig,
@@ -126,7 +128,7 @@ export default function NodeSettingsPanel({ node, onUpdate, onClose, upstreamNod
           className="h-full border-l overflow-hidden flex flex-col"
           style={{
             borderColor: 'var(--border-300)',
-            backgroundColor: 'var(--bg-100, #111114)',
+            backgroundColor: 'var(--bg-100, #1a1a1a)',
             width: panelWidth + 'px',
           }}
         >

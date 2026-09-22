@@ -1,188 +1,288 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import * as workflowDB from '../db/workflows.js';
 import { WorkflowExecutor } from '../services/workflowExecutor.js';
-import { createEngine } from '../services/workflowEngine.js';
 import { nanoid } from 'nanoid';
 import { parseWorkflow, getApiKeys } from './workflowHelpers.js';
+import { normalizeWorkflowGraph, validateWorkflowGraph } from '../../lib/workflow/graph.js';
+import { canExecutePublishedWorkflow } from '../../lib/workflow/auth.js';
 
 const router = Router();
+
+function writeEvent(res: Response, event: any) {
+  if (res.writableEnded || res.destroyed) return;
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function setupSSE(res: Response) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
+
+function preflight(nodes: any[], edges: any[]) {
+  const normalized = normalizeWorkflowGraph(nodes, edges);
+  const issues = validateWorkflowGraph(normalized.nodes, normalized.edges);
+  return { ...normalized, issues, valid: !issues.some(issue => issue.severity === 'error') };
+}
+
+function validateExecutionInput(nodes: any[], input: any): string | null {
+  const start = nodes.find(node => (node.data?.nodeType || node.type) === 'start');
+  const definitions = Array.isArray(start?.data?.inputVariables) ? start.data.inputVariables : [];
+  for (const definition of definitions) {
+    const value = input && typeof input === 'object' ? input[definition.name] : undefined;
+    if (definition.required && (value === undefined || value === null || value === '')) return `Missing required input "${definition.name}"`;
+  }
+  return null;
+}
+
+function hasExecutionAccess(req: any, workflow: any): boolean {
+  return canExecutePublishedWorkflow(req.headers.authorization as string | undefined, workflow);
+}
+
+router.post('/:id/validate', async (req, res) => {
+  try {
+    const workflow = await workflowDB.getWorkflow(req.params.id);
+    if (!workflow) { res.status(404).json({ error: 'Workflow not found' }); return; }
+    if (!hasExecutionAccess(req, workflow)) { res.status(401).json({ error: 'Invalid workflow API key' }); return; }
+    const parsed = parseWorkflow(workflow);
+    const result = preflight(parsed.nodes, parsed.edges);
+    res.json({ valid: result.valid, issues: result.issues });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.post('/:id/execute', async (req, res) => {
   try {
     const workflow = await workflowDB.getWorkflow(req.params.id);
-    if (!workflow) { res.status(404).json({ error: 'Not found' }); return; }
-
+    if (!workflow) { res.status(404).json({ error: 'Workflow not found' }); return; }
+    if (!hasExecutionAccess(req, workflow)) { res.status(401).json({ error: 'Invalid workflow API key' }); return; }
     const parsed = parseWorkflow(workflow);
+    const checked = preflight(parsed.nodes, parsed.edges);
+    if (!checked.valid) {
+      res.status(422).json({ error: 'Workflow validation failed', code: 'workflow_invalid', issues: checked.issues });
+      return;
+    }
+    const executionInput = req.body.input ?? req.body ?? {};
+    const inputError = validateExecutionInput(checked.nodes, executionInput);
+    if (inputError) { res.status(422).json({ error: inputError, code: 'workflow_input_invalid' }); return; }
+
     const executionId = `exec_${nanoid(10)}`;
-    await workflowDB.createExecution({ workflowId: workflow.id, input: JSON.stringify(req.body), threadId: executionId });
-
-    const engine = createEngine(parsed.nodes, parsed.edges, {
-      apiKeys: await getApiKeys(),
-      executionId,
-      threadId: executionId,
-    });
-
+    const threadId = `thread_${executionId}`;
+    const snapshot = { name: parsed.name, nodes: checked.nodes, edges: checked.edges };
+    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, workflowSnapshot: snapshot });
+    const executor = new WorkflowExecutor(checked.nodes, checked.edges, { executionId, threadId, llmKeys: await getApiKeys() });
     const events: any[] = [];
-    for await (const event of engine.executeStream(req.body.input || {})) {
+    let status = 'running';
+    let accumulatedResults: Record<string, any> = {};
+    let accumulatedVariables: Record<string, any> = {};
+
+    for await (const event of executor.executeStream(executionInput)) {
       events.push(event);
+      if (event.type === 'state_update') {
+        accumulatedResults = { ...accumulatedResults, ...(event.state?.nodeResults || {}) };
+        accumulatedVariables = { ...accumulatedVariables, ...(event.state?.variables || {}) };
+      }
+      if (event.type === 'workflow_paused') status = 'paused';
+      else if (event.type === 'workflow_completed') status = 'completed';
+      else if (event.type === 'error') status = 'failed';
     }
 
-    const lastState = events[events.length - 1]?.state;
+    const last = events[events.length - 1];
     await workflowDB.updateExecution(executionId, {
-      status: 'completed',
-      node_results: JSON.stringify(lastState?.nodeResults || {}),
-      variables: JSON.stringify(lastState?.variables || {}),
-      completed_at: new Date().toISOString(),
+      status,
+      node_results: last?.state?.nodeResults || accumulatedResults,
+      variables: last?.state?.variables || accumulatedVariables,
+      output: last?.state?.variables?.lastOutput ?? accumulatedVariables.lastOutput,
+      pending_action: last?.pendingAction || null,
+      error: last?.type === 'error' ? last.error : null,
+      completed_at: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
     });
-
-    res.json({ executionId, status: 'completed', events });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(status === 'failed' ? 500 : 200).json({ executionId, threadId, status, events });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 router.post('/:id/execute-stream', async (req, res) => {
   try {
     const workflow = await workflowDB.getWorkflow(req.params.id);
-    if (!workflow) { res.status(404).json({ error: 'Not found' }); return; }
-
+    if (!workflow) { res.status(404).json({ error: 'Workflow not found' }); return; }
+    if (!hasExecutionAccess(req, workflow)) { res.status(401).json({ error: 'Invalid workflow API key' }); return; }
     const parsed = parseWorkflow(workflow);
+    const checked = preflight(parsed.nodes, parsed.edges);
+    if (!checked.valid) {
+      res.status(422).json({ error: 'Workflow validation failed', code: 'workflow_invalid', issues: checked.issues });
+      return;
+    }
+    const executionInput = req.body.input ?? {};
+    const inputError = validateExecutionInput(checked.nodes, executionInput);
+    if (inputError) { res.status(422).json({ error: inputError, code: 'workflow_input_invalid' }); return; }
+
     const executionId = `exec_${nanoid(10)}`;
-    await workflowDB.createExecution({ workflowId: workflow.id, input: JSON.stringify(req.body), threadId: executionId });
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    const executor = new WorkflowExecutor(parsed.nodes, parsed.edges, {
-      onNodeUpdate: (nodeId: string, status: string, data?: any) => {
-        res.write(`data: ${JSON.stringify({ type: `node_${status}`, nodeId, data })}\n\n`);
-      },
-      executionId,
-      llmKeys: await getApiKeys(),
+    const threadId = `thread_${executionId}`;
+    const snapshot = { name: parsed.name, nodes: checked.nodes, edges: checked.edges };
+    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, workflowSnapshot: snapshot });
+    setupSSE(res);
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
     });
 
-    for await (const event of executor.executeStream(req.body.input || {})) {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    const executor = new WorkflowExecutor(checked.nodes, checked.edges, {
+      executionId,
+      threadId,
+      llmKeys: await getApiKeys(),
+      signal: abortController.signal,
+      onNodeUpdate: (nodeId, status, data) => {
+        const event = { type: `node_${status}`, nodeId, data, executionId, threadId };
+        writeEvent(res, event);
+        void workflowDB.createExecutionLog({ executionId, nodeId, eventType: event.type, data }).catch(() => {});
+      },
+    });
+    let accumulatedResults: Record<string, any> = {};
+    let accumulatedVariables: Record<string, any> = {};
 
-      if (event.type === 'completed') {
-        await workflowDB.updateExecution(executionId, { status: 'completed', completed_at: new Date().toISOString() });
-      } else if (event.type === 'paused') {
-        await workflowDB.updateExecution(executionId, { status: 'paused' });
+    for await (const event of executor.executeStream(executionInput)) {
+      writeEvent(res, event);
+      if (event.type === 'state_update') {
+        accumulatedResults = { ...accumulatedResults, ...(event.state?.nodeResults || {}) };
+        accumulatedVariables = { ...accumulatedVariables, ...(event.state?.variables || {}) };
+        await workflowDB.updateExecution(executionId, {
+          current_node_id: event.nodeId,
+          node_results: accumulatedResults,
+          variables: accumulatedVariables,
+        });
+      } else if (event.type === 'workflow_paused') {
+        await workflowDB.updateExecution(executionId, { status: 'paused', pending_action: event.pendingAction || null });
+        if (event.pendingAction?.kind === 'approval') {
+          await workflowDB.createApproval({
+            approvalId: event.pendingAction.approvalId,
+            workflowId: workflow.id,
+            executionId,
+            nodeId: event.pendingAction.nodeId,
+            message: event.pendingAction.message,
+          }).catch(() => {});
+        }
+      } else if (event.type === 'workflow_completed') {
+        await workflowDB.updateExecution(executionId, {
+          status: 'completed',
+          node_results: event.state?.nodeResults || {},
+          variables: event.state?.variables || {},
+          output: event.state?.variables?.lastOutput,
+          pending_action: null,
+          completed_at: new Date().toISOString(),
+        });
       } else if (event.type === 'error') {
         await workflowDB.updateExecution(executionId, { status: 'failed', error: event.error, completed_at: new Date().toISOString() });
       }
     }
 
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (err: any) {
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+    if (!res.writableEnded && !res.destroyed) {
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
+  } catch (error: any) {
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+    else {
+      writeEvent(res, { type: 'error', error: error.message });
       res.write('data: [DONE]\n\n');
       res.end();
     }
   }
 });
 
-router.post('/:id/execute-engine', async (req, res) => {
+router.post('/:id/execute-engine', (req, res) => {
+  res.redirect(307, `/api/workflows/${req.params.id}/execute-stream`);
+});
+
+router.post('/:id/resume', async (req, res) => {
   try {
-    const workflow = await workflowDB.getWorkflow(req.params.id);
-    if (!workflow) { res.status(404).json({ error: 'Not found' }); return; }
+    const { executionId, approved, data } = req.body;
+    const execution = await workflowDB.getExecution(executionId);
+    if (!execution || execution.workflow_id !== req.params.id) {
+      res.status(404).json({ error: 'Execution not found' });
+      return;
+    }
+    if (execution.status !== 'paused') {
+      res.status(409).json({ error: 'Execution is not paused' });
+      return;
+    }
 
-    const parsed = parseWorkflow(workflow);
-    const executionId = `exec_${nanoid(10)}`;
-    await workflowDB.createExecution({ workflowId: workflow.id, input: JSON.stringify(req.body), threadId: executionId });
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    const engine = createEngine(parsed.nodes, parsed.edges, {
-      apiKeys: await getApiKeys(),
-      executionId,
-      threadId: executionId,
-      onNodeUpdate: (nodeId: string, result: any) => {
-        res.write(`event: node-update\ndata: ${JSON.stringify({ nodeId, ...result })}\n\n`);
-      },
+    const snapshot = typeof execution.workflow_snapshot === 'string' ? JSON.parse(execution.workflow_snapshot) : execution.workflow_snapshot;
+    if (!snapshot?.nodes || !snapshot?.edges) {
+      res.status(409).json({ error: 'This execution has no resumable workflow snapshot' });
+      return;
+    }
+    setupSSE(res);
+    const threadId = execution.checkpoint_thread_id || execution.thread_id;
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
     });
+    const executor = new WorkflowExecutor(snapshot.nodes, snapshot.edges, {
+      executionId,
+      threadId,
+      llmKeys: await getApiKeys(),
+      signal: abortController.signal,
+      onNodeUpdate: (nodeId, status, nodeData) => writeEvent(res, { type: `node_${status}`, nodeId, data: nodeData, executionId, threadId }),
+    });
+    await workflowDB.updateExecution(executionId, { status: 'running', resumed_at: new Date().toISOString(), pending_action: null });
+    let accumulatedResults = typeof execution.node_results === 'string' ? JSON.parse(execution.node_results) : (execution.node_results || {});
+    let accumulatedVariables = typeof execution.variables === 'string' ? JSON.parse(execution.variables) : (execution.variables || {});
 
-    for await (const event of engine.executeStream(req.body.input || {})) {
-      res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-
-      if (event.type === 'completed') {
+    for await (const event of executor.executeStream({}, { resume: { approved: approved !== false, data } })) {
+      writeEvent(res, event);
+      if (event.type === 'state_update') {
+        accumulatedResults = { ...accumulatedResults, ...(event.state?.nodeResults || {}) };
+        accumulatedVariables = { ...accumulatedVariables, ...(event.state?.variables || {}) };
+        await workflowDB.updateExecution(executionId, { current_node_id: event.nodeId, node_results: accumulatedResults, variables: accumulatedVariables });
+      } else if (event.type === 'workflow_paused') {
+        await workflowDB.updateExecution(executionId, { status: 'paused', pending_action: event.pendingAction || null });
+      } else if (event.type === 'workflow_completed') {
         await workflowDB.updateExecution(executionId, {
-          status: 'completed',
-          node_results: JSON.stringify(event.state?.nodeResults || {}),
-          variables: JSON.stringify(event.state?.variables || {}),
-          completed_at: new Date().toISOString(),
+          status: 'completed', node_results: event.state?.nodeResults || {}, variables: event.state?.variables || {},
+          output: event.state?.variables?.lastOutput, pending_action: null, completed_at: new Date().toISOString(),
         });
-      } else if (event.type === 'pending_approval') {
-        await workflowDB.updateExecution(executionId, { status: 'paused', thread_id: executionId });
       } else if (event.type === 'error') {
         await workflowDB.updateExecution(executionId, { status: 'failed', error: event.error, completed_at: new Date().toISOString() });
       }
     }
 
-    res.write('event: done\ndata: [DONE]\n\n');
-    res.end();
-  } catch (err: any) {
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    } else {
-      res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
-      res.write('event: done\ndata: [DONE]\n\n');
+    const pending = typeof execution.pending_action === 'string' ? JSON.parse(execution.pending_action) : execution.pending_action;
+    if (pending?.approvalId) await workflowDB.respondApproval(pending.approvalId, approved === false ? 'rejected' : 'approved').catch(() => {});
+    if (!res.writableEnded && !res.destroyed) {
+      res.write('data: [DONE]\n\n');
       res.end();
     }
-  }
-});
-
-router.post('/:id/resume', async (req, res) => {
-  try {
-    const { executionId, approved, data: approvalData } = req.body;
-    const execution = await workflowDB.getExecution(executionId);
-    if (!execution) { res.status(404).json({ error: 'Execution not found' }); return; }
-
-    if (execution.thread_id) {
-      await workflowDB.respondApproval(execution.thread_id, approved ? 'approved' : 'rejected');
+  } catch (error: any) {
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+    else {
+      writeEvent(res, { type: 'error', error: error.message });
+      res.write('data: [DONE]\n\n');
+      res.end();
     }
-
-    res.json({ success: true, status: approved ? 'approved' : 'rejected' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
   }
 });
 
 router.get('/:id/executions', async (req, res) => {
   try {
     const executions = await workflowDB.getExecutionsByWorkflow(req.params.id);
-    res.json(executions.map(e => ({
-      ...e,
-      node_results: typeof e.node_results === 'string' ? JSON.parse(e.node_results) : e.node_results,
-      variables: typeof e.variables === 'string' ? JSON.parse(e.variables) : e.variables,
-    })));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.json(executions);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 router.get('/executions/:executionId', async (req, res) => {
   try {
     const execution = await workflowDB.getExecution(req.params.executionId);
-    if (!execution) { res.status(404).json({ error: 'Not found' }); return; }
-    res.json({
-      ...execution,
-      node_results: typeof execution.node_results === 'string' ? JSON.parse(execution.node_results) : execution.node_results,
-      variables: typeof execution.variables === 'string' ? JSON.parse(execution.variables) : execution.variables,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    if (!execution) { res.status(404).json({ error: 'Execution not found' }); return; }
+    res.json({ ...execution, logs: await workflowDB.getExecutionLogs(req.params.executionId) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

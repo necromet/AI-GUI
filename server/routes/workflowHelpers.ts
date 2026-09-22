@@ -15,6 +15,9 @@ export function parseWorkflow(row: any) {
     edges: JSON.parse(edgesRaw),
     isTemplate: row.is_template === true || row.is_template === 1,
     isPublic: row.is_public === true || row.is_public === 1,
+    published: row.published === true || row.published === 1,
+    endpointUrl: row.endpoint_url,
+    apiKey: row.api_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -51,19 +54,63 @@ export function generateExportCode(workflow: any): string {
   return `// Generated workflow: ${workflow.name}
 // Exported at: ${new Date().toISOString()}
 
-import { createEngine } from './workflowEngine';
+import { Annotation, END, START, StateGraph, interrupt } from '@langchain/langgraph';
 
 const nodes = ${JSON.stringify(nodes, null, 2)};
 const edges = ${JSON.stringify(edges, null, 2)};
 
-const engine = createEngine(nodes, edges);
+const State = Annotation.Root({
+  variables: Annotation<Record<string, unknown>>({
+    reducer: (left, right) => ({ ...left, ...right }),
+    default: () => ({}),
+  }),
+  nodeResults: Annotation<Record<string, unknown>>({
+    reducer: (left, right) => ({ ...left, ...right }),
+    default: () => ({}),
+  }),
+});
+
+async function executeNode(node: any, state: typeof State.State) {
+  const type = node.data?.nodeType || node.type;
+  if (type === 'start') return { variables: { input: state.variables.input } };
+  if (type === 'end') return {};
+  if (type === 'user-approval') {
+    const decision = interrupt({ nodeId: node.id, message: node.data.message || 'Approve to continue?' });
+    return { nodeResults: { [node.id]: { output: decision } } };
+  }
+
+  // Connect your agent, MCP, HTTP, transform, and extraction implementations here.
+  throw new Error(\`Implement executor for node type: \${type}\`);
+}
+
+const graph = new StateGraph(State);
+const executableNodes = nodes.filter((node: any) => (node.data?.nodeType || node.type) !== 'note');
+const executableIds = new Set(executableNodes.map((node: any) => node.id));
+const validEdges = edges.filter((edge: any) => executableIds.has(edge.source) && executableIds.has(edge.target));
+
+for (const node of executableNodes) {
+  const ends = [...new Set(validEdges.filter((edge: any) => edge.source === node.id).map((edge: any) => edge.target))];
+  graph.addNode(node.id, (state: typeof State.State) => executeNode(node, state), ends.length > 1 ? { ends } : undefined);
+}
+
+const start = executableNodes.find((node: any) => (node.data?.nodeType || node.type) === 'start');
+if (!start) throw new Error('Workflow needs a Start node');
+graph.addEdge(START, start.id);
+
+for (const node of executableNodes) {
+  const type = node.data?.nodeType || node.type;
+  const outgoing = validEdges.filter((edge: any) => edge.source === node.id);
+  if (type === 'end') graph.addEdge(node.id, END);
+  else if (type === 'if-else') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.branch || 'if', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
+  else if (type === 'while') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.shouldContinue ? 'continue' : 'break', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
+  else if (type === 'user-approval') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.approved === false ? 'reject' : 'approve', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
+  else for (const edge of outgoing) graph.addEdge(node.id, edge.target);
+}
+
+const app = graph.compile();
 
 async function run(input) {
-  for await (const event of engine.executeStream(input)) {
-    console.log(event.type, event.nodeId || '', event.data || '');
-    if (event.type === 'completed') return event.state;
-    if (event.type === 'error') throw new Error(event.error);
-  }
+  return app.invoke({ variables: { input }, nodeResults: {} });
 }
 
 run({ input: 'Your input here' }).then(console.log).catch(console.error);

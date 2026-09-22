@@ -44,17 +44,17 @@ export function useWorkflowExecution() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       for await (const event of parseSSEStream(response)) {
-        if (event.type === 'completed') {
+        if (event.type === 'workflow_completed') {
           setState(prev => ({ ...prev, status: 'completed' }));
-        } else if (event.type === 'paused' && event.pendingAuth) {
+        } else if (event.type === 'workflow_paused' && event.pendingAction) {
           setState(prev => ({
             ...prev,
             status: 'paused',
             pendingApproval: {
-              approvalId: event.pendingAuth.authId,
-              nodeId: event.pendingAuth.nodeId,
-              message: event.pendingAuth.message,
-              executionId: event.pendingAuth.executionId,
+              approvalId: event.pendingAction.approvalId,
+              nodeId: event.pendingAction.nodeId,
+              message: event.pendingAction.message,
+              executionId: event.pendingAction.executionId,
             },
           }));
         } else if (event.type === 'error') {
@@ -91,9 +91,16 @@ export function useWorkflowExecution() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ executionId, approved }),
       });
-      const data = await response.json();
-      if (data.success) {
-        setState(prev => ({ ...prev, status: 'running', pendingApproval: undefined }));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setState(prev => ({ ...prev, status: 'running', pendingApproval: undefined }));
+      for await (const event of parseSSEStream(response)) {
+        if (event.type === 'workflow_completed') {
+          setState(prev => ({ ...prev, status: 'completed', variables: event.state?.variables || prev.variables, nodeResults: event.state?.nodeResults || prev.nodeResults }));
+        } else if (event.type === 'workflow_paused') {
+          setState(prev => ({ ...prev, status: 'paused', pendingApproval: event.pendingAction }));
+        } else if (event.type === 'error') {
+          setState(prev => ({ ...prev, status: 'failed', error: event.error }));
+        }
       }
     } catch (err: any) {
       setState(prev => ({ ...prev, error: err.message }));

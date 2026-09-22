@@ -1,4 +1,5 @@
 import { substituteVariables } from './variables.js';
+import { callTool } from '../mcpService.js';
 
 export async function executeMCPNode(
   data: Record<string, any>,
@@ -8,6 +9,8 @@ export async function executeMCPNode(
   const {
     serverId,
     serverUrl,
+    accessToken,
+    headers: configuredHeaders = {},
     toolName,
     mcpAction,
     mcpServers = [],
@@ -19,9 +22,11 @@ export async function executeMCPNode(
   } = data;
 
   const variables = state.variables || {};
+  const resolvedScrapeUrl = typeof scrapeUrl === 'string' ? substituteVariables(scrapeUrl, state) : scrapeUrl;
+  const resolvedSearchQuery = typeof searchQuery === 'string' ? substituteVariables(searchQuery, state) : searchQuery;
 
   let url = serverUrl;
-  let authToken: string | undefined;
+  let authToken: string | undefined = accessToken;
 
   if (serverId && mcpServers.length > 0) {
     const server = mcpServers.find((s: any) => s.id === serverId);
@@ -31,13 +36,18 @@ export async function executeMCPNode(
     }
   }
 
-  const isFirecrawl = url?.toLowerCase().includes('firecrawl') || toolName?.startsWith('firecrawl_');
+  const action = toolName || mcpAction;
+  const isFirecrawl = url?.toLowerCase().includes('firecrawl') || toolName?.startsWith('firecrawl_') || ['scrape', 'search', 'crawl', 'extract', 'map'].includes(action);
   const firecrawlKey = apiKeys.firecrawl || (typeof process !== 'undefined' && process.env?.FIRECRAWL_API_KEY) || '';
 
+  if (isFirecrawl && !firecrawlKey) {
+    return { error: 'Firecrawl is not configured. Add FIRECRAWL_API_KEY on the server or in Agent Builder settings.' };
+  }
+
   if (isFirecrawl && firecrawlKey) {
-    return await executeFirecrawlAction(toolName || mcpAction || 'scrape', {
-      url: scrapeUrl || variables.lastOutput || variables.input,
-      query: searchQuery || variables.lastOutput,
+    return await executeFirecrawlAction(action || 'scrape', {
+      url: resolvedScrapeUrl || variables.lastOutput || variables.input,
+      query: resolvedSearchQuery || variables.lastOutput,
       formats: scrapeFormats,
       ...mcpParams,
       ...interpolateArgs(toolArgs, variables),
@@ -45,30 +55,9 @@ export async function executeMCPNode(
   }
 
   if (url && toolName) {
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'tools/call',
-          params: {
-            name: toolName,
-            arguments: interpolateArgs(toolArgs, variables),
-          },
-          id: Date.now(),
-        }),
-      });
-
-      const data = await response.json();
-      if (data.error) return { error: data.error.message || 'MCP call failed' };
-      return data.result?.content?.[0]?.text || data.result || 'No output';
-    } catch (err: any) {
-      return { error: `MCP call failed: ${err.message}` };
-    }
+    const headers: Record<string, string> = { ...configuredHeaders };
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    return callTool(url, toolName, interpolateArgs(toolArgs, variables), headers);
   }
 
   return { error: 'No MCP server or tool configured' };
@@ -164,12 +153,10 @@ async function executeFirecrawlAction(action: string, params: any, apiKey: strin
 function interpolateArgs(args: Record<string, any>, variables: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(args)) {
-    if (typeof val === 'string' && val.startsWith('{{') && val.endsWith('}}')) {
-      const varName = val.slice(2, -2);
-      result[key] = variables[varName] ?? val;
-    } else {
-      result[key] = val;
-    }
+    if (typeof val === 'string') result[key] = substituteVariables(val, { variables });
+    else if (Array.isArray(val)) result[key] = val.map(item => typeof item === 'string' ? substituteVariables(item, { variables }) : item);
+    else if (val && typeof val === 'object') result[key] = interpolateArgs(val, variables);
+    else result[key] = val;
   }
   return result;
 }

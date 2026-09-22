@@ -2,6 +2,8 @@
  * MCP Service - Model Context Protocol server management
  * Handles: tool discovery, connection testing, tool execution
  */
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 interface MCPTool {
   name: string;
@@ -28,13 +30,12 @@ interface MCPConnectionResult {
 // ─── Tool Discovery ───
 
 export async function discoverTools(serverUrl: string, headers?: Record<string, string>): Promise<MCPTool[]> {
+  let transport: StreamableHTTPClientTransport | null = null;
   try {
-    const response = await mcpRequest(serverUrl, 'tools/list', {}, headers);
-    if (response.error) {
-      console.error(`[mcp] Tool discovery failed for ${serverUrl}:`, response.error);
-      return [];
-    }
-    return (response.result?.tools || []).map((t: any) => ({
+    const connected = await connectClient(serverUrl, headers);
+    transport = connected.transport;
+    const response = await connected.client.listTools();
+    return (response.tools || []).map((t: any) => ({
       name: t.name,
       description: t.description || '',
       inputSchema: t.inputSchema || { type: 'object', properties: {} },
@@ -42,6 +43,8 @@ export async function discoverTools(serverUrl: string, headers?: Record<string, 
   } catch (err: any) {
     console.error(`[mcp] Tool discovery error:`, err.message);
     return [];
+  } finally {
+    await transport?.close().catch(() => {});
   }
 }
 
@@ -53,17 +56,16 @@ export async function callTool(
   args: Record<string, any>,
   headers?: Record<string, string>
 ): Promise<any> {
+  let transport: StreamableHTTPClientTransport | null = null;
   try {
-    const response = await mcpRequest(serverUrl, 'tools/call', {
+    const connected = await connectClient(serverUrl, headers);
+    transport = connected.transport;
+    const response: any = await connected.client.callTool({
       name: toolName,
       arguments: args,
-    }, headers);
+    });
 
-    if (response.error) {
-      return { error: response.error.message || 'Tool call failed' };
-    }
-
-    const content = response.result?.content;
+    const content = response.content;
     if (Array.isArray(content) && content.length > 0) {
       const textBlock = content.find((c: any) => c.type === 'text');
       if (textBlock) return textBlock.text;
@@ -71,9 +73,11 @@ export async function callTool(
       return content[0].text || content[0].data || JSON.stringify(content[0]);
     }
 
-    return response.result || 'No output';
+    return response.structuredContent || response.content || 'No output';
   } catch (err: any) {
     return { error: `Tool call failed: ${err.message}` };
+  } finally {
+    await transport?.close().catch(() => {});
   }
 }
 
@@ -82,24 +86,12 @@ export async function callTool(
 export async function testConnection(serverUrl: string, headers?: Record<string, string>): Promise<MCPConnectionResult> {
   const startTime = Date.now();
   try {
-    const response = await mcpRequest(serverUrl, 'initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'edward-labs', version: '1.0.0' },
-    }, headers);
-
-    const latencyMs = Date.now() - startTime;
-
-    if (response.error) {
-      return { success: false, error: response.error.message, latencyMs };
-    }
-
     const tools = await discoverTools(serverUrl, headers);
 
     return {
       success: true,
       tools,
-      latencyMs,
+      latencyMs: Date.now() - startTime,
     };
   } catch (err: any) {
     return {
@@ -108,6 +100,18 @@ export async function testConnection(serverUrl: string, headers?: Record<string,
       latencyMs: Date.now() - startTime,
     };
   }
+}
+
+async function connectClient(serverUrl: string, headers?: Record<string, string>) {
+  const client = new Client({ name: 'edward-labs-agent-builder', version: '1.0.0' }, { capabilities: {} });
+  const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
+    requestInit: {
+      headers: { ...headers },
+      signal: AbortSignal.timeout(30000),
+    },
+  });
+  await client.connect(transport);
+  return { client, transport };
 }
 
 // ─── JSON-RPC Transport ───

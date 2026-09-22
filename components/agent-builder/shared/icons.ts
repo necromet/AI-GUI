@@ -1,6 +1,6 @@
 import {
   Play, Square, Bot, Wrench, GitBranch, Repeat, UserCheck,
-  Code, Database, FileText, Globe, StickyNote, Circle, Shield
+  Code, Database, FileText, Globe, StickyNote, Circle, Shield, Gamepad2
 } from 'lucide-react';
 
 export const ICON_MAP: Record<string, any> = {
@@ -9,4 +9,5 @@ export const ICON_MAP: Record<string, any> = {
   code: Code, database: Database, 'file-text': FileText,
   globe: Globe, 'sticky-note': StickyNote, circle: Circle,
   shield: Shield,
+  gamepad: Gamepad2,
 };
