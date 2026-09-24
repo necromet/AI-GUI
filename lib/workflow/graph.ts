@@ -27,12 +27,15 @@ export function normalizeWorkflowGraph(rawNodes: any[] = [], rawEdges: any[] = [
       ? raw.data.label
       : typeof raw?.label === 'string' ? raw.label : type;
 
+    const rawData = { ...(raw?.data || {}) };
+    const data = type === 'database' ? normalizeDatabaseNodeData(rawData) : rawData;
+
     return {
       ...raw,
       id,
       type,
       position,
-      data: { ...(raw?.data || {}), nodeType: type, label },
+      data: { ...data, nodeType: type, label },
       label,
     } as WorkflowNode;
   });
@@ -52,10 +55,40 @@ export function normalizeWorkflowGraph(rawNodes: any[] = [], rawEdges: any[] = [
       sourceHandle: raw?.sourceHandle || undefined,
       targetHandle: raw?.targetHandle || undefined,
       label: typeof raw?.label === 'string' && raw.label.trim() ? raw.label : defaultBranchLabel,
+      type: 'interactive',
     };
   });
 
   return { nodes, edges };
+}
+
+function normalizeDatabaseNodeData(data: Record<string, any>): Record<string, any> {
+  const {
+    password: _password, passwordEncrypted: _passwordEncrypted, password_encrypted: _passwordEncryptedSnake,
+    credentials: _credentials, connectionString: _connectionString, host: _host, port: _port,
+    database: _database, username: _username, user: _user, ssl: _ssl,
+    ...safeData
+  } = data;
+  data = safeData;
+  if (!data.sourceType) return data;
+  if (data.sourceType === 'documents') {
+    const { sourceType: _sourceType, ...rest } = data;
+    return { ...rest, dataSource: 'documents' };
+  }
+  if (data.sourceType === 'postgres') {
+    const { sourceType: _sourceType, ...rest } = data;
+    return { ...rest, dataSource: 'postgres' };
+  }
+
+  // History and memory are now opt-in Agent capabilities. Keep the legacy
+  // node and graph topology intact, but require the owner to move the setting
+  // to an Agent rather than silently enabling persistent data access.
+  const { sourceType, ...rest } = data;
+  return {
+    ...rest,
+    dataSource: '',
+    migrationWarning: `Legacy ${sourceType} access moved to the Agent History/Memory switches.`,
+  };
 }
 
 function addIssue(issues: WorkflowValidationIssue[], issue: WorkflowValidationIssue, seen: Set<string>) {
@@ -267,6 +300,7 @@ function validateNodeConfiguration(node: WorkflowNode, issues: WorkflowValidatio
   if (type === 'agent') {
     required(Boolean(data.model), 'agent_model', 'needs a model');
     required(Boolean(String(data.userPrompt || data.systemPrompt || data.instructions || '').trim()), 'agent_prompt', 'needs instructions or a prompt');
+    if (data.includeChatHistory || data.includeChatMemory) required(['conversation', 'workflow'].includes(data.persistenceScope || 'conversation'), 'agent_persistence_scope', 'has an invalid History/Memory scope');
   } else if (type === 'mcp') required(Boolean(data.toolName || data.mcpAction), 'mcp_tool', 'needs an MCP action or tool');
   else if (type === 'http') required(Boolean(String(data.url || data.httpUrl || '').trim()), 'http_url', 'needs a URL');
   else if (type === 'if-else') {
@@ -279,5 +313,17 @@ function validateNodeConfiguration(node: WorkflowNode, issues: WorkflowValidatio
   else if (type === 'arcade') {
     required(Boolean(data.arcadeTool), 'arcade_tool', 'needs an Arcade tool');
     required(Boolean(data.arcadeUserId), 'arcade_user', 'needs an Arcade user ID');
+  } else if (type === 'database') {
+    required(data.dataSource === 'postgres' || data.dataSource === 'documents', 'database_source', 'needs PostgreSQL or Documents selected');
+    if (data.dataSource === 'postgres') {
+      required(Boolean(data.connectionId), 'database_connection', 'needs a saved PostgreSQL connection');
+      required(Boolean(String(data.sql || '').trim()), 'database_sql', 'needs a read-only SQL query');
+      required(Number(data.maxRows ?? 100) >= 1 && Number(data.maxRows ?? 100) <= 1000, 'database_row_limit', 'maximum rows must be between 1 and 1000');
+      required(Number(data.timeoutSeconds ?? 30) >= 1 && Number(data.timeoutSeconds ?? 30) <= 30, 'database_timeout', 'timeout must be between 1 and 30 seconds');
+    } else if (data.dataSource === 'documents') {
+      required(Boolean(String(data.query || '').trim()), 'documents_query', 'needs a search query');
+      required(Number(data.topK ?? 5) >= 1 && Number(data.topK ?? 5) <= 20, 'documents_top_k', 'Top K must be between 1 and 20');
+      required(Number(data.minScore ?? 0) >= 0 && Number(data.minScore ?? 0) <= 1, 'documents_min_score', 'minimum score must be between 0 and 1');
+    }
   }
 }

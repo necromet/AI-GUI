@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2, LayoutDashboard, Eye, Upload, Settings } from 'lucide-react';
+import { Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2, LayoutDashboard, Sparkles, Eye, Upload, Settings } from 'lucide-react';
 import type { Node, Edge } from '@xyflow/react';
 import { useWorkflow } from './useWorkflow';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import PublishModal from './PublishModal';
 import type { WorkflowHeaderControls } from './types';
 import WorkflowPreviewModal from './WorkflowPreviewModal';
 import AgentBuilderSettingsModal from './AgentBuilderSettingsModal';
+import { normalizeWorkflowGraph } from '../../lib/workflow/graph';
 
 interface Props {
   name: string;
@@ -26,6 +27,7 @@ interface Props {
   onRedo: () => void;
   onFitView: () => void;
   onAutoLayout: () => void;
+  onTidyUp: () => void;
   onFocusIssue: (nodeId?: string) => void;
   validationIssues: ValidationIssue[];
   onShowShortcuts: () => void;
@@ -35,7 +37,7 @@ interface Props {
 
 export default function WorkflowToolbar({
   name, onNameChange, nodes, edges, workflowId, onWorkflowSaved, onLoadTemplate,
-  canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onFocusIssue, validationIssues, onShowShortcuts, onBack, onHeaderControls,
+  canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack, onHeaderControls,
 }: Props) {
   const { saveWorkflow } = useWorkflow();
   const [saving, setSaving] = useState(false);
@@ -76,7 +78,8 @@ export default function WorkflowToolbar({
   }, [name, nodes, edges, workflowId, saveWorkflow, onWorkflowSaved]);
 
   const handleExport = useCallback(() => {
-    const data = { name, nodes, edges };
+    const normalized = normalizeWorkflowGraph(nodes, edges);
+    const data = { name, nodes: normalized.nodes, edges: normalized.edges };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -119,7 +122,8 @@ export default function WorkflowToolbar({
   }, [workflowId]);
 
   const handleShare = useCallback(() => {
-    const data = { name, nodes, edges };
+    const normalized = normalizeWorkflowGraph(nodes, edges);
+    const data = { name, nodes: normalized.nodes, edges: normalized.edges };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -157,13 +161,13 @@ export default function WorkflowToolbar({
   // Ref always holds the latest values — callbacks read from here, never from stale closures
   const controlsRef = useRef({
     name, onNameChange, nodes, edges, workflowId,
-    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onFocusIssue, validationIssues, onShowShortcuts, onBack,
+    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack,
     handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, handleImport, handlePreview, handleSettings, onLoadTemplate,
     showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
   });
   controlsRef.current = {
     name, onNameChange, nodes, edges, workflowId,
-    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onFocusIssue, validationIssues, onShowShortcuts, onBack,
+    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack,
     handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, handleImport, handlePreview, handleSettings, onLoadTemplate,
     showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
   };
@@ -263,6 +267,9 @@ export default function WorkflowToolbar({
         <button onClick={onAutoLayout} className={btnBase} style={{ color: 'var(--text-300)' }} title="Auto layout">
           <LayoutDashboard size={15} />
         </button>
+        <button onClick={onTidyUp} className={btnBase} style={{ color: 'var(--text-300)' }} title="Tidy up workflow (Shift+T)">
+          <Sparkles size={15} />
+        </button>
         <ShortcutButton onClick={onShowShortcuts} />
       </div>
 
@@ -342,7 +349,7 @@ export default function WorkflowToolbar({
           </button>
         )}
         {workflowId && (
-          <button onClick={() => setShowPublish(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Publish as API">
+          <button onClick={() => setShowPublish(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Publish and share">
             <Globe size={15} />
           </button>
         )}

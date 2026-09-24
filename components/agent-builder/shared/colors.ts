@@ -13,6 +13,8 @@ export const NODE_COLORS = {
   extract: '#14c8b0',
   http: '#8a96a8',
   note: '#e8a81c',
+  database: '#0ea5e9',
+  'web-source': '#e879f9',
 } as const;
 
 export const STATUS_COLORS = {

@@ -7,6 +7,7 @@ import { ICON_MAP } from './shared/icons';
 import { NODE_COLORS, STATUS_COLORS, HTTP_METHOD_COLORS } from './shared/colors';
 import { useExecutionStatus } from './ExecutionStatusContext';
 import { formatConditionRule, resolveConditionMode, validateConditionNode } from '../../lib/workflow/conditions';
+import VariablePillText from './shared/VariablePill';
 
 const HINTS: Partial<Record<WorkflowNodeType, string>> = {
   agent: 'Click to set model & prompt',
@@ -20,6 +21,8 @@ const HINTS: Partial<Record<WorkflowNodeType, string>> = {
   'user-approval': 'Click to set message',
   guardrails: 'Click to configure checks',
   arcade: 'Click to configure Arcade',
+  database: 'Click to set data source',
+  'web-source': 'Click to set URL or query',
 };
 
 function getNodeExecClass(status?: string): string {
@@ -91,6 +94,7 @@ function CustomNodeInner({ data, id }: NodeProps) {
             : `0 0 12px ${color}15`,
         transform: isHovered && !execStatus?.status ? 'scale(1.03)' : 'scale(1)',
         transition: 'all 0.15s ease',
+        cursor: 'pointer',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -159,9 +163,14 @@ function CustomNodeInner({ data, id }: NodeProps) {
               {typeof data.model === 'string' ? data.model.split('/').pop() : data.model}
             </div>
           )}
+          {nodeType === 'agent' && (data?.includeChatHistory || data?.includeChatMemory) && (
+            <div className="mt-0.5 text-[9px]" style={{ color: 'var(--text-500, #666)' }}>
+              {[data.includeChatHistory && 'History', data.includeChatMemory && 'Memory'].filter(Boolean).join(' + ')} · {data.persistenceScope || 'conversation'}
+            </div>
+          )}
           {isIfElse && conditionSummary && conditionSummary !== 'Set condition' && (
             <div className="text-[10px] truncate font-mono mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
-              {conditionSummary.slice(0, 30)}{conditionSummary.length > 30 ? '...' : ''}
+              <VariablePillText value={conditionSummary} />
             </div>
           )}
           {isIfElse && validateConditionNode(data as Record<string, any>) && (
@@ -175,7 +184,7 @@ function CustomNodeInner({ data, id }: NodeProps) {
           )}
           {!isIfElse && data?.condition && (
             <div className="text-[10px] truncate font-mono mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
-              {String(data.condition).slice(0, 30)}{String(data.condition).length > 30 ? '...' : ''}
+              <VariablePillText value={String(data.condition)} />
             </div>
           )}
           {data?.url && (
@@ -183,12 +192,12 @@ function CustomNodeInner({ data, id }: NodeProps) {
               <span className="px-1 rounded text-[8px] font-bold" style={{ backgroundColor: (HTTP_METHOD_COLORS[data.method || 'GET'] || HTTP_METHOD_COLORS.GET).bg, color: (HTTP_METHOD_COLORS[data.method || 'GET'] || HTTP_METHOD_COLORS.GET).text }}>
                 {data.method || 'GET'}
               </span>
-              <span style={{ color: 'var(--text-500, #666)' }} className="truncate">{data.url}</span>
+              <span style={{ color: 'var(--text-500, #666)' }} className="truncate"><VariablePillText value={String(data.url)} /></span>
             </div>
           )}
           {data?.message && nodeType === 'user-approval' && (
             <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
-              {data.message}
+              <VariablePillText value={String(data.message)} />
             </div>
           )}
           {data?.maxIterations && isWhile && (
@@ -201,6 +210,18 @@ function CustomNodeInner({ data, id }: NodeProps) {
           {data?.code && nodeType === 'transform' && (
             <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
               {String(data.code).split('\n').length} lines
+            </div>
+          )}
+          {nodeType === 'database' && data?.dataSource && (
+            <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
+              {data.dataSource === 'postgres'
+                ? `${data.connectionName || 'PostgreSQL'} · ${data.outputFormat || 'rows'}`
+                : `Documents · ${Array.isArray(data.documentIds) && data.documentIds.length ? `${data.documentIds.length} selected` : 'all'} · top ${data.topK || 5}`}
+            </div>
+          )}
+          {nodeType === 'web-source' && (data?.url || data?.searchQuery) && (
+            <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
+              {(data.fetchMode || 'fetch-url') === 'fetch-url' ? data.url : `Search: ${data.searchQuery}`}
             </div>
           )}
           {isUnconfigured && !execStatus && (
@@ -219,20 +240,6 @@ function CustomNodeInner({ data, id }: NodeProps) {
               <Handle type="source" position={Position.Right} id="else" className="!w-3 !h-3 !border-2 !top-[70%]" style={{ borderColor: NODE_COLORS.end, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
               <div className="absolute left-[calc(100%+8px)] top-[24%] text-[9px] font-semibold text-green-400 whitespace-nowrap">{String(data?.trueLabel || 'True')}</div>
               <div className="absolute left-[calc(100%+8px)] top-[64%] text-[9px] font-semibold text-red-400 whitespace-nowrap">{String(data?.falseLabel || 'False')}</div>
-              <button
-                type="button"
-                title="Add node on True branch"
-                className="absolute -right-[18px] top-[22%] w-4 h-4 rounded-full text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                style={{ backgroundColor: 'var(--bg-300)', color: NODE_COLORS.start, border: `1px solid ${NODE_COLORS.start}` }}
-                onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('ab-branch-quick-add', { detail: { nodeId: id, sourceHandle: 'if', x: e.clientX, y: e.clientY } })); }}
-              >+</button>
-              <button
-                type="button"
-                title="Add node on False branch"
-                className="absolute -right-[18px] top-[62%] w-4 h-4 rounded-full text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                style={{ backgroundColor: 'var(--bg-300)', color: NODE_COLORS.end, border: `1px solid ${NODE_COLORS.end}` }}
-                onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('ab-branch-quick-add', { detail: { nodeId: id, sourceHandle: 'else', x: e.clientX, y: e.clientY } })); }}
-              >+</button>
             </>
           ) : isWhile ? (
             <>
@@ -276,6 +283,16 @@ function isConfigured(nodeType: WorkflowNodeType, data: Record<string, any>): bo
     case 'guardrails': return !!(data.checks && (data.checks.pii || data.checks.moderation || data.checks.jailbreak));
     case 'arcade': return !!(data.arcadeTool && data.arcadeUserId);
     case 'user-approval': return !!(data.message) && data.message !== 'Approve to continue?';
+    case 'database': {
+      if (data.dataSource === 'postgres') return !!(data.connectionId && String(data.sql || '').trim());
+      if (data.dataSource === 'documents') return !!String(data.query || '').trim();
+      return false;
+    }
+    case 'web-source': {
+      const mode = data.fetchMode || 'fetch-url';
+      if (mode === 'fetch-url') return !!(data.url);
+      return !!(data.searchQuery);
+    }
     default: return true;
   }
 }

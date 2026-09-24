@@ -24,7 +24,7 @@ export const DEFAULT_TEMPERATURE = 0.7;
 export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
   start: { type: 'start', label: 'Start', color: NODE_COLORS.start, icon: 'play', category: 'flow', description: 'Workflow entry point', defaults: { inputVariables: [] } },
   end: { type: 'end', label: 'End', color: NODE_COLORS.end, icon: 'square', category: 'flow', description: 'Workflow completion' },
-  agent: { type: 'agent', label: 'Agent', color: NODE_COLORS.agent, icon: 'bot', category: 'ai', description: 'AI reasoning with LLM', defaults: { model: DEFAULT_AGENT_MODEL, systemPrompt: '', userPrompt: '', maxTokens: DEFAULT_MAX_TOKENS, temperature: DEFAULT_TEMPERATURE } },
+  agent: { type: 'agent', label: 'Agent', color: NODE_COLORS.agent, icon: 'bot', category: 'ai', description: 'AI reasoning with LLM', defaults: { model: DEFAULT_AGENT_MODEL, systemPrompt: '', userPrompt: '', maxTokens: DEFAULT_MAX_TOKENS, temperature: DEFAULT_TEMPERATURE, includeChatHistory: false, includeChatMemory: false, persistenceScope: 'conversation' } },
   mcp: { type: 'mcp', label: 'MCP Tool', color: NODE_COLORS.mcp, icon: 'wrench', category: 'ai', description: 'External tool call (Firecrawl, APIs)', defaults: { serverId: '', toolName: '', arguments: {} } },
   guardrails: { type: 'guardrails', label: 'Guardrails', color: NODE_COLORS.guardrails, icon: 'shield', category: 'ai', description: 'Content safety checks (PII, moderation, jailbreak)', defaults: { checks: { pii: true, moderation: true, jailbreak: true }, action: 'block' } },
   arcade: { type: 'arcade', label: 'Arcade Tool', color: NODE_COLORS.arcade, icon: 'gamepad', category: 'ai', description: 'Run an Arcade.dev action with authorization', defaults: { arcadeTool: '', arcadeUserId: 'workflow-builder', arcadeInput: {} } },
@@ -36,12 +36,14 @@ export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
   extract: { type: 'extract', label: 'Extract', color: NODE_COLORS.extract, icon: 'file-text', category: 'data', description: 'Extract fields from data', defaults: { fields: [] } },
   http: { type: 'http', label: 'HTTP Request', color: NODE_COLORS.http, icon: 'globe', category: 'io', description: 'Make HTTP API calls', defaults: { method: 'GET', url: '', headers: {}, body: '' } },
   note: { type: 'note', label: 'Note', color: NODE_COLORS.note, icon: 'sticky-note', category: 'flow', description: 'Sticky note for documentation', defaults: { text: '' } },
+  database: { type: 'database', label: 'Database / Document', color: NODE_COLORS.database, icon: 'book-open', category: 'data', description: 'Query PostgreSQL or retrieve uploaded documents.', defaults: { dataSource: '', connectionId: '', connectionName: '', sql: '', maxRows: 100, timeoutSeconds: 30, outputFormat: 'rows', includeColumns: true, allowSharedChat: false, documentIds: [], query: '', topK: 5, minScore: 0, documentOutputFormat: 'combined-text', includeMetadata: true } },
+  'web-source': { type: 'web-source', label: 'Outside Sources', color: NODE_COLORS['web-source'], icon: 'rss', category: 'io', description: 'Fetch web pages or search the internet', defaults: { fetchMode: 'fetch-url', url: '', extractMode: 'text', maxContentLength: 5000, searchQuery: '', maxResults: 5 } },
 };
 
 export const NODE_CATEGORIES = [
   { id: 'flow', label: 'Flow Control', types: ['start', 'end', 'note'] as WorkflowNodeType[] },
   { id: 'ai', label: 'AI & Tools', types: ['agent', 'mcp', 'arcade', 'guardrails'] as WorkflowNodeType[] },
   { id: 'logic', label: 'Logic', types: ['if-else', 'while', 'user-approval'] as WorkflowNodeType[] },
-  { id: 'data', label: 'Data', types: ['transform', 'set-state', 'extract'] as WorkflowNodeType[] },
-  { id: 'io', label: 'I/O', types: ['http'] as WorkflowNodeType[] },
+  { id: 'data', label: 'Data', types: ['transform', 'set-state', 'extract', 'database'] as WorkflowNodeType[] },
+  { id: 'io', label: 'I/O', types: ['http', 'web-source'] as WorkflowNodeType[] },
 ];

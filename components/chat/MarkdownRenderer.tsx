@@ -208,34 +208,29 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const codeString = getCodeString(children).replace(/\n$/, '');
             const lines = codeString.split('\n');
             const hasWinPath = /(?:[A-Z]:\\)/i.test(codeString) && codeString.split('\n').length <= 8;
-            const codeNode = (node as any)?.children?.[0];
-            const isHtmlBlock = codeNode?.properties?.className?.includes('language-html');
-            if (isHtmlBlock) return <>{children}</>;
             if (hasWinPath) {
               return (
-                <div className="my-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
-                  <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--bg-200)' }}>
-                    <span className="text-xs font-mono font-medium" style={{ color: 'var(--text-500)' }}>Path</span>
-                    <Button variant="ghost" size="sm" onClick={() => handleCopyCode(codeString, 'path')} title="Copy path">
+                <div className="code-block-shell my-4">
+                  <div className="code-block-toolbar flex items-center justify-between px-3 py-1.5">
+                    <span className="code-block-language">Path</span>
+                    <Button variant="ghost" size="sm" className="code-block-action h-7 px-2" onClick={() => handleCopyCode(codeString, 'path')} title="Copy path">
                       {copiedCode === 'path' ? <Check size={12} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={12} />}
                     </Button>
                   </div>
-                  <div className="px-4 py-3" style={{ background: 'var(--bg-100)' }}>
+                  <div className="code-block-content px-4 py-3">
                     {lines.map((line: string, i: number) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="select-none text-xs w-4 text-right flex-shrink-0" style={{ color: 'var(--text-500)' }}>{i + 1}</span>
-                        <code className="text-sm break-all" style={{ fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: isDark ? '#89b4fa' : '#1e66f5' }}>{line}</code>
+                        <code className="text-sm break-all" style={{ fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: 'var(--text-200)' }}>{line}</code>
                       </div>
                     ))}
                   </div>
                 </div>
               );
             }
-            return (
-              <div className="my-6 rounded-lg transition-all duration-300 min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
-                <pre {...props} className="neon-code-block-container">{children}</pre>
-              </div>
-            );
+            // The code renderer below owns the complete block shell. Returning
+            // its child directly prevents an invalid <pre><div><pre> tree.
+            return <>{children}</>;
           },
           code: ({ node, className, children, ...props }: any) => {
             const match = /language-(\w+)/.exec(className || '');
@@ -243,50 +238,49 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const codeString = String(children).replace(/\n$/, '');
             const isBlock = !match ? codeString.includes('\n') : true;
             const isCopied = copiedCode === language || (!language && copiedCode === 'text');
-            const headerBg = isDark ? 'bg-[var(--bg-200)]/95' : 'bg-[var(--bg-300)]/95';
-            const blockBg = isDark ? '#1e1e2e' : '#eff1f5';
+            const blockBg = 'var(--code-block-bg)';
             const codeTheme = isDark ? catppuccinMocha : catppuccinLatte;
 
             if (isBlock && language === 'html') {
               return (
-                <div className="my-4 rounded-lg overflow-hidden min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
-                  <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
-                    <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>html</span>
+                <div className="code-block-shell my-4">
+                  <div className="code-block-toolbar flex items-center justify-between px-3 py-1.5">
+                    <span className="code-block-language">html</span>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyCode(codeString, 'html')} title="Copy code">
+                      <Button variant="ghost" size="icon" className="code-block-action h-7 w-7" onClick={() => handleCopyCode(codeString, 'html')} title="Copy code">
                         {copiedCode === 'html' ? <Check size={13} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={13} />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadHtml(codeString)} title="Download HTML"><Download size={13} /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleFullscreenHtml(codeString)} title="Fullscreen"><Maximize2 size={13} /></Button>
+                      <Button variant="ghost" size="icon" className="code-block-action h-7 w-7" onClick={() => handleDownloadHtml(codeString)} title="Download HTML"><Download size={13} /></Button>
+                      <Button variant="ghost" size="icon" className="code-block-action h-7 w-7" onClick={() => handleFullscreenHtml(codeString)} title="Fullscreen"><Maximize2 size={13} /></Button>
                     </div>
                   </div>
-                  <SyntaxHighlighter language="html" style={codeTheme} customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
+                  <SyntaxHighlighter className="code-block-content" language="html" style={codeTheme} wrapLongLines customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: 0, fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' } }}>{codeString}</SyntaxHighlighter>
                 </div>
               );
             }
             if (isBlock && language) {
               return (
-                <div className="my-4 rounded-lg overflow-hidden min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
-                  <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
-                    <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>{language}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyCode(codeString, language)} title="Copy code">
+                <div className="code-block-shell my-4">
+                  <div className="code-block-toolbar flex items-center justify-between px-3 py-1.5">
+                    <span className="code-block-language">{language}</span>
+                    <Button variant="ghost" size="icon" className="code-block-action h-7 w-7" onClick={() => handleCopyCode(codeString, language)} title="Copy code">
                       {isCopied ? <Check size={13} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={13} />}
                     </Button>
                   </div>
-                  <SyntaxHighlighter language={language} style={codeTheme} customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' } }}>{codeString}</SyntaxHighlighter>
+                  <SyntaxHighlighter className="code-block-content" language={language} style={codeTheme} wrapLongLines customStyle={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: 0, fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }} codeTagProps={{ style: { fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' } }}>{codeString}</SyntaxHighlighter>
                 </div>
               );
             }
             if (isBlock) {
               return (
-                <div className="my-4 rounded-lg overflow-hidden min-w-0 max-w-full" style={{ border: '1px solid var(--border-300)' }}>
-                  <div className={`flex items-center justify-between px-4 py-2 ${headerBg} backdrop-blur-sm`}>
-                    <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>text</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyCode(codeString, 'text')} title="Copy code">
+                <div className="code-block-shell my-4">
+                  <div className="code-block-toolbar flex items-center justify-between px-3 py-1.5">
+                    <span className="code-block-language">text</span>
+                    <Button variant="ghost" size="icon" className="code-block-action h-7 w-7" onClick={() => handleCopyCode(codeString, 'text')} title="Copy code">
                       {isCopied ? <Check size={13} style={{ color: 'var(--neon-secondary)' }} /> : <Copy size={13} />}
                     </Button>
                   </div>
-                  <pre style={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: '0 0 0.5rem 0.5rem', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: isDark ? '#cdd6f4' : '#4c4f69', overflow: 'auto' }}>
+                  <pre className="code-block-content" style={{ margin: 0, padding: '1rem', background: blockBg, fontSize: 'var(--app-font-size, 15px)', borderRadius: 0, fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace', color: 'var(--text-200)', overflow: 'auto' }}>
                     <code style={{ fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>{codeString}</code>
                   </pre>
                 </div>

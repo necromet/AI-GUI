@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import {
   AlertTriangle, ArrowLeft, BookmarkPlus, CheckCircle2, Code, Download,
-  Eye, FileCode2, Globe2, Keyboard, LayoutDashboard, Maximize2, Network,
-  Redo2, Save, Share2, SlidersHorizontal, Undo2, Upload,
+  Eye, FileCode2, Keyboard, LayoutDashboard, Maximize2, Network,
+  Redo2, Save, Share2, SlidersHorizontal, Sparkles, Undo2, Upload,
 } from 'lucide-react';
 import { SEMANTIC_COLORS } from './shared/colors';
 import type { WorkflowHeaderControls } from './types';
@@ -58,6 +58,7 @@ export default function WorkflowHeaderBar({ controls: w }: { controls: WorkflowH
           <div className="w-px h-4 mx-0.5" style={{ background: 'var(--border-300)' }} />
           <IconButton label="Fit workflow to view" shortcut="F" onClick={w.onFitView}><Maximize2 size={14} /></IconButton>
           <IconButton label="Auto-arrange workflow" onClick={w.onAutoLayout}><LayoutDashboard size={14} /></IconButton>
+          <IconButton label="Tidy up workflow" shortcut="⇧ T" onClick={w.onTidyUp}><Sparkles size={14} /></IconButton>
           <IconButton label="Keyboard shortcuts" shortcut="?" onClick={w.onShowShortcuts}><Keyboard size={15} /></IconButton>
         </div>
 
@@ -97,7 +98,11 @@ export default function WorkflowHeaderBar({ controls: w }: { controls: WorkflowH
           </PopoverContent>
         </Popover>
 
-        {w.workflowId && <IconButton label="Publish workflow API" onClick={() => w.setShowPublish(true)}><Globe2 size={15} /></IconButton>}
+        {w.workflowId && (
+          <HeaderTip label="Create a public chat link or publish an API">
+            <button onClick={() => w.setShowPublish(true)} className="h-9 px-3 rounded-xl flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-all hover:-translate-y-px" style={{ color: 'var(--text-300)', ...groupStyle }}><Share2 size={14} />Share</button>
+          </HeaderTip>
+        )}
         <HeaderTip label="Save workflow" shortcut="Ctrl S">
           <button onClick={w.handleSave} disabled={w.saving} className="h-9 px-3.5 rounded-xl flex items-center gap-1.5 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-px" style={{ color: '#050505', background: 'var(--neon-color)', boxShadow: '0 8px 22px rgba(var(--neon-rgb),.2)' }}><Save size={14} />{w.saving ? 'Saving…' : 'Save'}</button>
         </HeaderTip>

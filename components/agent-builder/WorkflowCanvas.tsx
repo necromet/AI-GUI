@@ -34,8 +34,11 @@ import { validateWorkflow } from './validateWorkflow';
 import dagre from 'dagre';
 import { normalizeWorkflowGraph } from '../../lib/workflow/graph';
 import { toast } from 'sonner';
+import { AnimatePresence } from 'framer-motion';
+import InteractiveWorkflowEdge from './InteractiveWorkflowEdge';
 
 const nodeTypes = { custom: CustomNode };
+const edgeTypes = { interactive: InteractiveWorkflowEdge };
 
 interface Props {
   workflowId?: string;
@@ -52,7 +55,8 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
   const [workflowLoaded, setWorkflowLoaded] = useState(false);
   const [nodeContextMenu, setNodeContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
-  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; sourceNodeId?: string; sourceHandle?: 'if' | 'else' } | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const { getNodeStatus } = useExecutionStatus();
 
@@ -60,12 +64,12 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   const animatedEdges = edges.map(edge => {
     const sourceStatus = getNodeStatus(edge.source);
     if (sourceStatus?.status === 'running') {
-      return { ...edge, className: 'ab-edge-active', animated: true };
+      return { ...edge, type: 'interactive', selected: edge.id === selectedEdgeId, className: 'ab-edge-active', animated: true };
     }
     if (sourceStatus?.status === 'completed') {
-      return { ...edge, className: '', animated: false };
+      return { ...edge, type: 'interactive', selected: edge.id === selectedEdgeId, className: '', animated: false };
     }
-    return { ...edge, className: '', animated: edge.animated ?? true };
+    return { ...edge, type: 'interactive', selected: edge.id === selectedEdgeId, className: '', animated: edge.animated ?? true };
   });
   const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
   const [edgeLabelEdit, setEdgeLabelEdit] = useState<{ edgeId: string; label?: string; x: number; y: number } | null>(null);
@@ -127,24 +131,39 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       const branchLabel = sourceType === 'if-else'
         ? params.sourceHandle === 'else' ? String(sourceNode.data?.falseLabel || 'False') : String(sourceNode.data?.trueLabel || 'True')
         : undefined;
-      setEdges((eds) => addEdge({ ...params, animated: true, label: branchLabel }, eds));
+      setEdges((eds) => addEdge({ ...params, type: 'interactive', animated: true, label: branchLabel }, eds));
     },
     [setEdges, nodes, edges, undoRedo]
   );
 
   const onNodeClick = useCallback((_: any, node: Node) => {
+    setSelectedEdgeId(null);
+    setEdgeLabelEdit(null);
     setSelectedNode(node);
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    setSelectedEdgeId(null);
+    setEdgeLabelEdit(null);
     setNodeContextMenu(null);
     setCanvasContextMenu(null);
   }, []);
 
   const onEdgeClick = useCallback((_: any, edge: Edge) => {
+    _.stopPropagation();
+    setSelectedNode(null);
+    setSelectedEdgeId(edge.id);
     setEdgeLabelEdit({ edgeId: edge.id, label: edge.label as string | undefined, x: _.clientX, y: _.clientY });
   }, []);
+
+  const openEdgeEditor = useCallback((edgeId: string, x: number, y: number) => {
+    const edge = edges.find(item => item.id === edgeId);
+    if (!edge) return;
+    setSelectedNode(null);
+    setSelectedEdgeId(edgeId);
+    setEdgeLabelEdit({ edgeId, label: edge.label as string | undefined, x, y });
+  }, [edges]);
 
   const handleEdgeLabelUpdate = useCallback((edgeId: string, label: string) => {
     undoRedo.pushSnapshot(nodes, edges, 'Update edge label');
@@ -156,6 +175,14 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       setSelectedNode(current => current?.id === edge.source ? { ...current, data: { ...current.data, [key]: label } } : current);
     }
   }, [nodes, edges, undoRedo, setEdges, setNodes]);
+
+  const handleDeleteEdge = useCallback((edgeId: string) => {
+    if (!edges.some(edge => edge.id === edgeId)) return;
+    undoRedo.pushSnapshot(nodes, edges, 'Delete connection');
+    setEdges(current => current.filter(edge => edge.id !== edgeId));
+    setSelectedEdgeId(current => current === edgeId ? null : current);
+    setEdgeLabelEdit(current => current?.edgeId === edgeId ? null : current);
+  }, [nodes, edges, undoRedo, setEdges]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -260,31 +287,9 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
   }, [nodes, edges, undoRedo, setNodes, setEdges, selectedNode]);
 
   const handleAddNodeAtPosition = useCallback((type: WorkflowNodeType, clientX: number, clientY: number) => {
-    if (canvasContextMenu?.sourceNodeId && canvasContextMenu.sourceHandle) {
-      if (type === 'start' || type === 'note') {
-        toast.error(`${NODE_DEFINITIONS[type]?.label || type} cannot be a branch destination`);
-        return;
-      }
-      const source = nodes.find(node => node.id === canvasContextMenu.sourceNodeId);
-      if (!source) return;
-      if (edges.some(edge => edge.source === source.id && edge.sourceHandle === canvasContextMenu.sourceHandle)) {
-        toast.error('This branch already has a destination');
-        return;
-      }
-      undoRedo.pushSnapshot(nodes, edges, `Add ${NODE_DEFINITIONS[type]?.label || type} to branch`);
-      const yOffset = canvasContextMenu.sourceHandle === 'if' ? -90 : 90;
-      const newNode = createNode(type, { x: source.position.x + 260, y: source.position.y + yOffset });
-      const label = canvasContextMenu.sourceHandle === 'if' ? String(source.data?.trueLabel || 'True') : String(source.data?.falseLabel || 'False');
-      setNodes(current => [...current, newNode]);
-      setEdges(current => addEdge({ id: `edge_${source.id}_${canvasContextMenu.sourceHandle}_${newNode.id}`, source: source.id, sourceHandle: canvasContextMenu.sourceHandle, target: newNode.id, label, animated: true }, current));
-      setRecentNodeTypes(prev => [type, ...prev.filter(item => item !== type)].slice(0, 5));
-      setCanvasContextMenu(null);
-      requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
-      return;
-    }
     const position = screenToFlowPosition({ x: clientX, y: clientY });
     addNode(type, position);
-  }, [addNode, screenToFlowPosition, canvasContextMenu, nodes, edges, undoRedo, createNode, setNodes, setEdges, fitView]);
+  }, [addNode, screenToFlowPosition]);
 
   const handleCommandPaletteAdd = useCallback((type: WorkflowNodeType) => {
     const viewport = reactFlowWrapper.current?.getBoundingClientRect();
@@ -342,6 +347,88 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
     requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
   }, [nodes, edges, undoRedo, setNodes, fitView]);
 
+  const handleTidyUp = useCallback(() => {
+    if (nodes.length === 0) return;
+    undoRedo.pushSnapshot(nodes, edges, 'Tidy up');
+
+    const getNodeSize = (nodeType: string) => {
+      if (nodeType === 'start' || nodeType === 'end') return { width: 140, height: 64 };
+      if (nodeType === 'note') return { width: 220, height: 80 };
+      if (['if-else', 'while', 'user-approval'].includes(nodeType)) return { width: 180, height: 88 };
+      return { width: 180, height: 72 };
+    };
+
+    const graph = new dagre.graphlib.Graph();
+    graph.setDefaultEdgeLabel(() => ({}));
+    graph.setGraph({ rankdir: 'LR', ranksep: 140, nodesep: 80, marginx: 40, marginy: 40 });
+    nodes.forEach(node => {
+      const size = getNodeSize(node.data?.nodeType as string);
+      graph.setNode(node.id, size);
+    });
+    edges.forEach(edge => {
+      if (nodes.some(n => n.id === edge.source) && nodes.some(n => n.id === edge.target)) graph.setEdge(edge.source, edge.target);
+    });
+    dagre.layout(graph);
+
+    // Collect raw positions
+    let rawPositions = nodes.map(node => {
+      const point = graph.node(node.id);
+      const size = getNodeSize(node.data?.nodeType as string);
+      return {
+        id: node.id,
+        x: (point?.x ?? 0) - size.width / 2,
+        y: (point?.y ?? 0) - size.height / 2,
+      };
+    });
+
+    // Branch adjustments: true/approve/continue up, false/reject/break down
+    const BRANCH_OFFSET = 40;
+    const branchEdges = edges.filter(e =>
+      ['if', 'else', 'continue', 'break', 'approve', 'reject'].includes(String(e.sourceHandle))
+    );
+    for (const edge of branchEdges) {
+      const isUp = ['if', 'continue', 'approve'].includes(String(edge.sourceHandle));
+      const target = rawPositions.find(p => p.id === edge.target);
+      if (target) target.y += isUp ? -BRANCH_OFFSET : BRANCH_OFFSET;
+    }
+
+    // Snap to 20px grid
+    const GRID = 20;
+    rawPositions = rawPositions.map(p => ({
+      ...p,
+      x: Math.round(p.x / GRID) * GRID,
+      y: Math.round(p.y / GRID) * GRID,
+    }));
+
+    // Collision resolution
+    rawPositions.sort((a, b) => a.x - b.x || a.y - b.y);
+    for (let i = 1; i < rawPositions.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const a = rawPositions[j], b = rawPositions[i];
+        if (Math.abs(a.x - b.x) < 160 && Math.abs(a.y - b.y) < 70) {
+          b.y = Math.round((a.y + 90) / GRID) * GRID;
+        }
+      }
+    }
+
+    // Center the layout
+    const minX = Math.min(...rawPositions.map(p => p.x));
+    const maxX = Math.max(...rawPositions.map(p => p.x));
+    const minY = Math.min(...rawPositions.map(p => p.y));
+    const maxY = Math.max(...rawPositions.map(p => p.y));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    rawPositions = rawPositions.map(p => ({ ...p, x: p.x - cx, y: p.y - cy }));
+
+    // Apply positions
+    const positionMap = new Map(rawPositions.map(p => [p.id, p]));
+    setNodes(current => current.map(node => {
+      const pos = positionMap.get(node.id);
+      return pos ? { ...node, position: { x: pos.x, y: pos.y } } : node;
+    }));
+    requestAnimationFrame(() => fitView({ padding: 0.2, duration: 300 }));
+  }, [nodes, edges, undoRedo, setNodes, fitView]);
+
   const handleFocusIssue = useCallback((nodeId?: string) => {
     if (!nodeId) return;
     const node = nodes.find(item => item.id === nodeId);
@@ -356,23 +443,23 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       const detail = (e as CustomEvent).detail;
       setCanvasContextMenu({ x: detail.x, y: detail.y });
     };
-    const handleBranchQuickAdd = (e: Event) => {
+    const handleEdgeActivate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      setCanvasContextMenu({ x: detail.x, y: detail.y, sourceNodeId: detail.nodeId, sourceHandle: detail.sourceHandle });
+      openEdgeEditor(detail.edgeId, detail.x, detail.y);
     };
     const handleRename = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       updateNodeData(detail.nodeId, { label: detail.label });
     };
     window.addEventListener('ab-quick-add', handleQuickAdd);
-    window.addEventListener('ab-branch-quick-add', handleBranchQuickAdd);
+    window.addEventListener('ab-edge-activate', handleEdgeActivate);
     window.addEventListener('ab-rename-node', handleRename);
     return () => {
       window.removeEventListener('ab-quick-add', handleQuickAdd);
-      window.removeEventListener('ab-branch-quick-add', handleBranchQuickAdd);
+      window.removeEventListener('ab-edge-activate', handleEdgeActivate);
       window.removeEventListener('ab-rename-node', handleRename);
     };
-  }, [updateNodeData]);
+  }, [updateNodeData, openEdgeEditor]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -426,11 +513,17 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedEdgeId) {
+          handleDeleteEdge(selectedEdgeId);
+          return;
+        }
         handleDeleteSelected();
         return;
       }
       if (e.key === 'Escape') {
         setSelectedNode(null);
+        setSelectedEdgeId(null);
+        setEdgeLabelEdit(null);
         setNodeContextMenu(null);
         setCanvasContextMenu(null);
         return;
@@ -439,10 +532,15 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
         handleFitView();
         return;
       }
+      if (e.key === 'T' && e.shiftKey && !isInput && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleTidyUp();
+        return;
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, shortcutOverlayOpen, undoRedo, nodes, edges, setNodes, setEdges, handleSelectAll, handleDeleteSelected, handleDuplicateSelected, handleFitView]);
+  }, [commandPaletteOpen, shortcutOverlayOpen, undoRedo, nodes, edges, setNodes, setEdges, handleSelectAll, handleDeleteSelected, handleDuplicateSelected, handleFitView, handleTidyUp, selectedEdgeId, handleDeleteEdge]);
 
   const validationIssues = validateWorkflow(nodes, edges);
 
@@ -470,6 +568,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
             onRedo={() => undoRedo.redo(nodes, edges, setNodes, setEdges)}
             onFitView={handleFitView}
             onAutoLayout={handleAutoLayout}
+            onTidyUp={handleTidyUp}
             onFocusIssue={handleFocusIssue}
             validationIssues={validationIssues}
             onShowShortcuts={() => setShortcutOverlayOpen(true)}
@@ -492,6 +591,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
               onDrop={onDrop}
               onNodeDragStart={() => undoRedo.pushSnapshot(nodes, edges, 'Move node')}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               fitView
               colorMode="dark"
               multiSelectionKeyCode="Shift"
@@ -535,25 +635,39 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
               <EdgeLabelModal
                 edgeId={edgeLabelEdit.edgeId}
                 label={edgeLabelEdit.label}
+                sourceLabel={String(nodes.find(node => node.id === edges.find(edge => edge.id === edgeLabelEdit.edgeId)?.source)?.data?.label || 'Source')}
+                targetLabel={String(nodes.find(node => node.id === edges.find(edge => edge.id === edgeLabelEdit.edgeId)?.target)?.data?.label || 'Target')}
+                branchName={(() => {
+                  const edge = edges.find(item => item.id === edgeLabelEdit.edgeId);
+                  if (!edge?.sourceHandle) return undefined;
+                  if (edge.sourceHandle === 'if') return 'True';
+                  if (edge.sourceHandle === 'else') return 'False';
+                  return String(edge.sourceHandle);
+                })()}
                 x={edgeLabelEdit.x}
                 y={edgeLabelEdit.y}
                 onUpdateLabel={handleEdgeLabelUpdate}
+                onDelete={handleDeleteEdge}
                 onClose={() => setEdgeLabelEdit(null)}
               />
             )}
           </div>
         </div>
-        {selectedNode && (
-          <NodeSettingsPanel
-            node={selectedNode}
-            onUpdate={(data) => updateNodeData(selectedNode.id, data)}
-            onClose={() => setSelectedNode(null)}
-            upstreamNodes={nodes
-              .filter(n => n.id !== selectedNode.id && !['note', 'start'].includes(n.data?.nodeType as string))
-              .map(n => ({ id: n.id, label: (n.data?.label as string) || (n.data?.nodeType as string) || n.id }))
-            }
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {selectedNode && (
+            <NodeSettingsPanel
+              key={selectedNode.id}
+              node={selectedNode}
+              onUpdate={(data) => updateNodeData(selectedNode.id, data)}
+              onClose={() => setSelectedNode(null)}
+              onDelete={handleDeleteNode}
+              upstreamNodes={nodes
+                .filter(n => n.id !== selectedNode.id && !['note', 'start'].includes(n.data?.nodeType as string))
+                .map(n => ({ id: n.id, label: (n.data?.label as string) || (n.data?.nodeType as string) || n.id }))
+              }
+            />
+          )}
+        </AnimatePresence>
         <CommandPalette
           isOpen={commandPaletteOpen}
           onClose={() => setCommandPaletteOpen(false)}

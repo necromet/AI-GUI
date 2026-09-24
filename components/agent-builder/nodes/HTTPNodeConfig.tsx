@@ -8,8 +8,9 @@ import {
 } from '../shared/ThemedSelect';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HTTP_METHOD_COLORS } from '../shared/colors';
+import VariableAutocomplete from '../VariableAutocomplete';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; upstreamNodes?: { id: string; label: string }[]; accentColor?: string; }
 
 const METHOD_BADGE_STYLE = (method: string) => {
   const colors = HTTP_METHOD_COLORS[method as keyof typeof HTTP_METHOD_COLORS];
@@ -17,7 +18,7 @@ const METHOD_BADGE_STYLE = (method: string) => {
   return { backgroundColor: colors.bg, color: colors.text };
 };
 
-export default function HTTPNodeConfig({ data, onUpdate }: Props) {
+export default function HTTPNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
   const authType = data.authType || 'none';
   const method = data.method || 'GET';
 
@@ -64,12 +65,11 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
         </div>
         <div className="col-span-2">
           <label className={fieldClasses.label} style={FIELD_STYLES.label}>URL</label>
-          <input
+          <VariableAutocomplete
             value={data.url || data.httpUrl || ''}
-            onChange={e => onUpdate({ url: e.target.value, httpUrl: e.target.value })}
+            onChange={value => onUpdate({ url: value, httpUrl: value })}
             placeholder="https://api.example.com/..."
-            className={fieldClasses.input}
-            style={FIELD_STYLES.input}
+            upstreamNodes={upstreamNodes}
           />
         </div>
       </div>
@@ -106,12 +106,11 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
             transition={{ duration: 0.2 }}
           >
             <label className={fieldClasses.label} style={FIELD_STYLES.label}>Token</label>
-            <input
+            <VariableAutocomplete
               value={data.authToken || ''}
-              onChange={e => onUpdate({ authToken: e.target.value })}
+              onChange={value => onUpdate({ authToken: value })}
               placeholder="{{token}} or direct value"
-              className={fieldClasses.input}
-              style={FIELD_STYLES.input}
+              upstreamNodes={upstreamNodes}
             />
           </motion.div>
         )}
@@ -127,21 +126,19 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
           >
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>Header Name</label>
-              <input
+              <VariableAutocomplete
                 value={data.apiKeyHeader || 'X-API-Key'}
-                onChange={e => onUpdate({ apiKeyHeader: e.target.value })}
-                className={fieldClasses.input}
-                style={FIELD_STYLES.input}
+                onChange={value => onUpdate({ apiKeyHeader: value })}
+                upstreamNodes={upstreamNodes}
               />
             </div>
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>API Key</label>
-              <input
+              <VariableAutocomplete
                 value={data.apiKey || ''}
-                onChange={e => onUpdate({ apiKey: e.target.value })}
+                onChange={value => onUpdate({ apiKey: value })}
                 placeholder="{{apiKey}} or direct value"
-                className={fieldClasses.input}
-                style={FIELD_STYLES.input}
+                upstreamNodes={upstreamNodes}
               />
             </div>
           </motion.div>
@@ -158,21 +155,19 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
           >
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>Username</label>
-              <input
+              <VariableAutocomplete
                 value={data.basicUser || ''}
-                onChange={e => onUpdate({ basicUser: e.target.value })}
-                className={fieldClasses.input}
-                style={FIELD_STYLES.input}
+                onChange={value => onUpdate({ basicUser: value })}
+                upstreamNodes={upstreamNodes}
               />
             </div>
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>Password</label>
-              <input
+              <VariableAutocomplete
                 type="password"
                 value={data.basicPassword || ''}
-                onChange={e => onUpdate({ basicPassword: e.target.value })}
-                className={fieldClasses.input}
-                style={FIELD_STYLES.input}
+                onChange={value => onUpdate({ basicPassword: value })}
+                upstreamNodes={upstreamNodes}
               />
             </div>
           </motion.div>
@@ -184,13 +179,13 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
       </div>
       <div>
         <label className={fieldClasses.label} style={FIELD_STYLES.label}>Headers (JSON)</label>
-        <textarea
+        <VariableAutocomplete
           value={typeof data.headers === 'string' ? data.headers : JSON.stringify(data.headers || {}, null, 2)}
-          onChange={e => { try { onUpdate({ headers: JSON.parse(e.target.value) }); } catch { onUpdate({ headers: e.target.value }); } }}
+          onChange={value => { try { onUpdate({ headers: JSON.parse(value) }); } catch { onUpdate({ headers: value }); } }}
           placeholder='{"Authorization": "Bearer {{token}}"}'
+          multiline
           rows={3}
-          className={fieldClasses.textarea}
-          style={FIELD_STYLES.input}
+          upstreamNodes={upstreamNodes}
         />
       </div>
       {method !== 'GET' && (
@@ -200,12 +195,12 @@ export default function HTTPNodeConfig({ data, onUpdate }: Props) {
           </div>
           <div>
             <label className={fieldClasses.label} style={FIELD_STYLES.label}>Body</label>
-            <textarea
+            <VariableAutocomplete
               value={typeof data.body === 'string' ? data.body : JSON.stringify(data.body || '', null, 2)}
-              onChange={e => onUpdate({ body: e.target.value })}
+              onChange={value => onUpdate({ body: value })}
+              multiline
               rows={4}
-              className={fieldClasses.textarea}
-              style={FIELD_STYLES.input}
+              upstreamNodes={upstreamNodes}
             />
           </div>
         </>

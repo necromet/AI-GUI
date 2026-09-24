@@ -1,7 +1,7 @@
 export const WORKFLOW_NODE_TYPES = [
   'start', 'end', 'agent', 'mcp', 'guardrails', 'arcade',
   'if-else', 'while', 'user-approval', 'transform', 'set-state',
-  'extract', 'http', 'note',
+  'extract', 'http', 'note', 'database', 'web-source',
 ] as const;
 
 export type WorkflowNodeType = typeof WORKFLOW_NODE_TYPES[number];
@@ -58,6 +58,7 @@ export interface WorkflowEdge {
   targetHandle?: string;
   label?: string;
   animated?: boolean;
+  type?: 'interactive' | string;
 }
 
 export interface WorkflowGraph {

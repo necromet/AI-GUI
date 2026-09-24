@@ -98,7 +98,7 @@ export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ block, blockIdx, m
           >
             <ToolIcon size={14} style={{ color: toolMeta.color }} />
           </span>
-          <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-100)', fontFamily: 'var(--font-sans)' }}>
+          <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-100)', fontFamily: 'var(--app-font-family, var(--font-sans))' }}>
             {formatToolName(block.name)}
           </span>
           <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
@@ -155,7 +155,7 @@ export const AgentPlanBlock: React.FC<AgentPlanBlockProps> = ({ block, taskStatu
         <span className="flex items-center justify-center rounded-lg" style={{ width: 22, height: 22, backgroundColor: 'rgba(167,139,250,0.12)' }}>
           <ListTodo size={12} style={{ color: '#a78bfa' }} />
         </span>
-        <span className="text-[11px] font-semibold" style={{ color: '#a78bfa', fontFamily: 'var(--font-sans)' }}>Agent Plan</span>
+        <span className="text-[11px] font-semibold" style={{ color: '#a78bfa', fontFamily: 'var(--app-font-family, var(--font-sans))' }}>Agent Plan</span>
       </div>
       <div className="px-3 pb-2"><AgentPlan tasks={block.tasks} taskStatuses={taskStatuses} /></div>
     </div>
@@ -186,7 +186,7 @@ export const AskUserBlock: React.FC<AskUserBlockProps> = ({ block }) => (
         <span className="flex items-center justify-center rounded-lg" style={{ width: 22, height: 22, backgroundColor: 'rgba(var(--neon-rgb), 0.1)' }}>
           <MessageCircleQuestion size={12} style={{ color: 'var(--neon-color)' }} />
         </span>
-        <span className="text-[11px] font-semibold" style={{ color: 'var(--neon-color)', fontFamily: 'var(--font-sans)' }}>Question</span>
+        <span className="text-[11px] font-semibold" style={{ color: 'var(--neon-color)', fontFamily: 'var(--app-font-family, var(--font-sans))' }}>Question</span>
       </div>
       <div className="px-3 py-2 text-xs" style={{ color: 'var(--neon-color)' }}>{block.question}</div>
     </div>

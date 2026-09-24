@@ -9,6 +9,8 @@ export interface RAGChunk {
   embedding: number[];
   startIndex: number;
   endIndex: number;
+  score?: number;
+  documentName?: string;
 }
 
 export interface RAGDocument {
@@ -84,8 +86,16 @@ export async function deleteDocument(docId: string): Promise<boolean> {
   return result.rowCount > 0;
 }
 
-export async function retrieveRelevantChunks(query: string, topK: number = 5): Promise<RAGChunk[]> {
-  const rows = await getAll('SELECT * FROM rag_chunks');
+export async function retrieveRelevantChunks(
+  query: string,
+  topKOrOptions: number | { topK?: number; documentIds?: string[]; minScore?: number } = 5,
+): Promise<RAGChunk[]> {
+  const options = typeof topKOrOptions === 'number' ? { topK: topKOrOptions } : topKOrOptions;
+  const topK = Math.max(1, Math.min(options.topK ?? 5, 20));
+  const documentIds = Array.isArray(options.documentIds) ? [...new Set(options.documentIds.filter(Boolean))] : [];
+  const rows = documentIds.length > 0
+    ? await getAll('SELECT c.*, d.name AS document_name FROM rag_chunks c JOIN rag_documents d ON d.id = c.document_id WHERE c.document_id = ANY($1)', [documentIds])
+    : await getAll('SELECT c.*, d.name AS document_name FROM rag_chunks c JOIN rag_documents d ON d.id = c.document_id');
   if (rows.length === 0) return [];
 
   const queryEmbedding = await getEmbedding(query);
@@ -97,6 +107,7 @@ export async function retrieveRelevantChunks(query: string, topK: number = 5): P
     embedding: safeJsonParse(r.embedding, []),
     startIndex: r.start_index,
     endIndex: r.end_index,
+    documentName: r.document_name,
   }));
 
   const scored = chunks.map(chunk => ({
@@ -105,7 +116,8 @@ export async function retrieveRelevantChunks(query: string, topK: number = 5): P
   }));
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK).map(s => s.chunk);
+  const minScore = Math.max(0, Math.min(options.minScore ?? 0, 1));
+  return scored.filter(item => item.score >= minScore).slice(0, topK).map(item => ({ ...item.chunk, score: item.score }));
 }
 
 export function buildRAGSystemPrompt(chunks: RAGChunk[]): string {

@@ -33,6 +33,7 @@ import { SEMANTIC_COLORS } from './components/agent-builder/shared/colors';
 import type { WorkflowHeaderControls, WorkflowListHeaderControls } from './components/agent-builder/AgentBuilderMode';
 import WorkflowHeaderBar from './components/agent-builder/WorkflowHeaderBar';
 import AgentBuilderListHeader from './components/agent-builder/AgentBuilderListHeader';
+import SharedWorkflowChat from './components/agent-builder/SharedWorkflowChat';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
@@ -221,7 +222,7 @@ const App: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('none');
   const themeSettings = useThemeSettings();
-  const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, neonColor, setNeonColor, neonPreset, setNeonPreset, themePreset, setThemePreset, maxOutputTokens, setMaxOutputTokens } = themeSettings;
+  const { theme, setTheme, designSystem, setDesignSystem, fontSize, setFontSize, fontFamily, setFontFamily, neonColor, setNeonColor, neonPreset, setNeonPreset, themePreset, setThemePreset, maxOutputTokens, setMaxOutputTokens } = themeSettings;
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [defaultModelId, setDefaultModelId] = useState<string>(() => {
     return localStorage.getItem('edward:labs_defaultModel') || DEFAULT_MODELS[0].id;
@@ -990,10 +991,25 @@ const App: React.FC = () => {
     </div>
   );
 
+  const sharedChatMatch = location.pathname.match(/^\/share\/([^/]+)\/?$/);
+  if (sharedChatMatch) {
+    return (
+      <>
+        <SharedWorkflowChat
+          key={sharedChatMatch[1]}
+          token={decodeURIComponent(sharedChatMatch[1])}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        />
+        <Toaster position="bottom-center" />
+      </>
+    );
+  }
+
   if (auth.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0f172a' }}>
-        <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center" style={{ background: 'var(--bg-0)' }}>
+        <div className="w-6 h-6 border-2 border-[var(--border-200)] border-t-[var(--neon-color)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -1096,6 +1112,8 @@ const App: React.FC = () => {
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              designSystem={designSystem}
+              onChangeDesignSystem={setDesignSystem}
               neonColor={neonColor}
               onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
               neonPreset={neonPreset}
@@ -1431,18 +1449,19 @@ const App: React.FC = () => {
           >
 
             <Splitter.Panel id="chat" className="flex flex-col h-full min-h-0">
-              <div className="flex items-center justify-between px-4 py-2 shrink-0" style={{ background: 'var(--bg-200)', borderBottom: '1px solid var(--border-200)' }}>
-                <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>html</span>
+              <div className="code-block-toolbar flex items-center justify-between px-4 py-2 shrink-0">
+                <span className="code-block-language">html source</span>
               </div>
               <div className="flex-1 overflow-auto">
                 <SyntaxHighlighter
+                  className="code-block-content"
                   language="html"
                   style={theme === 'dark' ? catppuccinMocha : catppuccinLatte}
                   wrapLongLines={true}
                   customStyle={{
                     margin: 0,
                     padding: '1rem',
-                    background: theme === 'dark' ? '#1e1e2e' : '#eff1f5',
+                    background: 'var(--code-block-bg)',
                     fontSize: '12px',
                     borderRadius: 0,
                     fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',

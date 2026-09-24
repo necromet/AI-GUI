@@ -4,8 +4,9 @@ import { ThemedSelect, ThemedSelectTrigger, ThemedSelectValue, ThemedSelectConte
 import { ThemedTooltip, ThemedTooltipTrigger, ThemedTooltipContent, ThemedTooltipProvider } from '../shared/ThemedTooltip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Loader2 } from 'lucide-react';
+import VariableAutocomplete from '../VariableAutocomplete';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; upstreamNodes?: { id: string; label: string }[]; accentColor?: string; }
 
 const FIRECRAWL_ACTIONS = [
   { value: 'scrape', label: 'Scrape', desc: 'Extract content from a single URL' },
@@ -15,7 +16,7 @@ const FIRECRAWL_ACTIONS = [
   { value: 'map', label: 'Map', desc: 'Discover all URLs on a website' },
 ];
 
-export default function MCPNodeConfig({ data, onUpdate }: Props) {
+export default function MCPNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [argumentsText, setArgumentsText] = useState(JSON.stringify(data.arguments || {}, null, 2));
@@ -77,9 +78,9 @@ export default function MCPNodeConfig({ data, onUpdate }: Props) {
             </div>
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>URL</label>
-              <input value={data.scrapeUrl || data.url || ''} onChange={event => onUpdate({ scrapeUrl: event.target.value, url: event.target.value })} placeholder="{{input.url}} or https://..." className={fieldClasses.input} style={FIELD_STYLES.input} />
+              <VariableAutocomplete value={data.scrapeUrl || data.url || ''} onChange={value => onUpdate({ scrapeUrl: value, url: value })} placeholder="{{input.url}} or https://..." upstreamNodes={upstreamNodes} />
             </div>
-            <AnimatePresence>{action === 'search' && <motion.div key="search-query" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}><label className={fieldClasses.label} style={FIELD_STYLES.label}>Search query</label><input value={data.searchQuery || ''} onChange={event => onUpdate({ searchQuery: event.target.value })} placeholder="{{input.query}}" className={fieldClasses.input} style={FIELD_STYLES.input} /></motion.div>}</AnimatePresence>
+            <AnimatePresence>{action === 'search' && <motion.div key="search-query" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}><label className={fieldClasses.label} style={FIELD_STYLES.label}>Search query</label><VariableAutocomplete value={data.searchQuery || ''} onChange={value => onUpdate({ searchQuery: value })} placeholder="{{input.query}}" upstreamNodes={upstreamNodes} /></motion.div>}</AnimatePresence>
           </>
         ) : (
           <>
@@ -92,7 +93,7 @@ export default function MCPNodeConfig({ data, onUpdate }: Props) {
             </div>
             <div>
               <label className={fieldClasses.label} style={FIELD_STYLES.label}>Arguments (JSON)</label>
-              <textarea value={argumentsText} onChange={event => { setArgumentsText(event.target.value); try { onUpdate({ arguments: JSON.parse(event.target.value) }); setArgumentsError(false); } catch { setArgumentsError(true); } }} rows={7} className={fieldClasses.textarea} style={FIELD_STYLES.input} />
+              <VariableAutocomplete value={argumentsText} onChange={value => { setArgumentsText(value); try { onUpdate({ arguments: JSON.parse(value) }); setArgumentsError(false); } catch { setArgumentsError(true); } }} multiline rows={7} upstreamNodes={upstreamNodes} />
               {argumentsError && <p className="text-[10px] text-red-400 mt-1">Enter valid JSON before running.</p>}
             </div>
           </>

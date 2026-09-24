@@ -37,6 +37,8 @@
   --radius: 0.5rem;
 
   --font-sans: 'Plus Jakarta Sans', 'Google Sans', 'Open Sans', 'Fredoka', 'Comfortaa', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Source Code Pro', 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-serif: 'Playfair Display', 'Lora', 'Merriweather', 'Source Serif 4', 'Libre Baskerville', 'EB Garamond', 'Fraunces', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
 
   --animate-shake: shake 0.5s ease-in-out;
   --animate-fade-in: fade-in 0.3s ease-out forwards;
@@ -196,6 +198,7 @@
   --neon-accent: rgb(192, 132, 252);
   --app-font-size: 17px;
   --app-font-family: 'Plus Jakarta Sans', 'Google Sans', 'Open Sans', 'Fredoka', 'Comfortaa', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+  --app-code-font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Source Code Pro', 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
   --surface-hover: rgba(0,0,0,0.05);
 
@@ -290,16 +293,50 @@ html.dark {
 
 html {
   font-size: var(--app-font-size, 15px);
-  font-family: var(--app-font-family);
+  font-family: var(--app-font-family) !important;
 }
 
 
 body {
   background-color: var(--bg-100, #fcfcfc);
   color: var(--text-100, #2b2b2b);
-  font-family: var(--app-font-family);
+  font-family: inherit !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Force selected app font across UI; restore intentional mono/icon faces */
+#root,
+#root *,
+#root *::before,
+#root *::after {
+  font-family: inherit !important;
+}
+
+#root code,
+#root pre,
+#root kbd,
+#root samp,
+#root .font-mono,
+#root [class*='font-mono'],
+#root .code-block-content,
+#root .code-block-language {
+  font-family: var(--app-code-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
+}
+
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp,
+.material-symbols-outlined-filled {
+  font-family: 'Material Symbols Outlined' !important;
+}
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit !important;
 }
 
 html.dark body {
@@ -311,12 +348,109 @@ button {
   cursor: pointer;
 }
 
+/*
+ * Superellipse is the app-wide corner language. Border radius still defines
+ * each corner's size; corner-shape replaces the circular arc with a squircle.
+ * Keeping this global also covers inline styles and third-party components.
+ */
+*,
+*::before,
+*::after {
+  corner-shape: superellipse(2);
+}
+
+/*
+ * Terminal design system
+ * Inspired by the supplied two-colour TUI reference. It is deliberately a
+ * root-level skin so every feature, including portal-rendered dialogs and
+ * menus, inherits the same visual language. The existing Edward system stays
+ * untouched and can be restored from Settings > Appearance.
+ */
+html[data-design-system='terminal'] {
+  --card-shadow: 3px 3px 0 color-mix(in srgb, var(--bg-0) 82%, black) !important;
+  --card-shadow-hover: 4px 4px 0 color-mix(in srgb, var(--bg-0) 76%, black) !important;
+  --card-highlight: inset 0 1px 0 color-mix(in srgb, var(--text-100) 7%, transparent) !important;
+  --radius: 0.25rem;
+  color-scheme: dark;
+}
+
+html[data-design-system='terminal']:not(.dark) {
+  color-scheme: light;
+}
+
+html[data-design-system='terminal'] body {
+  letter-spacing: -0.012em;
+}
+
+html[data-design-system='terminal'] body::before,
+html[data-design-system='terminal'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+html[data-design-system='terminal'] body::before {
+  background-image: radial-gradient(var(--border-300) 0.75px, transparent 0.75px);
+  background-size: 18px 18px;
+  opacity: 0.12;
+}
+
+html[data-design-system='terminal'] body::after {
+  background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.1) 50%);
+  background-size: 100% 4px;
+  opacity: 0.14;
+}
+
+html[data-design-system='terminal'] :where(.rounded-md, .rounded-lg) {
+  border-radius: 0.25rem !important;
+  corner-shape: superellipse(1.35);
+}
+
+html[data-design-system='terminal'] :where(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 0.375rem !important;
+  corner-shape: superellipse(1.35);
+}
+
+html[data-design-system='terminal'] :where(button, input, textarea, select, [role='dialog'], [role='menu'], [role='listbox']) {
+  letter-spacing: 0.01em;
+}
+
+html[data-design-system='terminal'] :where(input, textarea, select) {
+  box-shadow: inset 0 0 0 1px rgba(var(--neon-rgb), 0.025);
+}
+
+html[data-design-system='terminal'] ::selection {
+  background: rgba(var(--neon-secondary-rgb), 0.65);
+  color: var(--bg-0);
+}
+
 * {
   scrollbar-color: #d4d4d4 #f5f5f5;
 }
 
 html.dark * {
   scrollbar-color: #3a3a3a transparent;
+}
+
+/*
+ * Structural dividers are overlays so scroll surfaces and opaque child
+ * backgrounds cannot cover isolated sections of the line.
+ */
+.structural-divider-right {
+  position: relative;
+}
+
+.structural-divider-right::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 100;
+  width: 1px;
+  background-color: var(--border-300);
+  pointer-events: none;
 }
 
 ::-webkit-scrollbar {
@@ -353,8 +487,8 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 }
 
 .prose pre {
-  background-color: #1e1e2e !important;
-  border: 1px solid rgba(255,255,255,0.06);
+  background-color: var(--code-block-bg, #1e1e2e) !important;
+  border: 0;
   border-radius: 0.5rem;
   padding: 1rem;
   margin-top: 1rem;
@@ -363,58 +497,100 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 }
 
 html:not(.dark) .prose pre {
-  background-color: #eff1f5 !important;
-  border: 1px solid rgba(0,0,0,0.06);
+  background-color: var(--code-block-bg, #eff1f5) !important;
 }
 
-.prose .neon-code-block-container {
-  background-color: transparent !important;
-  border: none;
-  border-radius: 1rem;
-  padding-top: 1.5rem;
-  padding-bottom: 0rem;
-  padding-right: 0rem;
-  padding-left: 0rem;
-  box-shadow: none;
-  transition: all 0.3s ease;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background: #1e1e2e !important;
-  margin: 0 !important;
+:root {
+  --code-block-bg: #f1f0ed;
+  --code-block-header: color-mix(in srgb, var(--bg-300) 72%, transparent);
+}
+
+html.dark {
+  --code-block-bg: #171923;
+  --code-block-header: color-mix(in srgb, var(--bg-300) 64%, transparent);
+}
+
+.code-block-shell {
+  position: relative;
   max-width: 100%;
   min-width: 0;
+  overflow: hidden;
+  border-radius: 0.625rem;
+  background: var(--code-block-bg);
+  box-shadow: inset 0 0 0 1px var(--border-200);
 }
 
-.prose .neon-code-block-container code {
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  max-width: 100%;
+.code-block-toolbar {
+  min-height: 2.25rem;
+  background: var(--code-block-header);
 }
 
-.prose .neon-code-block-container pre[class*="language-"],
-.prose .neon-code-block-container code[class*="language-"] {
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  max-width: 100%;
+.code-block-language {
+  color: var(--text-400);
+  font-family: var(--app-code-font-family, 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
-html:not(.dark) .prose .neon-code-block-container {
-  background: #eff1f5 !important;
+.code-block-action {
+  color: var(--text-400);
 }
 
-.code-block-wrapper:hover .neon-code-block-container {
-  background: #1e1e2e !important;
+.code-block-action:hover {
+  color: var(--text-100);
+  background: var(--surface-hover);
 }
 
-html:not(.dark) .code-block-wrapper:hover .neon-code-block-container {
-  background: #eff1f5 !important;
+.code-block-content {
+  background: var(--code-block-bg) !important;
+  color: var(--text-200) !important;
+  scrollbar-gutter: stable;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.code-block-content code,
+.code-block-content span {
+  white-space: inherit !important;
+  overflow-wrap: inherit !important;
+  word-break: inherit !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.prose .code-block-content code {
+  display: block;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-decoration-break: slice;
+  -webkit-box-decoration-break: slice;
+}
+
+.code-block-shell ::selection {
+  background: var(--bg-400);
+  color: inherit;
+}
+
+html[data-design-system='terminal'] .code-block-shell {
+  border-radius: 0.25rem;
+  box-shadow: inset 0 0 0 1px var(--border-300);
 }
 
 .prose pre[class*="language-"] {
   margin: 0 !important;
   border-radius: 0.5rem !important;
+}
+
+.prose pre.code-block-content {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
 }
 .prose code {
   background-color: rgba(var(--neon-rgb), 0.08);
@@ -798,6 +974,7 @@ html.dark .skema-outline-variant { border-color: #4d4354; }
 .react-flow__node {
   border: none !important;
   box-shadow: none !important;
+  cursor: pointer !important;
 }
 
 .react-flow__edge-path {
@@ -911,7 +1088,7 @@ html:not(.dark) .react-flow__edge-path {
   border-radius: 0.25rem;
   padding: 0.15em 0.4em;
   font-size: 0.875em;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--app-code-font-family, 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace);
 }
 
 html:not(.dark) .tiptap-editor code {
@@ -1311,6 +1488,56 @@ html.dark .tiptap-popover::before {
 }
 .node-settings-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--text-500);
+}
+
+.agent-builder-node-panel {
+  position: fixed;
+  right: 20px;
+  top: 80px;
+  z-index: 50;
+  width: calc(100vw - 240px);
+  max-width: 480px;
+  height: calc(100vh - 100px);
+  border-radius: 16px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+html.dark .agent-builder-node-panel {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.42), 0 4px 6px -4px rgba(0, 0, 0, 0.32);
+}
+
+.agent-builder-node-panel-body label {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.agent-builder-node-panel-body input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.agent-builder-node-panel-body textarea,
+.agent-builder-node-panel-body select {
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.variable-token-input {
+  background-color: transparent !important;
+}
+
+.variable-token-input::selection {
+  background: rgba(var(--neon-rgb), 0.3);
+  color: transparent;
+}
+
+@media (max-width: 767px) {
+  .agent-builder-node-panel {
+    left: 12px;
+    right: 12px;
+    top: 80px;
+    bottom: 20px;
+    width: auto;
+    max-width: none;
+    height: auto;
+  }
 }
 
 /* Agent Builder — Collapsible animations */

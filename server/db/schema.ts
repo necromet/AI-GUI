@@ -311,6 +311,8 @@ CREATE TABLE IF NOT EXISTS workflows (
   published BOOLEAN NOT NULL DEFAULT FALSE,
   api_key TEXT,
   endpoint_url TEXT,
+  chat_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  share_token TEXT UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -326,6 +328,7 @@ CREATE TABLE IF NOT EXISTS executions (
   output JSONB,
   error TEXT,
   thread_id TEXT,
+  conversation_id TEXT,
   checkpoint_thread_id TEXT,
   workflow_snapshot JSONB,
   pending_action JSONB,
@@ -411,10 +414,61 @@ CREATE INDEX IF NOT EXISTS idx_workflow_templates_category ON workflow_templates
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS api_key TEXT;
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS endpoint_url TEXT;
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS chat_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS share_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_share_token ON workflows(share_token) WHERE share_token IS NOT NULL;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS checkpoint_thread_id TEXT;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS workflow_snapshot JSONB;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS pending_action JSONB;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS resumed_at TIMESTAMPTZ;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+
+-- Persistent workflow chat history (append-only log per workflow)
+CREATE TABLE IF NOT EXISTS workflow_chat_history (
+  id            TEXT PRIMARY KEY,
+  workflow_id   TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  execution_id  TEXT,
+  thread_id     TEXT,
+  scope_type    TEXT NOT NULL DEFAULT 'workflow',
+  scope_id      TEXT NOT NULL DEFAULT 'legacy',
+  role          TEXT NOT NULL,
+  content       TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Migrate legacy workflow_chat_history tables missing scope columns
+ALTER TABLE workflow_chat_history ADD COLUMN IF NOT EXISTS scope_type TEXT;
+ALTER TABLE workflow_chat_history ADD COLUMN IF NOT EXISTS scope_id TEXT;
+UPDATE workflow_chat_history SET scope_type = 'workflow', scope_id = 'legacy' WHERE scope_type IS NULL OR scope_id IS NULL;
+ALTER TABLE workflow_chat_history ALTER COLUMN scope_type SET DEFAULT 'workflow';
+ALTER TABLE workflow_chat_history ALTER COLUMN scope_id SET DEFAULT 'legacy';
+ALTER TABLE workflow_chat_history ALTER COLUMN scope_type SET NOT NULL;
+ALTER TABLE workflow_chat_history ALTER COLUMN scope_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wch_workflow_scope ON workflow_chat_history(workflow_id, scope_type, scope_id, created_at);
+
+-- Persistent key-value chat memory per workflow (upsert on workflow_id + memory_key)
+CREATE TABLE IF NOT EXISTS workflow_chat_memory (
+  id            TEXT PRIMARY KEY,
+  workflow_id   TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  scope_type    TEXT NOT NULL DEFAULT 'workflow',
+  scope_id      TEXT NOT NULL DEFAULT 'legacy',
+  memory_key    TEXT NOT NULL,
+  memory_value  TEXT NOT NULL,
+  execution_id  TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Migrate legacy workflow_chat_memory tables missing scope columns
+ALTER TABLE workflow_chat_memory ADD COLUMN IF NOT EXISTS scope_type TEXT;
+ALTER TABLE workflow_chat_memory ADD COLUMN IF NOT EXISTS scope_id TEXT;
+UPDATE workflow_chat_memory SET scope_type = 'workflow', scope_id = 'legacy' WHERE scope_type IS NULL OR scope_id IS NULL;
+ALTER TABLE workflow_chat_memory ALTER COLUMN scope_type SET DEFAULT 'workflow';
+ALTER TABLE workflow_chat_memory ALTER COLUMN scope_id SET DEFAULT 'legacy';
+ALTER TABLE workflow_chat_memory ALTER COLUMN scope_type SET NOT NULL;
+ALTER TABLE workflow_chat_memory ALTER COLUMN scope_id SET NOT NULL;
+ALTER TABLE workflow_chat_memory DROP CONSTRAINT IF EXISTS workflow_chat_memory_workflow_id_memory_key_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wcm_workflow_scope_key ON workflow_chat_memory(workflow_id, scope_type, scope_id, memory_key);
 `;
 
 export const SEED_SQL = `

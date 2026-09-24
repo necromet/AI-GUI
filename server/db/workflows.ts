@@ -1,4 +1,5 @@
 import { getAll, getOne, run, runReturning, pool } from './pg';
+import { redactWorkflowSecrets } from '../services/workflowRedaction.js';
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -14,6 +15,10 @@ export async function getWorkflow(id: string) {
   return getOne('SELECT * FROM workflows WHERE id = $1 OR custom_id = $1', [id]);
 }
 
+export async function getWorkflowByShareToken(token: string) {
+  return getOne('SELECT * FROM workflows WHERE share_token = $1 AND chat_enabled = TRUE', [token]);
+}
+
 export async function createWorkflow(data: { name: string; nodes: string; edges: string; description?: string; category?: string; tags?: string }) {
   const id = 'wf_' + uid();
   await run(
@@ -24,7 +29,7 @@ export async function createWorkflow(data: { name: string; nodes: string; edges:
   return getWorkflow(id);
 }
 
-export async function updateWorkflow(id: string, data: Partial<{ name: string; nodes: string; edges: string; description: string; published: boolean; api_key: string | null; endpoint_url: string | null }>) {
+export async function updateWorkflow(id: string, data: Partial<{ name: string; nodes: string; edges: string; description: string; published: boolean; api_key: string | null; endpoint_url: string | null; chat_enabled: boolean; share_token: string | null }>) {
   const sets: string[] = [];
   const params: any[] = [];
   let idx = 1;
@@ -35,6 +40,8 @@ export async function updateWorkflow(id: string, data: Partial<{ name: string; n
   if (data.published !== undefined) { sets.push(`published = $${idx++}`); params.push(data.published); }
   if (data.api_key !== undefined) { sets.push(`api_key = $${idx++}`); params.push(data.api_key); }
   if (data.endpoint_url !== undefined) { sets.push(`endpoint_url = $${idx++}`); params.push(data.endpoint_url); }
+  if (data.chat_enabled !== undefined) { sets.push(`chat_enabled = $${idx++}`); params.push(data.chat_enabled); }
+  if (data.share_token !== undefined) { sets.push(`share_token = $${idx++}`); params.push(data.share_token); }
   sets.push('updated_at = NOW()');
   params.push(id);
   await run(`UPDATE workflows SET ${sets.join(', ')} WHERE id = $${idx}`, params);
@@ -52,13 +59,14 @@ export async function createExecution(data: {
   workflowId: string;
   input?: any;
   threadId?: string;
+  conversationId?: string;
   workflowSnapshot?: any;
 }) {
   const id = data.id || 'exec_' + uid();
   await run(
-    `INSERT INTO executions (id, workflow_id, input, thread_id, checkpoint_thread_id, workflow_snapshot)
-     VALUES ($1, $2, $3, $4, $4, $5)`,
-    [id, data.workflowId, JSON.stringify(data.input ?? {}), data.threadId || id, JSON.stringify(data.workflowSnapshot || null)]
+    `INSERT INTO executions (id, workflow_id, input, thread_id, checkpoint_thread_id, conversation_id, workflow_snapshot)
+     VALUES ($1, $2, $3, $4, $4, $5, $6)`,
+    [id, data.workflowId, JSON.stringify(redactWorkflowSecrets(data.input ?? {})), data.threadId || id, data.conversationId || id, JSON.stringify(redactWorkflowSecrets(data.workflowSnapshot || null))]
   );
   return id;
 }
@@ -70,7 +78,8 @@ export async function updateExecution(id: string, data: Record<string, any>) {
   const jsonColumns = new Set(['node_results', 'variables', 'input', 'output', 'workflow_snapshot', 'pending_action']);
   for (const [key, val] of Object.entries(data)) {
     sets.push(`${key} = $${idx++}`);
-    params.push(val !== null && (jsonColumns.has(key) || typeof val === 'object') ? JSON.stringify(val) : val);
+    const safeValue = jsonColumns.has(key) || typeof val === 'object' ? redactWorkflowSecrets(val) : val;
+    params.push(safeValue !== null && (jsonColumns.has(key) || typeof safeValue === 'object') ? JSON.stringify(safeValue) : safeValue);
   }
   params.push(id);
   await run(`UPDATE executions SET ${sets.join(', ')} WHERE id = $${idx}`, params);
@@ -82,6 +91,11 @@ export async function getExecution(id: string) {
 
 export async function getExecutionsByWorkflow(workflowId: string) {
   return getAll('SELECT * FROM executions WHERE workflow_id = $1 ORDER BY started_at DESC', [workflowId]);
+}
+
+export async function getWorkflowIdForExecution(executionId: string): Promise<string | null> {
+  const exec = await getOne('SELECT workflow_id FROM executions WHERE id = $1', [executionId]);
+  return exec?.workflow_id ?? null;
 }
 
 // ─── MCP Servers ───
@@ -251,7 +265,7 @@ export async function createExecutionLog(data: {
 }): Promise<void> {
   await pool.query(
     `INSERT INTO execution_logs (execution_id, node_id, event_type, data) VALUES ($1, $2, $3, $4)`,
-    [data.executionId, data.nodeId, data.eventType, data.data ? JSON.stringify(data.data) : null]
+    [data.executionId, data.nodeId, data.eventType, data.data ? JSON.stringify(redactWorkflowSecrets(data.data)) : null]
   );
 }
 

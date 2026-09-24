@@ -6,6 +6,7 @@ import {
   formatConditionRule,
 } from '../../../lib/workflow/conditions';
 import type { ConditionOperator, ConditionRule } from '../../../lib/workflow/types';
+import VariablePillText from '../shared/VariablePill';
 
 interface Props {
   rule: ConditionRule;
@@ -43,7 +44,7 @@ export default function ConditionBuilder({ rule, onChange, upstreamNodes = [] }:
           <ThemedSwitch checked={Boolean(rule.caseSensitive)} onCheckedChange={caseSensitive => update({ caseSensitive })} />
         </div>
       )}
-      <div className="rounded-lg px-2.5 py-2 text-[10px] font-mono" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }}>{formatConditionRule(rule)}</div>
+      <div className="rounded-lg px-2.5 py-2 text-[10px] font-mono" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }}><VariablePillText value={formatConditionRule(rule)} /></div>
     </div>
   );
 }

@@ -5,7 +5,8 @@ export type WorkflowNodeType =
   | 'agent' | 'mcp' | 'guardrails' | 'arcade'
   | 'if-else' | 'while' | 'user-approval'
   | 'transform' | 'set-state'
-  | 'extract' | 'http' | 'note';
+  | 'extract' | 'http' | 'note'
+  | 'database' | 'web-source';
 
 export interface WorkflowNode {
   id: string;
@@ -22,6 +23,7 @@ export interface WorkflowEdge {
   sourceHandle?: string;
   label?: string;
   animated?: boolean;
+  type?: 'interactive' | string;
 }
 
 export interface Workflow {
@@ -85,6 +87,7 @@ export interface WorkflowHeaderControls {
   onRedo: () => void;
   onFitView: () => void;
   onAutoLayout: () => void;
+  onTidyUp: () => void;
   onFocusIssue: (nodeId?: string) => void;
   validationIssues: any[];
   onShowShortcuts: () => void;

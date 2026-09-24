@@ -36,19 +36,19 @@ export const AgentMarkdown: React.FC<AgentMarkdownProps> = ({
           const isCollapsed = collapsedCodeBlocks.has(blockKey);
           const isCopied = copiedCode === blockKey;
           return (
-            <div className="my-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-300)' }}>
-              <div className="flex items-center justify-between px-2.5 py-1.5 cursor-pointer" style={{ backgroundColor: 'var(--bg-100)' }} onClick={() => toggleCodeBlock(blockKey)}>
+            <div className="code-block-shell my-2">
+              <div className="code-block-toolbar flex items-center justify-between px-3 py-1.5 cursor-pointer" onClick={() => toggleCodeBlock(blockKey)}>
                 <div className="flex items-center gap-1.5">
                   {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-                  <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-500)' }}>{language || 'code'}</span>
+                  <span className="code-block-language">{language || 'code'}</span>
                   <span className="text-[10px]" style={{ color: 'var(--text-500)' }}>{codeString.split('\n').length} lines</span>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); handleCopyCode(codeString, blockKey); }} className="p-1 rounded transition-colors hover:opacity-80" style={{ color: isCopied ? 'var(--neon-color)' : 'var(--text-500)' }} title="Copy code">
+                <button onClick={(e) => { e.stopPropagation(); handleCopyCode(codeString, blockKey); }} className="code-block-action h-7 w-7 rounded flex items-center justify-center transition-colors" style={{ color: isCopied ? 'var(--neon-color)' : undefined }} title="Copy code">
                   {isCopied ? <Check size={11} /> : <Copy size={11} />}
                 </button>
               </div>
               {!isCollapsed && (
-                <pre className="p-3 overflow-auto text-[11px] font-mono" style={{ maxHeight: 300, background: '#1e1e2e', margin: 0 }}><code>{codeString}</code></pre>
+                <pre className="code-block-content p-3 overflow-auto text-[11px] font-mono" style={{ maxHeight: 300, margin: 0 }}><code>{codeString}</code></pre>
               )}
             </div>
           );

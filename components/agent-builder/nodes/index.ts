@@ -12,3 +12,5 @@ export { default as NoteNodeConfig } from './NoteNodeConfig';
 export { default as HTTPNodeConfig } from './HTTPNodeConfig';
 export { default as ExtractNodeConfig } from './ExtractNodeConfig';
 export { default as SetStateNodeConfig } from './SetStateNodeConfig';
+export { default as DatabaseNodeConfig } from './DatabaseNodeConfig';
+export { default as WebSourceNodeConfig } from './WebSourceNodeConfig';

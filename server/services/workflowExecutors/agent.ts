@@ -36,6 +36,7 @@ export async function executeAgentNode(
     jsonOutputSchema,
     outputSchema,
     includeChatHistory = false,
+    memoryContext,
   } = nodeData;
 
   const variables = state.variables || {};
@@ -56,6 +57,7 @@ export async function executeAgentNode(
   }
 
   const contextParts: string[] = [];
+  if (memoryContext) contextParts.push(`Remembered context: ${typeof memoryContext === 'string' ? memoryContext : JSON.stringify(memoryContext)}`);
   if (variables.lastOutput) {
     contextParts.push(`Previous output: ${typeof variables.lastOutput === 'string' ? variables.lastOutput : JSON.stringify(variables.lastOutput)}`);
   }

@@ -1,9 +1,11 @@
 import * as workflowDB from '../db/workflows.js';
+import { normalizeWorkflowGraph } from '../../lib/workflow/graph.js';
 
 export function parseWorkflow(row: any) {
   const nodesRaw = typeof row.nodes === 'string' ? row.nodes : JSON.stringify(row.nodes);
   const edgesRaw = typeof row.edges === 'string' ? row.edges : JSON.stringify(row.edges);
   const tagsRaw = typeof row.tags === 'string' ? row.tags : JSON.stringify(row.tags || '[]');
+  const normalized = normalizeWorkflowGraph(JSON.parse(nodesRaw), JSON.parse(edgesRaw));
   return {
     id: row.id,
     customId: row.custom_id,
@@ -11,13 +13,16 @@ export function parseWorkflow(row: any) {
     description: row.description,
     category: row.category,
     tags: JSON.parse(tagsRaw),
-    nodes: JSON.parse(nodesRaw),
-    edges: JSON.parse(edgesRaw),
+    nodes: normalized.nodes,
+    edges: normalized.edges,
     isTemplate: row.is_template === true || row.is_template === 1,
     isPublic: row.is_public === true || row.is_public === 1,
     published: row.published === true || row.published === 1,
     endpointUrl: row.endpoint_url,
     apiKey: row.api_key,
+    chatEnabled: row.chat_enabled === true || row.chat_enabled === 1,
+    shareToken: row.share_token,
+    sharePath: row.share_token ? `/share/${row.share_token}` : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

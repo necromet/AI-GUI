@@ -12,11 +12,13 @@ import { executeAgentNode } from './workflowExecutors/agent.js';
 import { executeIfElseNode, executeWhileNode } from './workflowExecutors/logic.js';
 import { executeTransformNode } from './workflowExecutors/transform.js';
 import { executeMCPNode } from './workflowExecutors/mcp.js';
-import { executeSetStateNode } from './workflowExecutors/variables.js';
+import { executeSetStateNode, substituteVariables } from './workflowExecutors/variables.js';
 import { executeHTTPNode } from './workflowExecutors/http.js';
 import { executeExtractNode } from './workflowExecutors/extract.js';
 import { executeGuardrailsNode } from './workflowExecutors/tools.js';
 import { executeArcadeNode } from './workflowExecutors/arcade.js';
+import { executeDatabaseNode } from './workflowExecutors/database.js';
+import { executeWebSourceNode } from './workflowExecutors/webSource.js';
 import {
   getWorkflowNodeType,
   normalizeHandle,
@@ -49,12 +51,15 @@ export interface ExecutorOptions {
   llmKeys?: Record<string, string>;
   threadId?: string;
   executionId?: string;
+  workflowId?: string;
+  conversationId?: string;
   checkpointer?: BaseCheckpointSaver;
   signal?: AbortSignal;
 }
 
 export interface WorkflowStreamOptions {
   resume?: Record<string, any>;
+  initialChatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export function toMermaid(rawNodes: WorkflowNode[], rawEdges: WorkflowEdge[]): string {
@@ -97,7 +102,7 @@ export class WorkflowExecutor {
         variables: { input, lastOutput: input },
         currentNodeId: '',
         nodeResults: {},
-        chatHistory: [],
+        chatHistory: streamOptions.initialChatHistory || [],
         loopResults: [],
       };
       const graphInput = streamOptions.resume ? new Command({ resume: streamOptions.resume }) : initialState;
@@ -181,7 +186,7 @@ export class WorkflowExecutor {
           const approvalId = `approval_${this.options.executionId || 'workflow'}_${node.id}`;
           const decision = interrupt({
             kind: 'approval', approvalId, nodeId: node.id,
-            message: node.data.message || node.data.approvalMessage || 'Approve to continue?',
+            message: substituteVariables(node.data.message || node.data.approvalMessage || 'Approve to continue?', state),
             executionId: this.options.executionId,
             threadId: this.options.threadId,
           }) as { approved?: boolean; data?: any };
@@ -219,11 +224,13 @@ export class WorkflowExecutor {
         Object.assign(variables, output?.variableUpdates || output?.stateUpdates || output?.__variableUpdates || {});
         if (type === 'while' && output?.__iteration !== undefined) variables[`${node.id}__iteration`] = output.__iteration;
 
+        const historyUpdates = output?.chatHistoryUpdates || output?.__chatHistoryUpdates || [];
+
         return {
           currentNodeId: node.id,
           nodeResults: { [node.id]: result },
           variables,
-          chatHistory: output?.chatHistoryUpdates || output?.__chatHistoryUpdates || [],
+          chatHistory: historyUpdates,
         };
       } catch (error: any) {
         if (isGraphInterrupt(error)) throw error;
@@ -240,7 +247,7 @@ export class WorkflowExecutor {
     switch (type) {
       case 'start': return { input: state.variables.input };
       case 'end': return { finalOutput: state.variables.lastOutput };
-      case 'agent': return executeAgentNode(await this.hydrateAgentTools(node.data), state, keys);
+      case 'agent': return this.executeAgentWithPersistence(node, state, keys);
       case 'mcp': return executeMCPNode(await this.hydrateMCPNode(node.data), state, keys);
       case 'arcade': return executeArcadeNode(node.data, state, keys);
       case 'guardrails': return executeGuardrailsNode(node.data, state);
@@ -250,8 +257,43 @@ export class WorkflowExecutor {
       case 'set-state': return executeSetStateNode(node.data, state);
       case 'http': return executeHTTPNode(node.data, state);
       case 'extract': return executeExtractNode(node.data, state, keys);
+      case 'database': return executeDatabaseNode(node.data, state);
+      case 'web-source': return executeWebSourceNode(node.data, state, { executionId: this.options.executionId, threadId: this.options.threadId, llmKeys: keys });
       default: throw new Error(`Unsupported workflow node type: ${type}`);
     }
+  }
+
+  private async executeAgentWithPersistence(node: WorkflowNode, state: WorkflowState, keys: Record<string, string>): Promise<any> {
+    const data = await this.hydrateAgentTools(node.data);
+    const useHistory = data.includeChatHistory === true;
+    const useMemory = data.includeChatMemory === true;
+    const workflowId = this.options.workflowId;
+    const scopeId = data.persistenceScope === 'workflow'
+      ? workflowId
+      : (this.options.conversationId || this.options.executionId);
+    const scope = scopeId ? { type: data.persistenceScope === 'workflow' ? 'workflow' as const : 'conversation' as const, id: scopeId } : null;
+    let agentState: WorkflowState = state;
+    let memoryContext: any;
+
+    if (workflowId && scope && (useHistory || useMemory)) {
+      const persistence = await import('../db/workflowMemory.js');
+      if (useHistory) {
+        const stored = await persistence.getChatHistory(workflowId, scope, { limit: 20 });
+        agentState = { ...state, chatHistory: dedupeChatMessages([...stored, ...(state.chatHistory || [])]) };
+      }
+      if (useMemory) {
+        const entries = await persistence.getMemory(workflowId, scope, `agent:${node.id}`);
+        memoryContext = entries[0]?.value;
+      }
+    }
+
+    const result = await executeAgentNode({ ...data, nodeId: node.id, memoryContext }, agentState, keys);
+    if (workflowId && scope) {
+      const persistence = await import('../db/workflowMemory.js');
+      if (useHistory && result.chatHistoryUpdates?.length) await persistence.saveChatMessages(workflowId, scope, this.options.executionId ?? null, result.chatHistoryUpdates);
+      if (useMemory && result.output) await persistence.saveMemory(workflowId, scope, `agent:${node.id}`, { lastResponse: result.output, updatedAt: new Date().toISOString() }, this.options.executionId);
+    }
+    return result;
   }
 
   private async hydrateAgentTools(data: Record<string, any>): Promise<Record<string, any>> {
@@ -279,6 +321,15 @@ export class WorkflowExecutor {
     const server = await workflowDB.getMCPServer(data.serverId);
     return server ? { ...data, serverUrl: server.url, accessToken: server.access_token, headers: server.headers || {} } : data;
   }
+}
+
+function dedupeChatMessages(messages: Array<{ role: string; content: string }>) {
+  const seen = new Set<string>();
+  return messages.filter(message => {
+    const key = `${message.role}:${message.content}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(-20);
 }
 
 function branchMap(edges: WorkflowEdge[], handles: string[]): Record<string, string> {

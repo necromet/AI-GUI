@@ -41,6 +41,10 @@ function hasExecutionAccess(req: any, workflow: any): boolean {
   return canExecutePublishedWorkflow(req.headers.authorization as string | undefined, workflow);
 }
 
+function conversationIdFrom(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value) ? value : undefined;
+}
+
 router.post('/:id/validate', async (req, res) => {
   try {
     const workflow = await workflowDB.getWorkflow(req.params.id);
@@ -71,9 +75,10 @@ router.post('/:id/execute', async (req, res) => {
 
     const executionId = `exec_${nanoid(10)}`;
     const threadId = `thread_${executionId}`;
+    const conversationId = conversationIdFrom(req.body?.conversationId) || executionId;
     const snapshot = { name: parsed.name, nodes: checked.nodes, edges: checked.edges };
-    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, workflowSnapshot: snapshot });
-    const executor = new WorkflowExecutor(checked.nodes, checked.edges, { executionId, threadId, llmKeys: await getApiKeys() });
+    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, conversationId, workflowSnapshot: snapshot });
+    const executor = new WorkflowExecutor(checked.nodes, checked.edges, { executionId, threadId, workflowId: workflow.id, conversationId, llmKeys: await getApiKeys() });
     const events: any[] = [];
     let status = 'running';
     let accumulatedResults: Record<string, any> = {};
@@ -123,8 +128,9 @@ router.post('/:id/execute-stream', async (req, res) => {
 
     const executionId = `exec_${nanoid(10)}`;
     const threadId = `thread_${executionId}`;
+    const conversationId = conversationIdFrom(req.body?.conversationId) || executionId;
     const snapshot = { name: parsed.name, nodes: checked.nodes, edges: checked.edges };
-    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, workflowSnapshot: snapshot });
+    await workflowDB.createExecution({ id: executionId, workflowId: workflow.id, input: executionInput, threadId, conversationId, workflowSnapshot: snapshot });
     setupSSE(res);
     const abortController = new AbortController();
     res.on('close', () => {
@@ -134,6 +140,8 @@ router.post('/:id/execute-stream', async (req, res) => {
     const executor = new WorkflowExecutor(checked.nodes, checked.edges, {
       executionId,
       threadId,
+      workflowId: workflow.id,
+      conversationId,
       llmKeys: await getApiKeys(),
       signal: abortController.signal,
       onNodeUpdate: (nodeId, status, data) => {
@@ -225,6 +233,8 @@ router.post('/:id/resume', async (req, res) => {
     const executor = new WorkflowExecutor(snapshot.nodes, snapshot.edges, {
       executionId,
       threadId,
+      workflowId: execution.workflow_id,
+      conversationId: execution.conversation_id || execution.id,
       llmKeys: await getApiKeys(),
       signal: abortController.signal,
       onNodeUpdate: (nodeId, status, nodeData) => writeEvent(res, { type: `node_${status}`, nodeId, data: nodeData, executionId, threadId }),

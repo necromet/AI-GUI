@@ -38,15 +38,15 @@ export default function ArcadeNodeConfig({ data, onUpdate, upstreamNodes = [] }:
         {selectedDefinition.inputs.map(input => <div key={input.name}><label className={fieldClasses.label} style={FIELD_STYLES.label}>{input.name}{input.required ? ' *' : ''}</label><VariableAutocomplete value={typeof data.arcadeInput?.[input.name] === 'string' ? data.arcadeInput[input.name] : JSON.stringify(data.arcadeInput?.[input.name] ?? '')} onChange={value => onUpdate({ arcadeInput: { ...(data.arcadeInput || {}), [input.name]: input.type === 'array' ? (() => { try { return JSON.parse(value); } catch { return value; } })() : value } })} placeholder={input.type === 'array' ? '[]' : `{{${input.name}}}`} upstreamNodes={upstreamNodes} multiline={input.name === 'body' || input.name === 'content' || input.name === 'text_content'} /></div>)}
       </div> : <div>
         <label className={fieldClasses.label} style={FIELD_STYLES.label}>Tool input (JSON)</label>
-        <textarea
+        <VariableAutocomplete
           value={data.arcadeInputDraft ?? inputText}
-          onChange={event => {
-            try { onUpdate({ arcadeInput: JSON.parse(event.target.value), arcadeInputDraft: undefined }); }
-            catch { onUpdate({ arcadeInputDraft: event.target.value }); }
+          onChange={value => {
+            try { onUpdate({ arcadeInput: JSON.parse(value), arcadeInputDraft: undefined }); }
+            catch { onUpdate({ arcadeInputDraft: value }); }
           }}
+          multiline
           rows={8}
-          className={fieldClasses.textarea}
-          style={FIELD_STYLES.input}
+          upstreamNodes={upstreamNodes}
         />
         {data.arcadeInputDraft && <p className="mt-1 text-[10px] text-red-400">Enter valid JSON before running.</p>}
       </div>}

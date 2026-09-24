@@ -6,21 +6,23 @@ import {
   ThemedTooltipProvider,
 } from '../shared/ThemedTooltip';
 import { Info } from 'lucide-react';
+import VariableAutocomplete from '../VariableAutocomplete';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; upstreamNodes?: { id: string; label: string }[]; accentColor?: string; }
 
-export default function ApprovalNodeConfig({ data, onUpdate }: Props) {
+export default function ApprovalNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
   return (
     <ThemedTooltipProvider delayDuration={300}>
       <div className="space-y-4">
         <div>
           <label className={fieldClasses.label} style={FIELD_STYLES.label}>Approval Message</label>
-          <textarea
+          <VariableAutocomplete
             value={data.message || data.approvalMessage || 'Approve to continue?'}
-            onChange={e => onUpdate({ message: e.target.value, approvalMessage: e.target.value })}
+            onChange={value => onUpdate({ message: value, approvalMessage: value })}
+            placeholder="Use {{variable}} to include workflow data"
+            multiline
             rows={3}
-            className={fieldClasses.textarea}
-            style={FIELD_STYLES.input}
+            upstreamNodes={upstreamNodes}
           />
         </div>
 

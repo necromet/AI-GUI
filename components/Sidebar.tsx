@@ -156,8 +156,7 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
         direction="horizontal"
         activeKey={tab}
         onSelect={(key) => setTab(key as 'components' | 'properties')}
-        className="border-b flex-shrink-0"
-        style={{ borderColor: 'var(--border-200)' }}
+        className="flex-shrink-0"
         indicatorClassName="!rounded-none"
         indicatorStyle={{ top: 'auto', bottom: 0, height: 2, backgroundColor: 'var(--neon-color)', boxShadow: 'none' }}
         items={tabs.map((t) => ({ key: t.key, label: t.label, icon: t.icon }))}
@@ -197,8 +196,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
               </button>
             </div>
 
-            <div className="h-px mx-3.5 mt-3" style={{ background: 'var(--border-200)' }} />
-
             <div className="p-3.5">
               <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
                 Quick Add (Full Width)
@@ -209,7 +206,7 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
                     <button
                       key={key}
                       onClick={() => controls.onQuickAdd(key)}
-                      className="flex items-center gap-2.5 py-[7px] px-2.5 bg-transparent border border-transparent rounded-md cursor-pointer transition-colors hover:bg-[var(--bg-200)] hover:border-[var(--border-300)] w-full text-left"
+                      className="flex items-center gap-2.5 py-[7px] px-2.5 bg-transparent rounded-md cursor-pointer transition-colors hover:bg-[var(--bg-200)] w-full text-left"
                     >
                       <span className="w-[7px] h-[7px] rounded-full flex-shrink-0" style={{ background: val.color }} />
                       <span className="text-[12.5px] font-medium" style={{ color: 'var(--text-100)' }}>{val.label}</span>
@@ -222,7 +219,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
 
             {controls.projectFiles.length > 0 && (
               <>
-                <div className="h-px mx-3.5" style={{ background: 'var(--border-200)' }} />
                 <div className="p-3.5">
                   <div className="text-[10px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: 'var(--text-400)' }}>
                     Project Files ({controls.projectFiles.length})
@@ -299,8 +295,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
                   </span>
                 </PropertyField>
 
-                <div className="h-px" style={{ background: 'var(--border-200)' }} />
-
                 <div className="flex items-center justify-between">
                   <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-400)' }}>
                     TSX Source
@@ -338,8 +332,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
                     />
                   </div>
                 )}
-
-                <div className="h-px" style={{ background: 'var(--border-200)' }} />
 
                 <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-400)' }}>
                   Nudge
@@ -382,8 +374,6 @@ const CanvasSidebarContent: React.FC<{ controls: CanvasSidebarControls }> = ({ c
                     →
                   </Button>
                 </div>
-
-                <div className="h-px" style={{ background: 'var(--border-200)' }} />
 
                 <div className="flex flex-col gap-1.5">
                   <Button
@@ -530,7 +520,6 @@ const NoteSidebarItem: React.FC<{
               {note.isFavorite ? <StarOff size={12} /> : <Star size={12} />}
               {note.isFavorite ? 'Unfavorite' : 'Favorite'}
             </button>
-            <div className="h-px my-1" style={{ backgroundColor: 'var(--border-300)' }} />
             <button
               onClick={() => { controls.onDeleteNote(note.id); setShowMenu(false); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--bg-200)] transition-colors cursor-pointer"
@@ -654,34 +643,36 @@ const Sidebar: React.FC<SidebarProps> = ({
         : 'text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)]'
     }`;
 
-  const truncateTitle = (title: string) => {
-    const words = title.split(/\s+/);
-    return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : title;
-  };
-
   const renderConversation = (conv: ChatSession) => {
     const isActive = conv.dbConversationId === currentConversationId;
     return (
-      <li key={conv.id}>
-        <div
+      <li
+        key={conv.id}
+        className={`group flex min-w-0 items-center rounded-xl transition-colors duration-200 ${
+          isActive ? 'bg-[var(--bg-200)]' : 'hover:bg-[var(--bg-200)]'
+        }`}
+      >
+        <button
+          type="button"
           onClick={() => conv.dbConversationId && onSelectConversation(conv.dbConversationId)}
-          className={`${itemClassName(isActive)} group cursor-pointer relative`}
+          className="min-w-0 flex-1 px-3 py-2 text-left text-[13px] transition-colors"
+          style={{ color: isActive ? 'var(--text-100)' : 'var(--text-500)' }}
+          title={conv.title}
+          aria-current={isActive ? 'page' : undefined}
         >
-          <span className="truncate flex-1 text-[13px]">
-            {truncateTitle(conv.title)}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              conv.dbConversationId && onDeleteConversation(conv.dbConversationId);
-            }}
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-[var(--text-500)] hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 rounded-lg"
-          >
-            <Trash2 size={13} />
-          </Button>
-        </div>
+          <span className="block truncate">{conv.title || 'Untitled conversation'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => conv.dbConversationId && onDeleteConversation(conv.dbConversationId)}
+          className={`mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-[var(--text-500)] transition-all duration-200 hover:bg-red-500/10 hover:text-red-400 focus-visible:opacity-100 ${
+            isActive ? 'opacity-70' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+          }`}
+          title={`Delete ${conv.title || 'conversation'}`}
+          aria-label={`Delete ${conv.title || 'conversation'}`}
+        >
+          <Trash2 size={13} />
+        </button>
       </li>
     );
   };
@@ -694,6 +685,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     </div>
   );
 
+  const modeLabel = isSettingsPage
+    ? 'Settings'
+    : currentMode === 'agent-builder'
+      ? 'Builder'
+      : currentMode === 'database'
+        ? 'DB'
+        : currentMode.charAt(0).toUpperCase() + currentMode.slice(1);
+
   return (
     <aside
       className={`
@@ -704,14 +703,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       `}
       style={{
         backgroundColor: 'var(--bg-100)',
-        borderRight: '1px solid var(--border-300)',
       }}
     >
       <div className={`flex flex-col h-full ${isDatabaseMode ? 'w-[360px]' : 'w-[288px]'} transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
 
         {/* Header */}
-        <div className="relative flex w-full items-center px-3 pt-4 pb-2">
-          <div className="flex items-center gap-2.5 pl-1">
+        <div className="flex w-full items-start gap-2 px-3 pt-4 pb-3">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5 pl-1">
             {canvasControls && (
               <Button
                 variant="ghost"
@@ -722,40 +720,38 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <ArrowLeft size={16} />
               </Button>
             )}
-            <div className="flex items-center gap-2.5">
-              <div className="sidebar-brand-mark flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.15), rgba(var(--neon-rgb), 0.05))' }}>
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <div className="sidebar-brand-mark flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.15), rgba(var(--neon-rgb), 0.05))' }}>
                 <span className="text-sm font-bold" style={{ color: 'var(--neon-color)' }}>e</span>
               </div>
-              <div className="flex flex-col leading-tight">
-                <span className="font-semibold text-[14px] tracking-tight text-[var(--text-100)]">edward:labs</span>
-                <span className="text-[11px] tabular-nums tracking-wide text-[var(--text-500)]">{gmt7Time}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1 leading-tight">
+                <span className="truncate font-semibold text-[14px] tracking-tight text-[var(--text-100)]">edward:labs</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="flex-shrink-0 border-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                    style={{ backgroundColor: 'rgba(var(--neon-rgb), 0.1)', color: 'var(--neon-color)' }}
+                  >
+                    {modeLabel}
+                  </Badge>
+                  <span className="min-w-0 truncate text-[10px] tabular-nums tracking-wide text-[var(--text-500)]" title={`${gmt7Time} GMT+7`}>
+                    {gmt7Time}
+                  </span>
+                </div>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className="text-[11px] font-semibold border-0 px-2 py-0.5 ml-0.5"
-              style={{
-                backgroundColor: 'rgba(var(--neon-rgb), 0.1)',
-                color: 'var(--neon-color)',
-              }}
-            >
-              {currentMode === 'chat' ? 'Chat' : currentMode === 'rag' ? 'RAG' : currentMode === 'skema' ? 'Skema' : currentMode === 'python' ? 'Python' : currentMode === 'library' ? 'Library' : currentMode === 'database' ? 'DB' : currentMode === 'notes' ? 'Notes' : currentMode === 'agent-builder' ? 'Builder' : isSettingsPage ? 'Settings' : ''}
-            </Badge>
           </div>
-          <div className="absolute flex items-center right-3 top-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggle}
-              className="h-8 w-8 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
-            >
-              <PanelLeftClose size={16} />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="h-9 w-9 flex-shrink-0 rounded-lg text-[var(--text-500)] hover:bg-[var(--bg-200)] hover:text-[var(--text-100)] transition-all duration-200"
+            title="Close sidebar"
+            aria-label="Close sidebar"
+          >
+            <PanelLeftClose size={16} />
+          </Button>
         </div>
-
-        {/* Divider after header */}
-        <div className="mx-3 h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border-300), transparent)' }} />
 
         {sidebarPanel === 'token-stats' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -839,6 +835,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-3">
               <button
+                type="button"
                 className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
                 style={{
                   background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
@@ -846,6 +843,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   color: 'var(--text-100)',
                 }}
                 onClick={onNewChat}
+                title="Start a new chat"
               >
                 <div
                   className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
@@ -1128,11 +1126,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                           </div>
                         )}
 
-                        {/* Divider between sections */}
-                        {favorites.length > 0 && hasAnyNotes && (
-                          <div className="h-px mx-2 mb-2" style={{ backgroundColor: 'var(--border-300)', opacity: 0.5 }} />
-                        )}
-
                         {/* All pages (excluding favorites) */}
                         <div>
                           <div className="px-2 pb-1.5">
@@ -1185,6 +1178,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* New Chat */}
             <div className="px-3 pt-3">
               <button
+                type="button"
                 className="sidebar-new-chat group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer"
                 style={{
                   background: 'linear-gradient(135deg, rgba(var(--neon-rgb), 0.08), rgba(var(--neon-rgb), 0.03))',
@@ -1192,6 +1186,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   color: 'var(--text-100)',
                 }}
                 onClick={onNewChat}
+                title="Start a new chat"
               >
                 <div
                   className="flex items-center justify-center rounded-lg w-5 h-5 transition-all duration-200"
@@ -1199,10 +1194,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <Plus size={13} style={{ color: 'var(--neon-color)' }} />
                 </div>
-                <span>New chat</span>
-                <span className="ml-auto text-[10px] opacity-0 group-hover:opacity-60 transition-opacity text-[var(--text-500)] font-mono">
-                  Ctrl+⇧+O
-                </span>
+                <span className="min-w-0 flex-1 truncate text-left">New chat</span>
               </button>
             </div>
 
@@ -1258,8 +1250,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer — user card with popover menu */}
         <div className="px-3 pb-3 pt-1">
-          <div className="mx-1 my-2 h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border-300), transparent)' }} />
-
           <Popover>
             <PopoverTrigger asChild>
               <button className="sidebar-user-card w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all duration-200 cursor-pointer hover:bg-[var(--bg-200)]">
@@ -1311,8 +1301,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 </div>
               </div>
-
-              <div className="h-px mx-2" style={{ background: 'var(--border-300)' }} />
 
               <div className="py-1">
                 {!isSettingsPage && (

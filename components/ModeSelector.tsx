@@ -58,10 +58,10 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm" style={{ background: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }}>
+      <DialogContent className="max-w-sm" style={{ background: 'color-mix(in srgb, var(--bg-100) 96%, transparent)', borderColor: 'var(--border-200)', color: 'var(--text-100)' }}>
         <DialogHeader className="text-center">
-          <DialogTitle style={{ color: '#f8fafc' }}>{title}</DialogTitle>
-          <DialogDescription style={{ color: '#94a3b8' }}>{subtitle}</DialogDescription>
+          <DialogTitle style={{ color: 'var(--text-100)' }}>{title}</DialogTitle>
+          <DialogDescription style={{ color: 'var(--text-400)' }}>{subtitle}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -71,7 +71,7 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
             value={password}
             onChange={(e) => { setPassword(e.target.value); setError(''); }}
             placeholder="Password"
-            style={{ background: 'rgba(30, 41, 59, 0.7)', borderColor: 'rgba(255,255,255,0.1)', color: '#f8fafc' }}
+            style={{ background: 'var(--bg-200)', borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
           />
 
           {error && (
@@ -82,10 +82,10 @@ const InlinePasswordModal: React.FC<InlinePasswordModalProps> = ({ isOpen, title
             type="submit"
             disabled={isLoading || !password.trim()}
             className="w-full font-semibold"
-            style={{ backgroundColor: accentHex, color: '#0f172a' }}
+            style={{ backgroundColor: accentHex, color: 'var(--bg-0)' }}
           >
             {isLoading ? (
-              <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
             ) : (
               <>
                 Unlock
@@ -197,10 +197,10 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
           to { opacity: 1; transform: translateY(0); }
         }
         .selector-card {
-          background: rgba(30, 41, 59, 0.7);
+          background: color-mix(in srgb, var(--bg-200) 88%, transparent);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid transparent;
           border-radius: 1.5rem;
           padding: 2rem 1.5rem 1.5rem;
           display: flex;
@@ -212,7 +212,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
           position: relative;
           cursor: pointer;
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          box-shadow: var(--card-shadow);
           overflow: hidden;
           opacity: 0;
           animation: selector-fade-in 0.5s ease forwards;
@@ -229,8 +229,8 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
         }
         .selector-card:hover {
           transform: translateY(-10px) scale(1.02);
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
-          border-color: var(--glow-color);
+          box-shadow: var(--card-shadow-hover);
+          background: color-mix(in srgb, var(--bg-300) 92%, var(--glow-color) 8%);
         }
         .selector-card:hover::before {
           opacity: 0.2;
@@ -239,19 +239,17 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
           transition: all 0.4s ease;
         }
         .selector-card:hover .card-icon {
-          transform: translateY(-20px) scale(0.85);
+          transform: translateY(-5px) scale(0.92);
         }
         .selector-card .card-text {
-          position: absolute;
-          bottom: 1.25rem;
-          left: 0;
-          right: 0;
+          position: relative;
+          margin-top: 1.25rem;
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 2px;
-          opacity: 0;
-          transform: translateY(12px);
+          opacity: 1;
+          transform: none;
           transition: all 0.4s ease;
         }
         .selector-card:hover .card-text {
@@ -261,27 +259,27 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
         .selector-card .card-title {
           font-weight: 700;
           font-size: 0.95rem;
-          color: #f8fafc;
+          color: var(--text-100);
           line-height: 1.2;
         }
         .selector-card .card-desc {
           font-size: 0.7rem;
-          color: #94a3b8;
+          color: var(--text-400);
           line-height: 1.3;
           max-width: 140px;
         }
       `}</style>
 
-      <div className="relative flex min-h-screen items-center justify-center" style={{ background: '#0f172a' }}>
+      <div className="relative flex min-h-screen items-center justify-center" style={{ background: 'var(--bg-0)', color: 'var(--text-100)' }}>
         <NeuralBackground className="absolute inset-0 z-0" color={rgbToHex(neonColor)} trailOpacity={0.12} particleCount={600} speed={0.8} />
 
         <div className="relative z-10 w-full max-w-6xl mx-4 px-4">
           {/* Header */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight" style={{ background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight" style={{ background: 'linear-gradient(to right, var(--text-100), var(--text-400))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               EDWARD<span style={{ WebkitTextFillColor: accentColors[0].hex }}>:</span>LABS
             </h1>
-            <p className="mt-2 text-sm tracking-widest uppercase" style={{ color: '#94a3b8' }}>
+            <p className="mt-2 text-sm tracking-widest uppercase" style={{ color: 'var(--text-400)' }}>
               AI-powered tools for the curious
             </p>
           </div>
@@ -309,7 +307,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = (props) => {
                     {!card.locked && (
                       <div
                         className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: '#ef4444', boxShadow: '0 0 10px #ef4444' }}
+                        style={{ backgroundColor: 'var(--semantic-success)', boxShadow: '0 0 10px color-mix(in srgb, var(--semantic-success) 60%, transparent)' }}
                       />
                     )}
                   </div>
