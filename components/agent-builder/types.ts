@@ -2,10 +2,11 @@
 
 export type WorkflowNodeType =
   | 'start' | 'end'
-  | 'agent' | 'mcp' | 'guardrails'
+  | 'agent' | 'mcp' | 'guardrails' | 'arcade'
   | 'if-else' | 'while' | 'user-approval'
   | 'transform' | 'set-state'
-  | 'extract' | 'http' | 'note';
+  | 'extract' | 'http' | 'note'
+  | 'database' | 'web-source';
 
 export interface WorkflowNode {
   id: string;
@@ -22,6 +23,7 @@ export interface WorkflowEdge {
   sourceHandle?: string;
   label?: string;
   animated?: boolean;
+  type?: 'interactive' | string;
 }
 
 export interface Workflow {
@@ -41,10 +43,10 @@ export interface Workflow {
 
 export interface NodeExecutionResult {
   nodeId: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
   output?: any;
   error?: string;
-  startedAt: string;
+  startedAt?: string;
   completedAt?: string;
   toolCalls?: Array<{ name: string; input: any; output?: any }>;
 }
@@ -84,6 +86,9 @@ export interface WorkflowHeaderControls {
   onUndo: () => void;
   onRedo: () => void;
   onFitView: () => void;
+  onAutoLayout: () => void;
+  onTidyUp: () => void;
+  onFocusIssue: (nodeId?: string) => void;
   validationIssues: any[];
   onShowShortcuts: () => void;
   onBack?: () => void;
@@ -94,6 +99,9 @@ export interface WorkflowHeaderControls {
   handleExportCode: () => void;
   handleExportMermaid: () => void;
   handleShare: () => void;
+  handleImport: () => void;
+  handlePreview: () => void;
+  handleSettings: () => void;
   onLoadTemplate?: () => void;
   // Modal/popup state
   showValidation: boolean;

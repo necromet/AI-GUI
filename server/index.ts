@@ -57,6 +57,7 @@ const { default: workflowApprovalRoutes } = await import('./routes/workflowAppro
 const { default: workflowKeyRoutes } = await import('./routes/workflowKeys');
 const { default: workflowNodeRoutes } = await import('./routes/workflowNodes');
 const { default: workflowExecutionRoutes } = await import('./routes/workflowExecution');
+const { default: workflowShareRoutes } = await import('./routes/workflowShare');
 const { default: notesRoutes } = await import('./routes/notes');
 const { default: authRoutes } = await import('./routes/auth');
 const { requireModeAuth } = await import('./middleware/auth');
@@ -129,6 +130,14 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const sharedChatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'This chat is receiving too many requests. Try again in a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const originalEnd = res.end.bind(res);
@@ -181,6 +190,7 @@ app.use('/api/workflows', workflowApprovalRoutes);
 app.use('/api/workflows', workflowKeyRoutes);
 app.use('/api/workflows', workflowNodeRoutes);
 app.use('/api/workflows', workflowExecutionRoutes);
+app.use('/api/shared-workflows', sharedChatLimiter, workflowShareRoutes);
 app.use('/api/notes', notesRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

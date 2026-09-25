@@ -307,6 +307,31 @@ export default function AgentNodeConfig({ data, onUpdate, upstreamNodes = [], ac
                 onCheckedChange={v => onUpdate({ includeChatHistory: v })}
               />
             </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs cursor-pointer" style={FIELD_STYLES.label}>Use chat memory</label>
+                <p className="mt-0.5 text-[10px]" style={FIELD_STYLES.helperText}>Remember this Agent's latest response for future runs.</p>
+              </div>
+              <ThemedSwitch
+                checked={data.includeChatMemory || false}
+                onCheckedChange={v => onUpdate({ includeChatMemory: v })}
+              />
+            </div>
+            {(data.includeChatHistory || data.includeChatMemory) && (
+              <div>
+                <label className={fieldClasses.label} style={FIELD_STYLES.label}>Persistence Scope</label>
+                <ThemedSelect value={data.persistenceScope || 'conversation'} onValueChange={v => onUpdate({ persistenceScope: v })}>
+                  <ThemedSelectTrigger><ThemedSelectValue /></ThemedSelectTrigger>
+                  <ThemedSelectContent>
+                    <ThemedSelectItem value="conversation">Conversation — isolated per chat/run</ThemedSelectItem>
+                    <ThemedSelectItem value="workflow">Workflow — shared by every execution</ThemedSelectItem>
+                  </ThemedSelectContent>
+                </ThemedSelect>
+                {data.persistenceScope === 'workflow' && (
+                  <p className="mt-1 text-[10px]" style={{ color: 'var(--semantic-warning)' }}>All executions of this workflow share this data.</p>
+                )}
+              </div>
+            )}
           </ThemedCollapsibleContent>
         </ThemedCollapsible>
 

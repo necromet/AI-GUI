@@ -1,31 +1,67 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Square, CheckCircle2, XCircle, Clock, Loader2, ChevronUp, ChevronDown, Shield, RotateCcw } from 'lucide-react';
+import { Play, Square, CheckCircle2, XCircle, Clock, Loader2, ChevronUp, ChevronDown, Shield, RotateCcw, ExternalLink, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Node, Edge } from '@xyflow/react';
 import { parseSSEStream } from './shared/useSSEStream';
 import { useExecutionStatus } from './ExecutionStatusContext';
 import { STATUS_COLORS } from './shared/colors';
+import type { ValidationIssue } from './validateWorkflow';
 
 interface Props {
   nodes: Node[];
   edges: Edge[];
   workflowId?: string;
+  validationIssues: ValidationIssue[];
+  onFocusIssue: (nodeId?: string) => void;
 }
 
-export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
+export default function ExecutionPanel({ nodes, edges, workflowId, validationIssues, onFocusIssue }: Props) {
   const { nodeStatuses, setNodeStatuses, isExecuting, setIsExecuting } = useExecutionStatus();
   const [isExpanded, setIsExpanded] = useState(false);
   const [input, setInput] = useState('');
+  const [inputValues, setInputValues] = useState<Record<string, any>>({});
   const [output, setOutput] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [pendingApproval, setPendingApproval] = useState<any>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const startNode = nodes.find(node => node.data?.nodeType === 'start');
+  const inputVariables = Array.isArray(startNode?.data?.inputVariables) ? startNode.data.inputVariables : [];
+
+  const getExecutionInput = useCallback(() => {
+    if (inputVariables.length === 0) return input;
+    const result: Record<string, any> = {};
+    for (const variable of inputVariables) {
+      const raw = inputValues[variable.name] ?? variable.defaultValue ?? '';
+      if (variable.type === 'number') result[variable.name] = Number(raw);
+      else if (variable.type === 'boolean') result[variable.name] = raw === true || raw === 'true';
+      else if (variable.type === 'json') {
+        try { result[variable.name] = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+        catch { result[variable.name] = raw; }
+      } else result[variable.name] = raw;
+    }
+    return result;
+  }, [input, inputValues, inputVariables]);
 
   const execute = useCallback(async () => {
     if (!workflowId || isExecuting) return;
+    const blockingIssue = validationIssues.find(issue => issue.severity === 'error');
+    if (blockingIssue) {
+      setIsExpanded(true);
+      setError(`Cannot run: ${blockingIssue.message}`);
+      onFocusIssue(blockingIssue.nodeId);
+      return;
+    }
+    const missingInput = inputVariables.find((variable: any) => variable.required && !String(inputValues[variable.name] ?? variable.defaultValue ?? '').trim());
+    if (missingInput) {
+      setIsExpanded(true);
+      setError(`Enter a value for required input "${missingInput.name}"`);
+      return;
+    }
 
     setIsExecuting(true);
     setError(null);
@@ -45,14 +81,33 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const workflowNodes = nodes.map(node => ({
+        id: node.id,
+        type: node.data?.nodeType || 'agent',
+        position: node.position,
+        data: node.data,
+      }));
+      const saveResponse = await fetch(`/api/workflows/${workflowId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes: workflowNodes, edges }),
+        signal: controller.signal,
+      });
+      if (!saveResponse.ok) throw new Error('Could not save the latest graph before execution');
+
       const response = await fetch(`/api/workflows/${workflowId}/execute-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input: getExecutionInput() }),
         signal: controller.signal,
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const firstIssue = body.issues?.[0];
+        if (firstIssue?.nodeId) onFocusIssue(firstIssue.nodeId);
+        throw new Error(firstIssue?.message || body.error || `HTTP ${response.status}`);
+      }
 
       for await (const event of parseSSEStream(response)) {
         handleEvent(event);
@@ -64,17 +119,17 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
       setStartTime(null);
       abortRef.current = null;
     }
-  }, [workflowId, nodes, input, isExecuting, setIsExecuting, setNodeStatuses]);
+  }, [workflowId, nodes, edges, input, inputValues, inputVariables, getExecutionInput, isExecuting, validationIssues, onFocusIssue, setIsExecuting, setNodeStatuses]);
 
   const handleEvent = useCallback((event: any) => {
-    if (event.type === 'node_running' || event.type === 'node_start') {
+    if (event.type === 'node_running' || event.type === 'node_start' || event.type === 'node_started') {
       setNodeStatuses(prev => {
         const next = new Map(prev);
         const existing = next.get(event.nodeId) || { nodeId: event.nodeId, status: 'pending' };
         next.set(event.nodeId, { ...existing, status: 'running', startedAt: new Date().toISOString() });
         return next;
       });
-    } else if (event.type === 'node_completed' || event.type === 'completed') {
+    } else if (event.type === 'node_completed') {
       setNodeStatuses(prev => {
         const next = new Map(prev);
         const nodeId = event.nodeId || event.data?.nodeId;
@@ -85,7 +140,7 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
         return next;
       });
       if (event.data?.output) setOutput(event.data.output);
-    } else if (event.type === 'node_error' || event.type === 'error') {
+    } else if (event.type === 'node_error' || event.type === 'node_failed' || event.type === 'error') {
       setNodeStatuses(prev => {
         const next = new Map(prev);
         const nodeId = event.nodeId || event.data?.nodeId;
@@ -96,8 +151,9 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
         return next;
       });
       if (event.error) setError(event.error);
-    } else if (event.type === 'pending-auth' || event.type === 'pending_approval') {
-      setPendingApproval(event.data || event.pendingAuth);
+    } else if (event.type === 'pending-auth' || event.type === 'pending_approval' || event.type === 'workflow_paused') {
+      setPendingApproval(event.pendingAction || event.data || event.pendingAuth);
+      setIsExpanded(true);
     } else if (event.type === 'state_update') {
       if (event.state?.nodeResults) {
         setNodeStatuses(prev => {
@@ -108,13 +164,17 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
           return next;
         });
       }
+    } else if (event.type === 'workflow_completed') {
+      const finalOutput = event.state?.variables?.lastOutput;
+      if (finalOutput !== undefined) setOutput(finalOutput);
     }
   }, [setNodeStatuses]);
 
   const handleApproval = useCallback(async (approved: boolean) => {
     if (!pendingApproval || !workflowId) return;
     try {
-      await fetch(`/api/workflows/${workflowId}/resume`, {
+      setIsExecuting(true);
+      const response = await fetch(`/api/workflows/${workflowId}/resume`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,11 +183,31 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
           decision: approved ? 'approve' : 'reject',
         }),
       });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${response.status}`);
+      }
       setPendingApproval(null);
+      for await (const event of parseSSEStream(response)) handleEvent(event);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [pendingApproval, workflowId, handleEvent, setIsExecuting]);
+
+  const loadHistory = useCallback(async () => {
+    if (!workflowId) return;
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/executions`);
+      if (!response.ok) throw new Error('Could not load execution history');
+      setHistory(await response.json());
+      setShowHistory(true);
+      setIsExpanded(true);
     } catch (err: any) {
       setError(err.message);
     }
-  }, [pendingApproval, workflowId]);
+  }, [workflowId]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -173,7 +253,7 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
       className="rounded-t-lg border border-b-0 shadow-xl"
       style={{
         borderColor: 'var(--border-300)',
-        backgroundColor: 'var(--bg-100, #111114)',
+        backgroundColor: 'var(--bg-100, #1a1a1a)',
         width: isExpanded ? 'min(560px, calc(100vw - 120px))' : 'min(340px, calc(100vw - 120px))',
         transition: 'width 0.2s ease',
       }}
@@ -223,6 +303,14 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
               <RotateCcw size={11} />
             </button>
           )}
+          <button
+            onClick={(event) => { event.stopPropagation(); void loadHistory(); }}
+            className="p-0.5 rounded cursor-pointer"
+            style={{ color: showHistory ? 'var(--neon-color)' : 'var(--text-500)' }}
+            title="Execution history"
+          >
+            <History size={11} />
+          </button>
           {isExpanded ? <ChevronDown size={11} style={{ color: 'var(--text-500)' }} /> : <ChevronUp size={11} style={{ color: 'var(--text-500)' }} />}
         </div>
       </div>
@@ -241,17 +329,14 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
         </div>
       )}
 
-      <div className="flex gap-2 px-3 py-2">
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Workflow input..."
-          className="flex-1 px-2 py-1 text-[11px] rounded border bg-transparent"
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-          onKeyDown={e => e.key === 'Enter' && execute()}
-          disabled={isExecuting}
-          onClick={e => e.stopPropagation()}
-        />
+      <div className="flex gap-2 px-3 py-2 items-end">
+        <div className="flex-1 min-w-0">
+          {inputVariables.length === 0 ? <input value={input} onChange={e => setInput(e.target.value)} placeholder="Workflow input..." className="w-full px-2 py-1 text-[11px] rounded border bg-transparent" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }} onKeyDown={e => e.key === 'Enter' && execute()} disabled={isExecuting} onClick={e => e.stopPropagation()} /> : (
+            <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto">
+              {inputVariables.map((variable: any) => <label key={variable.name} className="min-w-0"><span className="block text-[8px] mb-0.5 truncate" style={{ color: 'var(--text-500)' }}>{variable.name}{variable.required ? ' *' : ''}</span>{variable.type === 'boolean' ? <select value={String(inputValues[variable.name] ?? variable.defaultValue ?? false)} onChange={event => setInputValues(current => ({ ...current, [variable.name]: event.target.value }))} className="w-full px-1.5 py-1 text-[10px] rounded border" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)', background: 'var(--bg-100)' }}><option value="false">false</option><option value="true">true</option></select> : <input value={inputValues[variable.name] ?? variable.defaultValue ?? ''} onChange={event => setInputValues(current => ({ ...current, [variable.name]: event.target.value }))} placeholder={variable.description || variable.type} className="w-full px-1.5 py-1 text-[10px] rounded border bg-transparent" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }} />}</label>)}
+            </div>
+          )}
+        </div>
         {isExecuting ? (
           <button onClick={(e) => { e.stopPropagation(); cancel(); }} className="px-2 py-1 rounded text-xs cursor-pointer" style={{ backgroundColor: STATUS_COLORS.failed + '20', color: STATUS_COLORS.failed }}>
             <Square size={11} />
@@ -272,9 +357,29 @@ export default function ExecutionPanel({ nodes, edges, workflowId }: Props) {
                 <span className="text-[11px] font-medium" style={{ color: STATUS_COLORS.running }}>Approval Required</span>
               </div>
               <p className="text-[10px] mb-2" style={{ color: 'var(--text-300)' }}>{pendingApproval.message}</p>
+              {pendingApproval.authUrl && (
+                <a href={pendingApproval.authUrl} target="_blank" rel="noreferrer" className="mb-2 inline-flex items-center gap-1 text-[10px] underline" style={{ color: 'var(--neon-color)' }}>
+                  Open authorization <ExternalLink size={10} />
+                </a>
+              )}
               <div className="flex gap-2">
-                <button onClick={() => handleApproval(true)} className="px-2.5 py-1 rounded text-[11px] cursor-pointer" style={{ backgroundColor: STATUS_COLORS.completed + '20', color: STATUS_COLORS.completed }}>Approve</button>
-                <button onClick={() => handleApproval(false)} className="px-2.5 py-1 rounded text-[11px] cursor-pointer" style={{ backgroundColor: STATUS_COLORS.failed + '20', color: STATUS_COLORS.failed }}>Reject</button>
+                <button onClick={() => handleApproval(true)} className="px-2.5 py-1 rounded text-[11px] cursor-pointer" style={{ backgroundColor: STATUS_COLORS.completed + '20', color: STATUS_COLORS.completed }}>{pendingApproval.kind === 'arcade-authorization' ? 'Resume' : 'Approve'}</button>
+                <button onClick={() => handleApproval(false)} className="px-2.5 py-1 rounded text-[11px] cursor-pointer" style={{ backgroundColor: STATUS_COLORS.failed + '20', color: STATUS_COLORS.failed }}>{pendingApproval.kind === 'arcade-authorization' ? 'Cancel' : 'Reject'}</button>
+              </div>
+            </div>
+          )}
+
+          {showHistory && (
+            <div className="mx-3 mb-2 rounded border overflow-hidden" style={{ borderColor: 'var(--border-300)' }}>
+              <div className="px-2 py-1.5 text-[10px] font-medium" style={{ color: 'var(--text-300)', background: 'var(--bg-200)' }}>Recent executions</div>
+              <div className="max-h-32 overflow-y-auto">
+                {history.slice(0, 20).map(item => (
+                  <div key={item.id} className="flex items-center justify-between px-2 py-1.5 text-[9px] border-t" style={{ borderColor: 'var(--border-300)', color: 'var(--text-500)' }}>
+                    <span className="font-mono">{item.id}</span>
+                    <span style={{ color: item.status === 'completed' ? STATUS_COLORS.completed : item.status === 'failed' ? STATUS_COLORS.failed : STATUS_COLORS.running }}>{item.status}</span>
+                  </div>
+                ))}
+                {history.length === 0 && <div className="px-2 py-3 text-center text-[10px]" style={{ color: 'var(--text-500)' }}>No executions yet</div>}
               </div>
             </div>
           )}

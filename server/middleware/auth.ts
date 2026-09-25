@@ -21,6 +21,10 @@ const ROUTE_MODE_MAP: Record<string, string> = {
 
 export function requireModeAuth(req: Request, res: Response, next: NextFunction) {
   const url = req.originalUrl || req.url;
+  const isPublishedWorkflowExecution = /^\/api\/workflows\/[^/]+\/execute(?:-stream)?(?:\?|$)/.test(url);
+  if (isPublishedWorkflowExecution && req.headers.authorization?.startsWith('Bearer ')) {
+    return next();
+  }
   const mode = Object.entries(ROUTE_MODE_MAP).find(([prefix]) =>
     url.startsWith(prefix)
   )?.[1];

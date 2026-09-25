@@ -18,11 +18,11 @@ const ThemedSelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-8 w-full items-center justify-between rounded-lg border px-2.5 py-2 text-xs outline-none",
+      "flex h-8 w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden rounded-lg border px-2.5 py-2 text-xs outline-none",
       "transition-colors cursor-pointer",
-      "focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)]",
+      "focus:border-[var(--neon-color)] focus:ring-1 focus:ring-inset focus:ring-[var(--neon-color)]",
       "disabled:cursor-not-allowed disabled:opacity-50",
-      "[&>span]:line-clamp-1",
+      "[&>span]:min-w-0 [&>span]:truncate",
       className,
     )}
     style={{
@@ -76,7 +76,7 @@ const ThemedSelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-lg border shadow-lg",
+        "relative z-50 max-h-72 min-w-[8rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border shadow-lg",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
@@ -92,6 +92,7 @@ const ThemedSelectContent = React.forwardRef<
         color: 'var(--text-100)',
       }}
       position={position}
+      collisionPadding={8}
       {...props}
     >
       <ThemedSelectScrollUpButton />
@@ -128,15 +129,16 @@ ThemedSelectLabel.displayName = SelectPrimitive.Label.displayName
 
 const ThemedSelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { displayText?: string }
+>(({ className, children, displayText, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-7 pr-2 text-xs outline-none",
+      "relative flex w-full min-w-0 cursor-default select-none items-center overflow-hidden rounded-md py-1.5 pl-7 pr-2 text-xs outline-none",
       "focus:bg-[var(--bg-300)] focus:text-[var(--text-100)]",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "transition-colors",
+      displayText !== undefined && "items-start",
       className,
     )}
     style={{ color: 'var(--text-300)' }}
@@ -147,7 +149,16 @@ const ThemedSelectItem = React.forwardRef<
         <Check className="h-3.5 w-3.5" style={{ color: 'var(--neon-color)' }} />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {displayText !== undefined ? (
+      <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+        <SelectPrimitive.ItemText>{displayText}</SelectPrimitive.ItemText>
+        {children && <span className="truncate text-[9px] leading-tight opacity-60">{children}</span>}
+      </div>
+    ) : (
+      <SelectPrimitive.ItemText>
+        <span className="block min-w-0 truncate">{children}</span>
+      </SelectPrimitive.ItemText>
+    )}
   </SelectPrimitive.Item>
 ))
 ThemedSelectItem.displayName = SelectPrimitive.Item.displayName

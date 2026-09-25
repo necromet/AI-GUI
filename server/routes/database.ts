@@ -1,167 +1,22 @@
 import { Router, Request, Response } from 'express';
-import pg from 'pg';
-import crypto from 'crypto';
-import { query, getOne, getAll } from '../db/pg';
+import {
+  closeConnectionPool,
+  createDatabaseConnection,
+  deleteDatabaseConnection,
+  executeReadOnlyQuery,
+  findDatabaseConnection,
+  getConnectionPool,
+  listDatabaseConnections,
+  sanitizeDatabaseError,
+  testDatabaseConnection,
+  updateDatabaseConnection,
+} from '../services/databaseConnectionService.js';
 
 const router = Router();
 
-const ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY || process.env.SESSION_SECRET;
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
-
-function deriveKey(): Buffer {
-  const source = ENCRYPTION_KEY || 'insecure-fallback-key-do-not-use-in-production';
-  return crypto.scryptSync(source, 'db-pw-salt-v2', 32);
-}
-
-function encodePassword(pw: string): string {
-  const key = deriveKey();
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  const encrypted = Buffer.concat([cipher.update(pw, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, encrypted]).toString('base64');
-}
-
-function decodePassword(encoded: string): string {
-  const data = Buffer.from(encoded, 'base64');
-  if (data.length < IV_LENGTH + TAG_LENGTH + 1) {
-    return Buffer.from(encoded, 'base64').toString('utf-8');
-  }
-  try {
-    const key = deriveKey();
-    const iv = data.subarray(0, IV_LENGTH);
-    const tag = data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
-    const encrypted = data.subarray(IV_LENGTH + TAG_LENGTH);
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(tag);
-    return decipher.update(encrypted) + decipher.final('utf8');
-  } catch {
-    return Buffer.from(encoded, 'base64').toString('utf-8');
-  }
-}
-
-const poolCache = new Map<string, { pool: pg.Pool; lastUsed: number }>();
-const POOL_IDLE_MS = 5 * 60 * 1000;
-const MAX_ROWS = 1000;
-const MAX_CACHED_POOLS = 50;
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, entry] of poolCache) {
-    if (now - entry.lastUsed > POOL_IDLE_MS) {
-      entry.pool.end().catch(() => {});
-      poolCache.delete(id);
-    }
-  }
-}, 60_000);
-
-function getPool(id: string, config: { host: string; port: number; database: string; user: string; password: string; ssl: boolean }): pg.Pool {
-  const cached = poolCache.get(id);
-  if (cached) {
-    cached.lastUsed = Date.now();
-    return cached.pool;
-  }
-  if (poolCache.size >= MAX_CACHED_POOLS) {
-    let oldestId: string | null = null;
-    let oldestTime = Infinity;
-    for (const [k, v] of poolCache) {
-      if (v.lastUsed < oldestTime) { oldestTime = v.lastUsed; oldestId = k; }
-    }
-    if (oldestId) {
-      const entry = poolCache.get(oldestId);
-      entry?.pool.end().catch(() => {});
-      poolCache.delete(oldestId);
-    }
-  }
-  const pool = new pg.Pool({
-    host: config.host,
-    port: config.port,
-    database: config.database,
-    user: config.user,
-    password: config.password,
-    max: 5,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    statement_timeout: 30000,
-    ssl: config.ssl ? { rejectUnauthorized: true } : undefined,
-  });
-  pool.on('error', () => {});
-  poolCache.set(id, { pool, lastUsed: Date.now() });
-  return pool;
-}
-
-function removePool(id: string) {
-  const cached = poolCache.get(id);
-  if (cached) {
-    cached.pool.end().catch(() => {});
-    poolCache.delete(id);
-  }
-}
-
-function stripSqlComments(sql: string): string {
-  return sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-}
-
-function isReadOnlyQuery(sql: string): { allowed: boolean; keyword?: string } {
-  const cleaned = stripSqlComments(sql).trim();
-  const match = cleaned.match(/^\s*(SELECT|WITH|EXPLAIN|SHOW|SET\s+|BEGIN|COMMIT|ROLLBACK|START\s+TRANSACTION)\b/i);
-  if (!match) {
-    const nonReadMatch = cleaned.match(/^\s*(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE)\b/i);
-    return { allowed: false, keyword: nonReadMatch?.[1]?.toUpperCase() || 'non-SELECT' };
-  }
-  return { allowed: true };
-}
-
-function injectRowLimit(sql: string, maxRows: number): string {
-  const cleaned = stripSqlComments(sql).trim().replace(/;\s*$/, '');
-  if (/\bLIMIT\s+\d+/i.test(cleaned)) return sql;
-  if (/^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b/i.test(cleaned)) return sql;
-  return `${cleaned} LIMIT ${maxRows}`;
-}
-
-interface ConnRow {
-  id: string;
-  name: string;
-  host: string;
-  port: number;
-  database_name: string;
-  username: string;
-  password_encrypted: string;
-  ssl: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-async function getConnConfig(id: string): Promise<{ pool: pg.Pool; row: ConnRow } | null> {
-  const row = await getOne<ConnRow>('SELECT * FROM database_connections WHERE id = $1', [id]);
-  if (!row) return null;
-  const pool = getPool(id, {
-    host: row.host,
-    port: row.port,
-    database: row.database_name,
-    user: row.username,
-    password: decodePassword(row.password_encrypted),
-    ssl: row.ssl,
-  });
-  return { pool, row };
-}
-
 router.get('/connections', async (_req: Request, res: Response) => {
   try {
-    const rows = await getAll<ConnRow>('SELECT * FROM database_connections ORDER BY created_at DESC');
-    const connections = rows.map(r => ({
-      id: r.id,
-      name: r.name,
-      host: r.host,
-      port: r.port,
-      database: r.database_name,
-      user: r.username,
-      ssl: r.ssl,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    }));
+    const connections = await listDatabaseConnections();
     res.json({ connections });
   } catch (error: any) {
     console.error('[database/connections] Error:', error.message);
@@ -171,24 +26,12 @@ router.get('/connections', async (_req: Request, res: Response) => {
 
 router.get('/connections/:id', async (req: Request, res: Response) => {
   try {
-    const row = await getOne<ConnRow>('SELECT * FROM database_connections WHERE id = $1', [req.params.id]);
-    if (!row) {
+    const connection = await findDatabaseConnection(String(req.params.id));
+    if (!connection) {
       res.status(404).json({ error: 'Connection not found' });
       return;
     }
-    res.json({
-      connection: {
-        id: row.id,
-        name: row.name,
-        host: row.host,
-        port: row.port,
-        database: row.database_name,
-        user: row.username,
-        ssl: row.ssl,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      },
-    });
+    res.json({ connection });
   } catch (error: any) {
     console.error('[database/connections/:id] Error:', error.message);
     res.status(500).json({ error: error.message });
@@ -202,13 +45,7 @@ router.post('/connections', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: name, host, database, user, password' });
       return;
     }
-    const id = crypto.randomBytes(16).toString('hex');
-    const encoded = encodePassword(password);
-    await query(
-      `INSERT INTO database_connections (id, name, host, port, database_name, username, password_encrypted, ssl)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, name, host, port || 5432, database, user, encoded, ssl || false]
-    );
+    const id = await createDatabaseConnection({ name, host, port, database, user, password, ssl });
     res.json({ id });
   } catch (error: any) {
     console.error('[database/connections POST] Error:', error.message);
@@ -218,21 +55,7 @@ router.post('/connections', async (req: Request, res: Response) => {
 
 router.put('/connections/:id', async (req: Request, res: Response) => {
   try {
-    const { name, host, port, database, user, password, ssl } = req.body;
-    const sets: string[] = [];
-    const params: any[] = [];
-    let idx = 1;
-    if (name !== undefined) { sets.push(`name = $${idx++}`); params.push(name); }
-    if (host !== undefined) { sets.push(`host = $${idx++}`); params.push(host); }
-    if (port !== undefined) { sets.push(`port = $${idx++}`); params.push(port); }
-    if (database !== undefined) { sets.push(`database_name = $${idx++}`); params.push(database); }
-    if (user !== undefined) { sets.push(`username = $${idx++}`); params.push(user); }
-    if (password !== undefined) { sets.push(`password_encrypted = $${idx++}`); params.push(encodePassword(password)); }
-    if (ssl !== undefined) { sets.push(`ssl = $${idx++}`); params.push(ssl); }
-    sets.push(`updated_at = NOW()`);
-    params.push(req.params.id);
-    await query(`UPDATE database_connections SET ${sets.join(', ')} WHERE id = $${idx}`, params);
-    removePool(req.params.id);
+    await updateDatabaseConnection(String(req.params.id), req.body);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[database/connections/:id PUT] Error:', error.message);
@@ -242,8 +65,7 @@ router.put('/connections/:id', async (req: Request, res: Response) => {
 
 router.delete('/connections/:id', async (req: Request, res: Response) => {
   try {
-    removePool(req.params.id);
-    await query('DELETE FROM database_connections WHERE id = $1', [req.params.id]);
+    await deleteDatabaseConnection(String(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     console.error('[database/connections/:id DELETE] Error:', error.message);
@@ -258,24 +80,11 @@ router.post('/test', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
-    const testPool = new pg.Pool({
-      host,
-      port: port || 5432,
-      database,
-      user,
-      password,
-      max: 1,
-      connectionTimeoutMillis: 10000,
-      ssl: ssl ? { rejectUnauthorized: true } : undefined,
-    });
-    const client = await testPool.connect();
-    const result = await client.query('SELECT version()');
-    client.release();
-    await testPool.end();
-    res.json({ success: true, version: result.rows[0]?.version || '' });
+    const version = await testDatabaseConnection({ host, port, database, user, password, ssl });
+    res.json({ success: true, version });
   } catch (error: any) {
     console.error('[database/test] Error:', error.message);
-    res.json({ success: false, error: error.message });
+    res.json({ success: false, error: sanitizeDatabaseError(error) });
   }
 });
 
@@ -286,13 +95,11 @@ router.post('/schema', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing connectionId' });
       return;
     }
-    const config = await getConnConfig(connectionId);
-    if (!config) {
+    const pool = await getConnectionPool(connectionId);
+    if (!pool) {
       res.status(404).json({ error: 'Connection not found' });
       return;
     }
-    const { pool } = config;
-
     const schemasResult = await pool.query(
       `SELECT schema_name FROM information_schema.schemata
        WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
@@ -373,7 +180,7 @@ router.post('/schema', async (req: Request, res: Response) => {
     res.json({ schemas, tables });
   } catch (error: any) {
     console.error('[database/schema] Error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: sanitizeDatabaseError(error) });
   }
 });
 
@@ -384,49 +191,16 @@ router.post('/query', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing connectionId or sql' });
       return;
     }
-    const config = await getConnConfig(connectionId);
-    if (!config) {
-      res.status(404).json({ error: 'Connection not found' });
-      return;
-    }
-
-    const check = isReadOnlyQuery(sql);
-    if (!check.allowed) {
-      res.status(403).json({
-        columns: [],
-        rows: [],
-        rowCount: 0,
-        executionTime: 0,
-        error: `Only read-only queries are allowed. "${check.keyword}" statements are not permitted.`,
-      });
-      return;
-    }
-
-    const limit = Math.min(maxRows || MAX_ROWS, MAX_ROWS);
-    const finalSql = injectRowLimit(sql, limit);
-    const start = Date.now();
-    const result = await config.pool.query({
-      text: finalSql,
-      ...(timeout ? { query_timeout: timeout } : {}),
-    } as any);
-    const executionTime = Date.now() - start;
-
-    const columns = result.fields?.map((f: any) => f.name) || [];
-    let rows = result.rows || [];
-    const truncated = rows.length > limit;
-    if (truncated) {
-      rows = rows.slice(0, limit);
-    }
-
-    const flatRows = rows.map((row: any) => columns.map(col => row[col]));
-    const isSelect = columns.length > 0;
+    const result = await executeReadOnlyQuery(connectionId, sql, [], { maxRows: maxRows ?? 1000, timeoutMs: timeout });
+    const columnNames = result.columns.map(column => column.name);
+    const flatRows = result.rows.map((row: any) => columnNames.map(column => row[column]));
 
     res.json({
-      columns,
+      columns: columnNames,
       rows: flatRows,
-rowCount: isSelect ? flatRows.length : (result.rowCount || 0),
-      executionTime,
-      truncated,
+      rowCount: result.rowCount,
+      executionTime: result.executionTime,
+      truncated: result.truncated,
     });
   } catch (error: any) {
     console.error('[database/query] Error:', error.message);
@@ -435,14 +209,14 @@ rowCount: isSelect ? flatRows.length : (result.rowCount || 0),
       rows: [],
       rowCount: 0,
       executionTime: 0,
-      error: error.message,
+      error: sanitizeDatabaseError(error),
     });
   }
 });
 
 router.delete('/connections/:id/pool', async (req: Request, res: Response) => {
   try {
-    removePool(req.params.id);
+    closeConnectionPool(String(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -451,16 +225,16 @@ router.delete('/connections/:id/pool', async (req: Request, res: Response) => {
 
 router.post('/connections/:id/ping', async (req: Request, res: Response) => {
   try {
-    const config = await getConnConfig(req.params.id);
-    if (!config) {
+    const pool = await getConnectionPool(String(req.params.id));
+    if (!pool) {
       res.status(404).json({ error: 'Connection not found' });
       return;
     }
-    const client = await config.pool.connect();
+    const client = await pool.connect();
     client.release();
     res.json({ reachable: true });
   } catch (error: any) {
-    res.json({ reachable: false, error: error.message });
+    res.json({ reachable: false, error: sanitizeDatabaseError(error) });
   }
 });
 

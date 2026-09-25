@@ -16,6 +16,18 @@ npm run preview      # Preview production build
 
 No lint, typecheck, test, or formatter scripts exist. The only verification is `npm run build`.
 
+## Frontend Design Convention
+
+All rounded frontend surfaces use the global superellipse corner treatment in
+`src/globals.css`. Continue using the existing Tailwind `rounded-*` utilities or
+`border-radius` to set corner size; do not override `corner-shape` back to the
+default circular `round` shape. Deliberately square corners remain allowed.
+
+For full-height separators beside scrollable or independently painted regions,
+use the global `structural-divider-right` overlay utility instead of a container
+`border-right`. This prevents child backgrounds and scroll layers from hiding
+parts of the divider.
+
 ## Architecture
 
 Frontend is a single-page React app. Backend is Express 5 with PostgreSQL (`pg`). Client talks to backend via REST + SSE streaming — there is no direct DB access from the browser.

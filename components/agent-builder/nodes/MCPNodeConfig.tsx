@@ -1,21 +1,12 @@
+import { useEffect, useMemo, useState } from 'react';
 import { FIELD_STYLES, fieldClasses } from '../shared/formStyles';
-import {
-  ThemedSelect,
-  ThemedSelectTrigger,
-  ThemedSelectValue,
-  ThemedSelectContent,
-  ThemedSelectItem,
-} from '../shared/ThemedSelect';
-import {
-  ThemedTooltip,
-  ThemedTooltipTrigger,
-  ThemedTooltipContent,
-  ThemedTooltipProvider,
-} from '../shared/ThemedTooltip';
+import { ThemedSelect, ThemedSelectTrigger, ThemedSelectValue, ThemedSelectContent, ThemedSelectItem } from '../shared/ThemedSelect';
+import { ThemedTooltip, ThemedTooltipTrigger, ThemedTooltipContent, ThemedTooltipProvider } from '../shared/ThemedTooltip';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Info } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
+import VariableAutocomplete from '../VariableAutocomplete';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; upstreamNodes?: { id: string; label: string }[]; accentColor?: string; }
 
 const FIRECRAWL_ACTIONS = [
   { value: 'scrape', label: 'Scrape', desc: 'Extract content from a single URL' },
@@ -25,70 +16,88 @@ const FIRECRAWL_ACTIONS = [
   { value: 'map', label: 'Map', desc: 'Discover all URLs on a website' },
 ];
 
-export default function MCPNodeConfig({ data, onUpdate }: Props) {
+export default function MCPNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
+  const [servers, setServers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [argumentsText, setArgumentsText] = useState(JSON.stringify(data.arguments || {}, null, 2));
+  const [argumentsError, setArgumentsError] = useState(false);
+  const provider = data.serverId || 'firecrawl';
   const action = data.mcpAction || data.toolName || 'scrape';
+  const selectedServer = useMemo(() => servers.find(server => server.id === data.serverId), [servers, data.serverId]);
+  const tools = Array.isArray(selectedServer?.tools) ? selectedServer.tools : [];
+
+  useEffect(() => {
+    fetch('/api/workflows/mcp/registry')
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('Could not load MCP registry')))
+      .then(setServers)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const selectProvider = (value: string) => {
+    if (value === 'firecrawl') {
+      onUpdate({ serverId: '', serverUrl: '', mcpAction: 'scrape', toolName: 'scrape' });
+      return;
+    }
+    const server = servers.find(item => item.id === value);
+    const firstTool = server?.tools?.[0];
+    onUpdate({
+      serverId: value,
+      serverUrl: server?.url || '',
+      mcpAction: undefined,
+      toolName: typeof firstTool === 'string' ? firstTool : firstTool?.name || '',
+    });
+  };
 
   return (
     <ThemedTooltipProvider delayDuration={300}>
       <div className="space-y-4">
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <label className={fieldClasses.label} style={{ ...FIELD_STYLES.label, marginBottom: 0 }}>Action</label>
-            <ThemedTooltip>
-              <ThemedTooltipTrigger asChild>
-                <span style={{ color: 'var(--text-500)' }}><Info size={11} /></span>
-              </ThemedTooltipTrigger>
-              <ThemedTooltipContent side="top">
-                {FIRECRAWL_ACTIONS.find(a => a.value === action)?.desc || 'Select an action'}
-              </ThemedTooltipContent>
-            </ThemedTooltip>
-          </div>
-          <ThemedSelect
-            value={action}
-            onValueChange={v => onUpdate({ mcpAction: v, toolName: v })}
-          >
-            <ThemedSelectTrigger>
-              <ThemedSelectValue />
-            </ThemedSelectTrigger>
-            <ThemedSelectContent>
-              {FIRECRAWL_ACTIONS.map(a => (
-                <ThemedSelectItem key={a.value} value={a.value}>{a.label}</ThemedSelectItem>
-              ))}
-            </ThemedSelectContent>
-          </ThemedSelect>
-        </div>
-
-        <div>
-          <label className={fieldClasses.label} style={FIELD_STYLES.label}>URL</label>
-          <input
-            value={data.scrapeUrl || data.url || ''}
-            onChange={e => onUpdate({ scrapeUrl: e.target.value, url: e.target.value })}
-            placeholder="{{input}} or https://..."
-            className={fieldClasses.input}
-            style={FIELD_STYLES.input}
-          />
-        </div>
-
-        <AnimatePresence>
-          {action === 'search' && (
-            <motion.div
-              key="search-query"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <label className={fieldClasses.label} style={FIELD_STYLES.label}>Search Query</label>
-              <input
-                value={data.searchQuery || ''}
-                onChange={e => onUpdate({ searchQuery: e.target.value })}
-                placeholder="{{input}}"
-                className={fieldClasses.input}
-                style={FIELD_STYLES.input}
-              />
-            </motion.div>
+          <label className={fieldClasses.label} style={FIELD_STYLES.label}>MCP server</label>
+          {loading ? <div className="h-9 flex items-center justify-center"><Loader2 size={14} className="animate-spin" /></div> : (
+            <ThemedSelect value={provider} onValueChange={selectProvider}>
+              <ThemedSelectTrigger><ThemedSelectValue /></ThemedSelectTrigger>
+              <ThemedSelectContent>
+                <ThemedSelectItem value="firecrawl">Firecrawl (built in)</ThemedSelectItem>
+                {servers.map(server => <ThemedSelectItem key={server.id} value={server.id}>{server.name}</ThemedSelectItem>)}
+              </ThemedSelectContent>
+            </ThemedSelect>
           )}
-        </AnimatePresence>
+        </div>
+
+        {provider === 'firecrawl' ? (
+          <>
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label className={fieldClasses.label} style={{ ...FIELD_STYLES.label, marginBottom: 0 }}>Action</label>
+                <ThemedTooltip><ThemedTooltipTrigger asChild><span style={{ color: 'var(--text-500)' }}><Info size={11} /></span></ThemedTooltipTrigger><ThemedTooltipContent side="top">{FIRECRAWL_ACTIONS.find(item => item.value === action)?.desc}</ThemedTooltipContent></ThemedTooltip>
+              </div>
+              <ThemedSelect value={action} onValueChange={value => onUpdate({ mcpAction: value, toolName: value })}>
+                <ThemedSelectTrigger><ThemedSelectValue /></ThemedSelectTrigger>
+                <ThemedSelectContent>{FIRECRAWL_ACTIONS.map(item => <ThemedSelectItem key={item.value} value={item.value}>{item.label}</ThemedSelectItem>)}</ThemedSelectContent>
+              </ThemedSelect>
+            </div>
+            <div>
+              <label className={fieldClasses.label} style={FIELD_STYLES.label}>URL</label>
+              <VariableAutocomplete value={data.scrapeUrl || data.url || ''} onChange={value => onUpdate({ scrapeUrl: value, url: value })} placeholder="{{input.url}} or https://..." upstreamNodes={upstreamNodes} />
+            </div>
+            <AnimatePresence>{action === 'search' && <motion.div key="search-query" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}><label className={fieldClasses.label} style={FIELD_STYLES.label}>Search query</label><VariableAutocomplete value={data.searchQuery || ''} onChange={value => onUpdate({ searchQuery: value })} placeholder="{{input.query}}" upstreamNodes={upstreamNodes} /></motion.div>}</AnimatePresence>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className={fieldClasses.label} style={FIELD_STYLES.label}>Tool</label>
+              <ThemedSelect value={data.toolName || ''} onValueChange={value => onUpdate({ toolName: value })}>
+                <ThemedSelectTrigger><ThemedSelectValue placeholder="Select a tool" /></ThemedSelectTrigger>
+                <ThemedSelectContent>{tools.map((tool: any) => { const name = typeof tool === 'string' ? tool : tool.name; return <ThemedSelectItem key={name} value={name}>{name}</ThemedSelectItem>; })}</ThemedSelectContent>
+              </ThemedSelect>
+            </div>
+            <div>
+              <label className={fieldClasses.label} style={FIELD_STYLES.label}>Arguments (JSON)</label>
+              <VariableAutocomplete value={argumentsText} onChange={value => { setArgumentsText(value); try { onUpdate({ arguments: JSON.parse(value) }); setArgumentsError(false); } catch { setArgumentsError(true); } }} multiline rows={7} upstreamNodes={upstreamNodes} />
+              {argumentsError && <p className="text-[10px] text-red-400 mt-1">Enter valid JSON before running.</p>}
+            </div>
+          </>
+        )}
       </div>
     </ThemedTooltipProvider>
   );

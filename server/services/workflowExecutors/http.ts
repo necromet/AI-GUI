@@ -1,3 +1,5 @@
+import { substituteVariables } from './variables.js';
+
 export async function executeHTTPNode(
   data: Record<string, any>,
   state: any
@@ -12,27 +14,27 @@ export async function executeHTTPNode(
   } = data;
 
   const variables = state.variables || {};
-  const url = interpolate(rawUrl, variables);
+  const url = substituteVariables(rawUrl, state);
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(rawHeaders)) {
-    headers[interpolate(k, variables)] = interpolate(v as string, variables);
+    headers[substituteVariables(k, state)] = substituteVariables(v as string, state);
   }
 
   // Apply auth headers
   const authType = data.authType || 'none';
   if (authType === 'bearer' && data.authToken) {
-    headers['Authorization'] = `Bearer ${interpolate(data.authToken, variables)}`;
+    headers['Authorization'] = `Bearer ${substituteVariables(data.authToken, state)}`;
   } else if (authType === 'api-key' && data.apiKey) {
     const headerName = data.apiKeyHeader || 'X-API-Key';
-    headers[headerName] = interpolate(data.apiKey, variables);
+    headers[headerName] = substituteVariables(data.apiKey, state);
   } else if (authType === 'basic' && data.basicUser) {
-    const creds = btoa(`${interpolate(data.basicUser, variables)}:${interpolate(data.basicPassword || '', variables)}`);
+    const creds = Buffer.from(`${substituteVariables(data.basicUser, state)}:${substituteVariables(data.basicPassword || '', state)}`).toString('base64');
     headers['Authorization'] = `Basic ${creds}`;
   }
 
   let body: string | undefined;
   if (rawBody && method !== 'GET') {
-    body = typeof rawBody === 'string' ? interpolate(rawBody, variables) : JSON.stringify(rawBody);
+    body = typeof rawBody === 'string' ? substituteVariables(rawBody, state) : JSON.stringify(rawBody);
   }
 
   try {
@@ -74,12 +76,4 @@ export async function executeHTTPNode(
       method,
     };
   }
-}
-
-function interpolate(str: string, vars: Record<string, any>): string {
-  if (!str) return str;
-  return str.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_, path) => {
-    const val = path.split('.').reduce((o: any, k: string) => o?.[k], vars);
-    return val !== undefined ? String(val) : `{{${path}}}`;
-  });
 }

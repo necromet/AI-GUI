@@ -24,10 +24,10 @@ router.get('/mcp/registry', async (_req, res) => {
 
 router.post('/mcp', async (req, res) => {
   try {
-    const { name, url, description, authType, accessToken, headers } = req.body;
+    const { name, url, description, authType, accessToken, headers, tools } = req.body;
     const server = await workflowDB.createMCPServer({
       id: `mcp_${nanoid(10)}`,
-      name, url, description, authType, accessToken, headers,
+      name, url, description, authType, accessToken, headers, tools,
     });
     res.json(server);
   } catch (err: any) {

@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Moon, Sun, Palette, Type, Bot, Shield, Sparkles, Wrench, RotateCcw,
+  Moon, Sun, Palette, Type, Bot, Shield, Sparkles, Wrench, RotateCcw, LayoutTemplate, Terminal,
 } from 'lucide-react';
 import { ModelConfig } from '../types';
 import { NEON_PRESETS, INDIVIDUAL_COLORS, THEME_PRESETS } from '../constants';
 import { FONT_SIZE_MAP, FONT_FAMILY_MAP } from '../App';
+import type { DesignSystem } from '../hooks/useThemeSettings';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -31,6 +32,8 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.Elemen
 interface SettingsPageProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  designSystem: DesignSystem;
+  onChangeDesignSystem: (designSystem: DesignSystem) => void;
   neonColor: string;
   onChangeNeonColor: (color: string) => void;
   neonPreset: string;
@@ -48,14 +51,44 @@ interface SettingsPageProps {
   onChangeFontFamily: (family: string) => void;
 }
 
-const FONTS = [
-  { id: 'default', name: 'Default', sample: 'Plus Jakarta Sans + system stack' },
-  { id: 'plus-jakarta-sans', name: 'Plus Jakarta Sans', sample: 'Clean geometric sans-serif' },
-  { id: 'google-sans', name: 'Google Sans', sample: 'Friendly and approachable' },
-  { id: 'open-sans', name: 'Open Sans', sample: 'Neutral and highly legible' },
-  { id: 'fredoka', name: 'Fredoka', sample: 'Rounded and playful' },
-  { id: 'comfortaa', name: 'Comfortaa', sample: 'Geometric and modern' },
-  { id: 'space-grotesk', name: 'Space Grotesk', sample: 'Technical and geometric' },
+type FontCategory = 'sans' | 'mono' | 'serif';
+
+const FONTS: { id: string; name: string; sample: string; category: FontCategory }[] = [
+  { id: 'default', name: 'Default', sample: 'Plus Jakarta Sans + system stack', category: 'sans' },
+  { id: 'plus-jakarta-sans', name: 'Plus Jakarta Sans', sample: 'Clean geometric sans-serif', category: 'sans' },
+  { id: 'google-sans', name: 'Google Sans', sample: 'Friendly and approachable', category: 'sans' },
+  { id: 'open-sans', name: 'Open Sans', sample: 'Neutral and highly legible', category: 'sans' },
+  { id: 'fredoka', name: 'Fredoka', sample: 'Rounded and playful', category: 'sans' },
+  { id: 'comfortaa', name: 'Comfortaa', sample: 'Geometric and modern', category: 'sans' },
+  { id: 'space-grotesk', name: 'Space Grotesk', sample: 'Technical and geometric', category: 'sans' },
+  { id: 'inter', name: 'Inter', sample: 'UI workhorse, highly legible', category: 'sans' },
+  { id: 'dm-sans', name: 'DM Sans', sample: 'Low-contrast geometric', category: 'sans' },
+  { id: 'outfit', name: 'Outfit', sample: 'Soft geometric display', category: 'sans' },
+  { id: 'manrope', name: 'Manrope', sample: 'Semi-geometric and crisp', category: 'sans' },
+  { id: 'sora', name: 'Sora', sample: 'Modern and technical', category: 'sans' },
+  { id: 'poppins', name: 'Poppins', sample: 'Circular and friendly', category: 'sans' },
+  { id: 'roboto', name: 'Roboto', sample: 'Familiar neo-grotesque', category: 'sans' },
+  { id: 'ibm-plex-sans', name: 'IBM Plex Sans', sample: 'Engineered for interfaces', category: 'sans' },
+  { id: 'work-sans', name: 'Work Sans', sample: 'Optimized for body text', category: 'sans' },
+  { id: 'nunito', name: 'Nunito', sample: 'Rounded terminals, warm', category: 'sans' },
+  { id: 'figtree', name: 'Figtree', sample: 'Clean and approachable', category: 'sans' },
+  { id: 'lato', name: 'Lato', sample: 'Semi-rounded humanist', category: 'sans' },
+  { id: 'rubik', name: 'Rubik', sample: 'Slightly rounded grotesque', category: 'sans' },
+  { id: 'epilogue', name: 'Epilogue', sample: 'Variable display sans', category: 'sans' },
+  { id: 'jetbrains-mono', name: 'JetBrains Mono', sample: 'Coding-first monospace', category: 'mono' },
+  { id: 'ibm-plex-mono', name: 'IBM Plex Mono', sample: 'Structured developer mono', category: 'mono' },
+  { id: 'fira-code', name: 'Fira Code', sample: 'Ligature-friendly coding', category: 'mono' },
+  { id: 'source-code-pro', name: 'Source Code Pro', sample: 'Adobes readable mono', category: 'mono' },
+  { id: 'space-mono', name: 'Space Mono', sample: 'Quirky geometric mono', category: 'mono' },
+  { id: 'roboto-mono', name: 'Roboto Mono', sample: 'Neutral coding mono', category: 'mono' },
+  { id: 'inconsolata', name: 'Inconsolata', sample: 'Humanist monospace', category: 'mono' },
+  { id: 'playfair-display', name: 'Playfair Display', sample: 'High-contrast display serif', category: 'serif' },
+  { id: 'lora', name: 'Lora', sample: 'Contemporary calligraphic', category: 'serif' },
+  { id: 'merriweather', name: 'Merriweather', sample: 'Sturdy screen serif', category: 'serif' },
+  { id: 'source-serif-4', name: 'Source Serif 4', sample: 'Adobes classic serif', category: 'serif' },
+  { id: 'libre-baskerville', name: 'Libre Baskerville', sample: 'Transitional book serif', category: 'serif' },
+  { id: 'eb-garamond', name: 'EB Garamond', sample: 'Classic old-style', category: 'serif' },
+  { id: 'fraunces', name: 'Fraunces', sample: 'Soft, expressive serif', category: 'serif' },
 ];
 
 const FONT_CSS: Record<string, string> = {
@@ -66,7 +99,41 @@ const FONT_CSS: Record<string, string> = {
   fredoka: "'Fredoka', sans-serif",
   comfortaa: "'Comfortaa', sans-serif",
   'space-grotesk': "'Space Grotesk', sans-serif",
+  inter: "'Inter', sans-serif",
+  'dm-sans': "'DM Sans', sans-serif",
+  outfit: "'Outfit', sans-serif",
+  manrope: "'Manrope', sans-serif",
+  sora: "'Sora', sans-serif",
+  poppins: "'Poppins', sans-serif",
+  roboto: "'Roboto', sans-serif",
+  'ibm-plex-sans': "'IBM Plex Sans', sans-serif",
+  'work-sans': "'Work Sans', sans-serif",
+  nunito: "'Nunito', sans-serif",
+  figtree: "'Figtree', sans-serif",
+  lato: "'Lato', sans-serif",
+  rubik: "'Rubik', sans-serif",
+  epilogue: "'Epilogue', sans-serif",
+  'jetbrains-mono': "'JetBrains Mono', monospace",
+  'ibm-plex-mono': "'IBM Plex Mono', monospace",
+  'fira-code': "'Fira Code', monospace",
+  'source-code-pro': "'Source Code Pro', monospace",
+  'space-mono': "'Space Mono', monospace",
+  'roboto-mono': "'Roboto Mono', monospace",
+  inconsolata: "'Inconsolata', monospace",
+  'playfair-display': "'Playfair Display', serif",
+  lora: "'Lora', serif",
+  merriweather: "'Merriweather', serif",
+  'source-serif-4': "'Source Serif 4', serif",
+  'libre-baskerville': "'Libre Baskerville', serif",
+  'eb-garamond': "'EB Garamond', serif",
+  fraunces: "'Fraunces', serif",
 };
+
+const FONT_CATEGORY_LABELS: { id: FontCategory; label: string }[] = [
+  { id: 'sans', label: 'Sans Serif' },
+  { id: 'mono', label: 'Monospace' },
+  { id: 'serif', label: 'Serif' },
+];
 
 const FONT_SIZES = [
   { id: 'xs', label: 'XS', px: 16 },
@@ -79,6 +146,8 @@ const FONT_SIZES = [
 const SettingsPage: React.FC<SettingsPageProps> = ({
   theme,
   onToggleTheme,
+  designSystem,
+  onChangeDesignSystem,
   neonColor,
   onChangeNeonColor,
   neonPreset,
@@ -127,6 +196,69 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   const renderAppearanceTab = () => (
     <div className="space-y-8">
       <div>
+        {sectionTitle('Design System', 'Change the visual language across the entire application')}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {([
+            {
+              id: 'edward' as const,
+              name: 'Edward',
+              description: 'Soft surfaces and modern sans',
+              icon: LayoutTemplate,
+              colors: ['#1a1a1a', '#f87171', '#ececec'],
+            },
+            {
+              id: 'terminal' as const,
+              name: 'Terminal',
+              description: 'TUI chrome, mono type and print-like color',
+              icon: Terminal,
+              colors: ['#14161b', '#8bd5ca', '#f5bde6'],
+            },
+          ]).map((system) => {
+            const isActive = designSystem === system.id;
+            const Icon = system.icon;
+            return (
+              <button
+                key={system.id}
+                type="button"
+                onClick={() => {
+                  onChangeDesignSystem(system.id);
+                  if (system.id === 'terminal') {
+                    onChangeThemePreset('terminal-macchiato');
+                    onChangeNeonPreset('riso-ink');
+                  } else {
+                    onChangeThemePreset('default');
+                    onChangeNeonPreset('cyber');
+                  }
+                }}
+                aria-pressed={isActive}
+                className="group relative flex min-h-24 flex-col items-start gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200"
+                style={{
+                  backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'var(--bg-200)',
+                  border: `1px solid ${isActive ? 'var(--neon-color)' : 'var(--border-300)'}`,
+                  boxShadow: isActive && system.id === 'terminal' ? '3px 3px 0 #0d0f14' : 'none',
+                }}
+              >
+                <div className="flex w-full items-center justify-between">
+                  <Icon size={18} style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-400)' }} />
+                  <div className="flex -space-x-1">
+                    {system.colors.map((color) => (
+                      <span key={color} className="h-4 w-4 rounded-full border" style={{ backgroundColor: color, borderColor: 'var(--border-300)' }} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-100)' }}>
+                    {system.name}
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed" style={{ color: 'var(--text-500)' }}>{system.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         {sectionTitle('Theme', 'Switch between dark and light mode')}
         <div
           className="flex items-center justify-between p-4 rounded-xl transition-all duration-300"
@@ -160,14 +292,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
           {THEME_PRESETS.map((preset) => {
             const isActive = themePreset === preset.id;
             const previewColors = preset.id === 'default'
-              ? (mode === 'dark' ? ['#0e0e0e', '#1a1a1a', '#f87171'] : ['#ffffff', '#f7f7f8', '#f87171'])
+              ? (mode === 'dark' ? ['#1a1a1a', '#242424', '#f87171'] : ['#fcfcfc', '#f3f3f3', '#f87171'])
               : preset.neon
-                ? [preset[mode]['--bg-100'] || (mode === 'dark' ? '#0e0e0e' : '#fff'), preset[mode]['--bg-200'] || (mode === 'dark' ? '#1a1a1a' : '#f7f7f8'), preset.neon[mode].primary.tailwind]
-                : [preset[mode]['--bg-100'] || '#fff', preset[mode]['--bg-200'] || '#f7f7f8', 'var(--neon-color)'];
+                ? [preset[mode]['--bg-100'] || (mode === 'dark' ? '#1a1a1a' : '#fcfcfc'), preset[mode]['--bg-200'] || (mode === 'dark' ? '#242424' : '#f3f3f3'), preset.neon[mode].primary.tailwind]
+                : [preset[mode]['--bg-100'] || '#fcfcfc', preset[mode]['--bg-200'] || '#f3f3f3', 'var(--neon-color)'];
             return (
               <button
                 key={preset.id}
-                onClick={() => onChangeThemePreset(preset.id)}
+                onClick={() => {
+                  onChangeThemePreset(preset.id);
+                  if (preset.id === 'terminal-macchiato') onChangeNeonPreset('riso-ink');
+                  if (preset.id === 'mint-garden') onChangeNeonPreset('garden');
+                  if (preset.id === 'default') onChangeNeonPreset('cyber');
+                }}
                 className="group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200"
                 style={{
                   backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'var(--bg-200)',
@@ -293,35 +430,46 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
     <div className="space-y-8">
       <div>
         {sectionTitle('Font Family', 'Choose a typeface that suits your style')}
-        <div className="space-y-2">
-          {FONTS.map((font) => {
-            const isActive = fontFamily === font.id;
+        <div className="space-y-6">
+          {FONT_CATEGORY_LABELS.map(({ id: category, label }) => {
+            const categoryFonts = FONTS.filter((font) => font.category === category);
+            if (categoryFonts.length === 0) return null;
             return (
-              <button
-                key={font.id}
-                onClick={() => onChangeFontFamily(font.id)}
-                className="w-full text-left px-4 py-3 rounded-xl transition-all duration-200"
-                style={{
-                  backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'var(--bg-200)',
-                  border: `1px solid ${isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--border-300)'}`,
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-100)', fontFamily: FONT_CSS[font.id] }}
-                  >
-                    {font.name}
-                  </span>
-                  {isActive && <Sparkles size={12} style={{ color: 'var(--neon-color)' }} />}
-                </div>
-                <p
-                  className="text-xs mt-1"
-                  style={{ color: 'var(--text-500)', fontFamily: FONT_CSS[font.id] }}
-                >
-                  The quick brown fox jumps over the lazy dog
-                </p>
-              </button>
+              <div key={category} className="space-y-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-400)' }}>
+                  {label}
+                </h4>
+                {categoryFonts.map((font) => {
+                  const isActive = fontFamily === font.id;
+                  return (
+                    <button
+                      key={font.id}
+                      onClick={() => onChangeFontFamily(font.id)}
+                      className="w-full text-left px-4 py-3 rounded-xl transition-all duration-200"
+                      style={{
+                        backgroundColor: isActive ? 'rgba(var(--neon-rgb), 0.08)' : 'var(--bg-200)',
+                        border: `1px solid ${isActive ? 'rgba(var(--neon-rgb), 0.2)' : 'var(--border-300)'}`,
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: isActive ? 'var(--neon-color)' : 'var(--text-100)', fontFamily: FONT_CSS[font.id] }}
+                        >
+                          {font.name}
+                        </span>
+                        {isActive && <Sparkles size={12} style={{ color: 'var(--neon-color)' }} />}
+                      </div>
+                      <p
+                        className="text-xs mt-1"
+                        style={{ color: 'var(--text-500)', fontFamily: FONT_CSS[font.id] }}
+                      >
+                        The quick brown fox jumps over the lazy dog
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>

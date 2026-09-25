@@ -1,4 +1,6 @@
 import { substituteVariables } from './variables.js';
+import { executeMCPNode } from './mcp.js';
+import vm from 'node:vm';
 
 interface WorkflowState {
   variables: Record<string, any>;
@@ -32,7 +34,9 @@ export async function executeAgentNode(
     tools = [],
     outputFormat,
     jsonOutputSchema,
+    outputSchema,
     includeChatHistory = false,
+    memoryContext,
   } = nodeData;
 
   const variables = state.variables || {};
@@ -53,6 +57,7 @@ export async function executeAgentNode(
   }
 
   const contextParts: string[] = [];
+  if (memoryContext) contextParts.push(`Remembered context: ${typeof memoryContext === 'string' ? memoryContext : JSON.stringify(memoryContext)}`);
   if (variables.lastOutput) {
     contextParts.push(`Previous output: ${typeof variables.lastOutput === 'string' ? variables.lastOutput : JSON.stringify(variables.lastOutput)}`);
   }
@@ -104,7 +109,7 @@ export async function executeAgentNode(
     chatUpdates.push({ role: 'assistant', content: finalOutput || JSON.stringify(response.toolCalls) });
 
     for (const tc of response.toolCalls) {
-      const toolResult = await executeToolCall(tc, mcpTools, state);
+      const toolResult = await executeToolCall(tc, mcpTools, state, apiKeys);
       allToolCalls.push({
         name: tc.name,
         arguments: tc.arguments,
@@ -126,7 +131,7 @@ export async function executeAgentNode(
     ];
   }
 
-  if (outputFormat === 'json' && jsonOutputSchema) {
+  if (outputFormat === 'json' && (jsonOutputSchema || outputSchema)) {
     try {
       const parsed = JSON.parse(finalOutput);
       finalOutput = JSON.stringify(parsed, null, 2);
@@ -225,56 +230,38 @@ function buildToolDefinitions(mcpTools: any[], toolIds: string[]): any[] {
   return defs;
 }
 
-async function executeToolCall(toolCall: { name: string; arguments: any }, mcpTools: any[], state: any): Promise<any> {
+async function executeToolCall(
+  toolCall: { name: string; arguments: any },
+  mcpTools: any[],
+  state: any,
+  apiKeys: Record<string, string>,
+): Promise<any> {
   const { name, arguments: args } = toolCall;
 
   const mcpTool = mcpTools?.find((t: any) => t.name === name);
   if (mcpTool) {
-    try {
-      const response = await fetch('/api/workflows/execute-mcp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toolName: name, arguments: args, serverUrl: mcpTool.serverUrl }),
-      });
-      const result = await response.json();
-      return result.output || result.error || 'No output';
-    } catch (err: any) {
-      return `Error calling MCP tool: ${err.message}`;
-    }
+    return executeMCPNode({
+      serverUrl: mcpTool.serverUrl || mcpTool.url,
+      toolName: name,
+      arguments: args,
+      accessToken: mcpTool.accessToken,
+      headers: mcpTool.headers,
+    }, state, apiKeys);
   }
 
   if (name === 'web_browse') {
-    try {
-      const response = await fetch('/api/workflows/execute-firecrawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'scrape', url: args.url }),
-      });
-      const result = await response.json();
-      return result.markdown || result.output || result.error || 'No content';
-    } catch (err: any) {
-      return `Error browsing: ${err.message}`;
-    }
+    return executeMCPNode({ toolName: 'firecrawl_scrape', scrapeUrl: args.url }, state, apiKeys);
   }
 
   if (name === 'search_web') {
-    try {
-      const response = await fetch('/api/workflows/execute-firecrawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'search', query: args.query, limit: args.limit }),
-      });
-      const result = await response.json();
-      return result.results || result.output || result.error || 'No results';
-    } catch (err: any) {
-      return `Error searching: ${err.message}`;
-    }
+    return executeMCPNode({ toolName: 'firecrawl_search', searchQuery: args.query, mcpParams: { limit: args.limit } }, state, apiKeys);
   }
 
   if (name === 'execute_code') {
     try {
-      const fn = new Function('state', 'variables', args.code);
-      const result = fn(state, state.variables);
+      const sandbox = { state: structuredClone(state), variables: structuredClone(state.variables), result: undefined as any };
+      vm.runInNewContext(`result = (() => { ${args.code} })()`, sandbox, { timeout: 5000 });
+      const result = sandbox.result;
       return typeof result === 'string' ? result : JSON.stringify(result);
     } catch (err: any) {
       return `Code execution error: ${err.message}`;

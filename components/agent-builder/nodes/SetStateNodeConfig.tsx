@@ -9,8 +9,9 @@ import {
   ThemedSelectItem,
 } from '../shared/ThemedSelect';
 import { VARIABLE_TYPE_COLORS } from '../shared/colors';
+import VariableAutocomplete from '../VariableAutocomplete';
 
-interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; accentColor?: string; }
+interface Props { data: Record<string, any>; onUpdate: (data: Record<string, any>) => void; upstreamNodes?: { id: string; label: string }[]; accentColor?: string; }
 
 const VALUE_TYPES = [
   { value: 'string', label: 'String' },
@@ -26,7 +27,7 @@ interface VarEntry {
   type: string;
 }
 
-export default function SetStateNodeConfig({ data, onUpdate }: Props) {
+export default function SetStateNodeConfig({ data, onUpdate, upstreamNodes = [] }: Props) {
   const vars: Record<string, any> = data.variables || {};
   const varTypes: Record<string, string> = data.variableTypes || {};
   const entries: VarEntry[] = Object.entries(vars).map(([key, val]) => ({
@@ -137,25 +138,34 @@ export default function SetStateNodeConfig({ data, onUpdate }: Props) {
                   </motion.div>
                 ) : entry.type === 'json' || entry.type === 'expression' ? (
                   <motion.div key="textarea" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                    <textarea
+                    <VariableAutocomplete
                       value={typeof entry.value === 'string' ? entry.value : JSON.stringify(entry.value, null, 2)}
-                      onChange={e => updateVar(entry.key, entry.key, e.target.value, entry.type)}
+                      onChange={value => updateVar(entry.key, entry.key, value, entry.type)}
                       placeholder={entry.type === 'json' ? '{"key": "value"}' : 'lastOutput.result * 2'}
+                      multiline
                       rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-transparent resize-none font-mono transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none"
-                      style={FIELD_STYLES.input}
+                      upstreamNodes={upstreamNodes}
                     />
                   </motion.div>
                 ) : (
                   <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                    <input
-                      value={typeof entry.value === 'string' ? entry.value : JSON.stringify(entry.value)}
-                      onChange={e => updateVar(entry.key, entry.key, entry.type === 'number' ? Number(e.target.value) : e.target.value, entry.type)}
-                      placeholder={entry.type === 'number' ? '0' : 'value'}
-                      type={entry.type === 'number' ? 'number' : 'text'}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-transparent transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none"
-                      style={FIELD_STYLES.input}
-                    />
+                    {entry.type === 'number' ? (
+                      <input
+                        value={typeof entry.value === 'number' ? entry.value : Number(entry.value) || 0}
+                        onChange={e => updateVar(entry.key, entry.key, Number(e.target.value), entry.type)}
+                        placeholder="0"
+                        type="number"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-transparent transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none"
+                        style={FIELD_STYLES.input}
+                      />
+                    ) : (
+                      <VariableAutocomplete
+                        value={typeof entry.value === 'string' ? entry.value : JSON.stringify(entry.value)}
+                        onChange={value => updateVar(entry.key, entry.key, value, entry.type)}
+                        placeholder="value or {{variable}}"
+                        upstreamNodes={upstreamNodes}
+                      />
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

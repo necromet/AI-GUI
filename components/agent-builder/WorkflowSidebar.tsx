@@ -4,7 +4,7 @@ import type { WorkflowNodeType } from './types';
 import { Circle, Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { ICON_MAP } from './shared/icons';
 
-export default function WorkflowSidebar() {
+export default function WorkflowSidebar({ embedded = false }: { embedded?: boolean }) {
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -25,7 +25,12 @@ export default function WorkflowSidebar() {
   const searchLower = search.toLowerCase();
 
   return (
-    <div className="w-56 border-r flex flex-col overflow-y-auto flex-shrink-0" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}>
+    <div
+      className={embedded
+        ? 'flex-1 min-h-0 flex flex-col overflow-y-auto'
+        : 'w-56 border-r hidden md:flex flex-col overflow-y-auto flex-shrink-0'}
+      style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100)' }}
+    >
       <div className="px-3 pt-3 pb-2">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-500)' }} />

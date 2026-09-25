@@ -1,20 +1,31 @@
+import vm from 'node:vm';
+
 export function substituteVariables(template: string, state: any): string {
   if (!template || typeof template !== 'string') return template;
-  return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_, path) => {
-    const parts = path.split('.');
-    let value: any = state;
-    for (const part of parts) {
-      if (value === undefined || value === null) return `{{${path}}}`;
-      const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
-      if (arrayMatch) {
-        value = value[arrayMatch[1]]?.[parseInt(arrayMatch[2])];
-      } else {
-        value = value[part];
-      }
-    }
+  const variables = state?.variables || {};
+  const withDynamicIndexes = template.replace(/\{\{([a-zA-Z0-9_.]+)\[\{\{([a-zA-Z0-9_.]+)\}\}\]\}\}/g, (match, collectionPath, indexPath) => {
+    const collection = readPath(variables, collectionPath) ?? readPath(variables.input, collectionPath);
+    const index = readPath(variables, indexPath) ?? readPath(variables.input, indexPath);
+    const value = collection?.[Number(index)];
+    return value === undefined ? match : typeof value === 'string' ? value : JSON.stringify(value);
+  });
+  return withDynamicIndexes.replace(/\{\{([a-zA-Z0-9_.\[\]]+)\}\}/g, (_, path) => {
+    let value = readPath(variables, path);
+    if (value === undefined && variables.input && typeof variables.input === 'object') value = readPath(variables.input, path);
+    if (value === undefined) value = readPath(state, path);
     if (value === undefined) return `{{${path}}}`;
     return typeof value === 'string' ? value : JSON.stringify(value);
   });
+}
+
+function readPath(root: any, path: string): any {
+  const tokens = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  let value = root;
+  for (const token of tokens) {
+    if (value === undefined || value === null) return undefined;
+    value = value[token];
+  }
+  return value;
 }
 
 export function resolveVariableRef(ref: string, variables: Record<string, any>): any {
@@ -69,8 +80,12 @@ export async function executeSetStateNode(
         break;
       case 'expression':
         try {
-          const exprFn = new Function('input', 'lastOutput', 'state', 'variables', `return ${value}`);
-          updates[key] = exprFn(variables.input, variables.lastOutput, state, variables);
+          updates[key] = vm.runInNewContext(`(${value})`, {
+            input: structuredClone(variables.input),
+            lastOutput: structuredClone(variables.lastOutput),
+            state: structuredClone(state),
+            variables: structuredClone(variables),
+          }, { timeout: 1000 });
         } catch { updates[key] = value; }
         break;
       default:

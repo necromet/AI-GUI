@@ -71,7 +71,7 @@ export default function ShortcutOverlay({ isOpen, onClose }: Props) {
         className="w-[380px] max-w-[calc(100vw-32px)] rounded-xl border shadow-2xl overflow-hidden transition-all duration-200"
         style={{
           borderColor: 'var(--border-300)',
-          backgroundColor: 'var(--bg-100, #111114)',
+          backgroundColor: 'var(--bg-100, #1a1a1a)',
           opacity: animState === 'visible' ? 1 : 0,
           transform: animState === 'visible' ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(8px)',
         }}

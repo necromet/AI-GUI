@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VARIABLE_TYPE_COLORS } from './shared/colors';
+import VariablePillText, { hasVariableToken } from './shared/VariablePill';
 
 interface VariableSuggestion {
   name: string;
@@ -21,15 +22,19 @@ interface Props {
   placeholder?: string;
   multiline?: boolean;
   className?: string;
+  rows?: number;
+  type?: 'text' | 'password';
+  autoFocus?: boolean;
   upstreamNodes?: { id: string; label: string }[];
 }
 
-export default function VariableAutocomplete({ value, onChange, placeholder, multiline, className, upstreamNodes = [] }: Props) {
+export default function VariableAutocomplete({ value, onChange, placeholder, multiline, className, rows = 3, type = 'text', autoFocus = false, upstreamNodes = [] }: Props) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerPos, setTriggerPos] = useState<number | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -104,35 +109,64 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
 
   const typeColor = (type: string) => VARIABLE_TYPE_COLORS[type] || VARIABLE_TYPE_COLORS.any;
 
-  const inputClasses = `w-full px-2.5 py-2 text-xs rounded-lg border bg-transparent transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none ${className || ''}`;
+  const inputClasses = `w-full rounded-[8px] border bg-transparent px-[12px] py-[10px] text-[14px] leading-[20px] transition-colors focus:ring-1 focus:ring-[var(--neon-color)] focus:border-[var(--neon-color)] outline-none ${className || ''}`;
+  const hasTokens = hasVariableToken(value);
+  const syncScroll = (element: HTMLInputElement | HTMLTextAreaElement) => {
+    setScrollPosition({ left: element.scrollLeft, top: element.scrollTop });
+  };
+
+  const tokenOverlay = (isMultiline: boolean) => hasTokens && (
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-lg" aria-hidden="true">
+      <div
+        className={`px-[12px] py-[10px] text-[14px] leading-[20px] ${isMultiline ? 'min-h-[80px] whitespace-pre-wrap break-words font-mono' : 'whitespace-pre min-w-max'}`}
+        style={{
+          color: 'var(--text-100)',
+          transform: `translate(${-scrollPosition.left}px, ${-scrollPosition.top}px)`,
+        }}
+      >
+        <VariablePillText value={value} maskPlain={type === 'password'} compact />
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative">
       {multiline ? (
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={placeholder}
-          className={`${inputClasses} font-mono min-h-[80px] resize-y`}
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-          rows={3}
-        />
+        <div className="relative rounded-lg" style={{ backgroundColor: 'var(--bg-200)' }}>
+          {tokenOverlay(true)}
+          <textarea
+            ref={textareaRef}
+            autoFocus={autoFocus}
+            value={value}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onScroll={event => syncScroll(event.currentTarget)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={placeholder}
+            className={`${inputClasses} variable-token-input relative z-10 font-mono min-h-[80px] resize-y`}
+            style={{ borderColor: 'var(--border-300)', color: hasTokens ? 'transparent' : 'var(--text-100)', caretColor: 'var(--text-100)' }}
+            rows={rows}
+          />
+        </div>
       ) : (
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={placeholder}
-          className={inputClasses}
-          style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}
-        />
+        <div className="relative rounded-lg" style={{ backgroundColor: 'var(--bg-200)' }}>
+          {tokenOverlay(false)}
+          <input
+            ref={inputRef}
+            autoFocus={autoFocus}
+            type={type}
+            value={value}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onScroll={event => syncScroll(event.currentTarget)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={placeholder}
+            className={`${inputClasses} variable-token-input relative z-10`}
+            style={{ borderColor: 'var(--border-300)', color: hasTokens ? 'transparent' : 'var(--text-100)', caretColor: 'var(--text-100)' }}
+          />
+        </div>
       )}
 
       {isFocused && (
@@ -147,7 +181,7 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
       {showDropdown && filtered.length > 0 && (
         <div
           className="absolute z-40 left-0 right-0 mt-1 rounded-lg border shadow-xl max-h-[180px] overflow-y-auto"
-          style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }}
+          style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #1a1a1a)' }}
         >
           {filtered.map((s, i) => (
             <button
@@ -158,8 +192,8 @@ export default function VariableAutocomplete({ value, onChange, placeholder, mul
               onMouseEnter={() => setSelectedIndex(i)}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <code className="text-[10px] font-mono font-medium" style={{ color: 'var(--text-100)' }}>
-                  {`{{${s.name}}}`}
+                <code className="text-[10px] font-mono" style={{ color: 'var(--text-100)' }}>
+                  <VariablePillText value={`{{${s.name}}}`} />
                 </code>
                 <span className="text-[10px] truncate" style={{ color: 'var(--text-500)' }}>
                   {s.description}

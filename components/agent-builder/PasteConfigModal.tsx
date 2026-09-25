@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import VariableAutocomplete from './VariableAutocomplete';
 
 interface Props {
   nodeLabel: string;
@@ -11,10 +12,8 @@ export default function PasteConfigModal({ nodeLabel, onApply, onClose }: Props)
   const [json, setJson] = useState('');
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    textareaRef.current?.focus();
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
@@ -75,14 +74,13 @@ export default function PasteConfigModal({ nodeLabel, onApply, onClose }: Props)
               Paste from clipboard
             </button>
           </div>
-          <textarea
-            ref={textareaRef}
+          <VariableAutocomplete
             value={json}
-            onChange={e => { setJson(e.target.value); setError(null); }}
+            onChange={value => { setJson(value); setError(null); }}
             placeholder='{"model": "mimo-v2.5", "systemPrompt": "..."}'
+            multiline
+            autoFocus
             rows={8}
-            className="w-full px-3 py-2 text-xs rounded-lg border bg-transparent resize-none font-mono outline-none focus:ring-1 focus:ring-[var(--neon-color)]"
-            style={{ borderColor: error ? 'var(--danger, #f87171)' : 'var(--border-300)', color: 'var(--text-100)' }}
           />
           {error && (
             <div className="text-[10px]" style={{ color: 'var(--danger, #f87171)' }}>{error}</div>

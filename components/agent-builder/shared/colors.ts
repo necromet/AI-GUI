@@ -1,55 +1,59 @@
 export const NODE_COLORS = {
-  start: '#34d399',
-  end: '#f87171',
-  agent: '#818cf8',
-  mcp: '#fbbf24',
-  guardrails: '#10b981',
-  'if-else': '#fb923c',
-  while: '#c084fc',
-  'user-approval': '#ec4899',
-  transform: '#60a5fa',
-  'set-state': '#a78bfa',
-  extract: '#2dd4bf',
-  http: '#94a3b8',
-  note: '#fbbf24',
+  start: '#2dd48a',
+  end: '#f05252',
+  agent: '#7c86f8',
+  mcp: '#f5b91a',
+  guardrails: '#0db87a',
+  arcade: '#2eb6e8',
+  'if-else': '#f07830',
+  while: '#b45af0',
+  'user-approval': '#e83d8c',
+  transform: '#4a90f0',
+  'set-state': '#9a6cf0',
+  extract: '#14c8b0',
+  http: '#8a96a8',
+  note: '#e8a81c',
+  database: '#0ea5e9',
+  'web-source': '#e879f9',
 } as const;
 
 export const STATUS_COLORS = {
-  running: '#fbbf24',
-  completed: '#34d399',
-  failed: '#f87171',
+  running: '#f5b91a',
+  completed: '#2dd48a',
+  failed: '#f05252',
   pending: '#6b7280',
 } as const;
 
 export const SEMANTIC_COLORS = {
-  danger: '#f87171',
-  warning: '#fbbf24',
-  success: '#34d399',
-  info: '#60a5fa',
-  default: '#6b7280',
+  danger: 'var(--semantic-danger, #f87171)',
+  warning: 'var(--semantic-warning, #fbbf24)',
+  success: 'var(--semantic-success, #34d399)',
+  info: 'var(--semantic-info, #60a5fa)',
+  default: 'var(--text-400, #6b7280)',
 } as const;
 
 export const HTTP_METHOD_COLORS: Record<string, { bg: string; text: string }> = {
-  GET: { bg: '#34d39920', text: '#34d399' },
-  POST: { bg: '#818cf820', text: '#818cf8' },
-  PUT: { bg: '#fbbf2420', text: '#fbbf24' },
-  PATCH: { bg: '#fbbf2420', text: '#fbbf24' },
-  DELETE: { bg: '#f8717120', text: '#f87171' },
+  GET: { bg: 'rgba(45,212,138,0.16)', text: '#2dd48a' },
+  POST: { bg: 'rgba(124,134,248,0.16)', text: '#7c86f8' },
+  PUT: { bg: 'rgba(245,185,26,0.16)', text: '#f5b91a' },
+  PATCH: { bg: 'rgba(245,185,26,0.16)', text: '#f5b91a' },
+  DELETE: { bg: 'rgba(240,82,82,0.16)', text: '#f05252' },
 };
 
 export const VARIABLE_TYPE_COLORS: Record<string, string> = {
-  string: '#60a5fa',
-  object: '#a78bfa',
-  array: '#2dd4bf',
-  any: '#94a3b8',
+  string: '#4a90f0',
+  object: '#9a6cf0',
+  array: '#14c8b0',
+  any: '#8a96a8',
 };
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  scraping: '#fbbf24',
-  ai: '#818cf8',
-  data: '#60a5fa',
-  workflow: '#ec4899',
-  logic: '#fb923c',
+  scraping: '#f5b91a',
+  ai: '#7c86f8',
+  data: '#4a90f0',
+  workflow: '#e83d8c',
+  logic: '#f07830',
+  automation: '#14c8b0',
 };
 
-export const DEFAULT_NODE_COLOR = '#94a3b8';
+export const DEFAULT_NODE_COLOR = '#8a96a8';

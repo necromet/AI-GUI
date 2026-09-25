@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2, LayoutDashboard, Sparkles, Eye, Upload, Settings } from 'lucide-react';
 import type { Node, Edge } from '@xyflow/react';
 import { useWorkflow } from './useWorkflow';
 import { toast } from 'sonner';
@@ -9,6 +9,9 @@ import { SEMANTIC_COLORS } from './shared/colors';
 import SaveAsTemplateModal from './SaveAsTemplateModal';
 import PublishModal from './PublishModal';
 import type { WorkflowHeaderControls } from './types';
+import WorkflowPreviewModal from './WorkflowPreviewModal';
+import AgentBuilderSettingsModal from './AgentBuilderSettingsModal';
+import { normalizeWorkflowGraph } from '../../lib/workflow/graph';
 
 interface Props {
   name: string;
@@ -23,6 +26,9 @@ interface Props {
   onUndo: () => void;
   onRedo: () => void;
   onFitView: () => void;
+  onAutoLayout: () => void;
+  onTidyUp: () => void;
+  onFocusIssue: (nodeId?: string) => void;
   validationIssues: ValidationIssue[];
   onShowShortcuts: () => void;
   onBack?: () => void;
@@ -31,13 +37,16 @@ interface Props {
 
 export default function WorkflowToolbar({
   name, onNameChange, nodes, edges, workflowId, onWorkflowSaved, onLoadTemplate,
-  canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack, onHeaderControls,
+  canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack, onHeaderControls,
 }: Props) {
   const { saveWorkflow } = useWorkflow();
   const [saving, setSaving] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -58,6 +67,7 @@ export default function WorkflowToolbar({
         animated: e.animated,
       }));
       const result = await saveWorkflow(workflowId, { name, nodes: workflowNodes, edges: workflowEdges });
+      if (!result) throw new Error('The server did not save the workflow');
       if (result?.id) onWorkflowSaved?.(result.id);
       toast.success('Workflow saved');
     } catch (err: any) {
@@ -68,7 +78,8 @@ export default function WorkflowToolbar({
   }, [name, nodes, edges, workflowId, saveWorkflow, onWorkflowSaved]);
 
   const handleExport = useCallback(() => {
-    const data = { name, nodes, edges };
+    const normalized = normalizeWorkflowGraph(nodes, edges);
+    const data = { name, nodes: normalized.nodes, edges: normalized.edges };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -81,7 +92,7 @@ export default function WorkflowToolbar({
   const handleExportCode = useCallback(async () => {
     if (!workflowId) return;
     try {
-      const res = await fetch('/api/workflows/' + workflowId + '/export-code');
+      const res = await fetch('/api/workflows/' + workflowId + '/export-code', { method: 'POST' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       const blob = new Blob([data.code || JSON.stringify(data, null, 2)], { type: 'text/plain' });
@@ -111,7 +122,8 @@ export default function WorkflowToolbar({
   }, [workflowId]);
 
   const handleShare = useCallback(() => {
-    const data = { name, nodes, edges };
+    const normalized = normalizeWorkflowGraph(nodes, edges);
+    const data = { name, nodes: normalized.nodes, edges: normalized.edges };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -122,22 +134,48 @@ export default function WorkflowToolbar({
     toast.success('Workflow file downloaded');
   }, [name, nodes, edges]);
 
+  const handleImport = useCallback(() => importRef.current?.click(), []);
+  const handlePreview = useCallback(() => setShowPreview(true), []);
+  const handleSettings = useCallback(() => setShowSettings(true), []);
+
+  const importWorkflow = useCallback(async (file?: File) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) throw new Error('Workflow JSON must contain nodes and edges arrays');
+      const response = await fetch('/api/workflows/import-langgraph', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: parsed.name || file.name.replace(/\.json$/i, ''), description: parsed.description, nodes: parsed.nodes, edges: parsed.edges }),
+      });
+      const imported = await response.json();
+      if (!response.ok) throw new Error(imported.error || 'Import failed');
+      toast.success('Workflow imported');
+      window.location.assign(`/agent-builder/${imported.id}`);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      if (importRef.current) importRef.current.value = '';
+    }
+  }, []);
+
   // Ref always holds the latest values — callbacks read from here, never from stale closures
   const controlsRef = useRef({
     name, onNameChange, nodes, edges, workflowId,
-    canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
-    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, onLoadTemplate,
+    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack,
+    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, handleImport, handlePreview, handleSettings, onLoadTemplate,
     showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
   });
   controlsRef.current = {
     name, onNameChange, nodes, edges, workflowId,
-    canUndo, canRedo, onUndo, onRedo, onFitView, validationIssues, onShowShortcuts, onBack,
-    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, onLoadTemplate,
+    canUndo, canRedo, onUndo, onRedo, onFitView, onAutoLayout, onTidyUp, onFocusIssue, validationIssues, onShowShortcuts, onBack,
+    handleSave, saving, handleExport, handleExportCode, handleExportMermaid, handleShare, handleImport, handlePreview, handleSettings, onLoadTemplate,
     showValidation, setShowValidation, showSaveAsTemplate, setShowSaveAsTemplate, showPublish, setShowPublish,
   };
 
   const onHeaderControlsRef = useRef(onHeaderControls);
   onHeaderControlsRef.current = onHeaderControls;
+
+  useEffect(() => () => onHeaderControlsRef.current?.(null), []);
 
   // Push controls to the parent header when data changes.
   // Uses JSON.stringify for nodes/edges/prevNodes/prevEdges to avoid false positives from
@@ -170,6 +208,7 @@ export default function WorkflowToolbar({
   if (onHeaderControls) {
     return (
       <>
+        <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={event => void importWorkflow(event.target.files?.[0])} />
         {showSaveAsTemplate && (
           <SaveAsTemplateModal
             workflowId={workflowId}
@@ -186,6 +225,8 @@ export default function WorkflowToolbar({
             onClose={() => setShowPublish(false)}
           />
         )}
+        {showPreview && <WorkflowPreviewModal name={name} nodes={nodes} edges={edges} onClose={() => setShowPreview(false)} />}
+        {showSettings && <AgentBuilderSettingsModal onClose={() => setShowSettings(false)} />}
       </>
     );
   }
@@ -223,6 +264,12 @@ export default function WorkflowToolbar({
         <button onClick={onFitView} className={btnBase} style={{ color: 'var(--text-300)' }} title="Fit View (F)">
           <Maximize2 size={15} />
         </button>
+        <button onClick={onAutoLayout} className={btnBase} style={{ color: 'var(--text-300)' }} title="Auto layout">
+          <LayoutDashboard size={15} />
+        </button>
+        <button onClick={onTidyUp} className={btnBase} style={{ color: 'var(--text-300)' }} title="Tidy up workflow (Shift+T)">
+          <Sparkles size={15} />
+        </button>
         <ShortcutButton onClick={onShowShortcuts} />
       </div>
 
@@ -244,7 +291,7 @@ export default function WorkflowToolbar({
               className="absolute top-full left-0 mt-1 w-[280px] rounded-lg border shadow-xl z-40 overflow-hidden transition-all duration-150"
               style={{
                 borderColor: 'var(--border-300)',
-                backgroundColor: 'var(--bg-100, #111114)',
+                backgroundColor: 'var(--bg-100, #1a1a1a)',
                 opacity: showValidation ? 1 : 0,
                 transform: showValidation ? 'translateY(0)' : 'translateY(-4px)',
                 pointerEvents: showValidation ? 'auto' : 'none',
@@ -256,10 +303,10 @@ export default function WorkflowToolbar({
               </div>
               <div className="max-h-[200px] overflow-y-auto">
                 {validationIssues.map((issue, i) => (
-                  <div key={i} className="flex items-start gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid var(--border-300)' }}>
+                  <button key={i} onClick={() => { onFocusIssue(issue.nodeId); setShowValidation(false); }} className="flex items-start gap-2 px-3 py-1.5 w-full text-left cursor-pointer" style={{ borderBottom: '1px solid var(--border-300)' }}>
                     <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" style={{ color: issue.severity === 'error' ? SEMANTIC_COLORS.danger : SEMANTIC_COLORS.warning }} />
                     <span className="text-[10px]" style={{ color: 'var(--text-300)' }}>{issue.message}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -273,6 +320,7 @@ export default function WorkflowToolbar({
       <div className="flex-1" />
 
       <div className="flex items-center gap-1 flex-shrink-0">
+        <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={event => void importWorkflow(event.target.files?.[0])} />
         {onLoadTemplate && (
           <button onClick={onLoadTemplate} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs cursor-pointer" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }} title="Templates">
             <FileCode size={14} />
@@ -287,6 +335,9 @@ export default function WorkflowToolbar({
         <button onClick={handleExport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export JSON">
           <Download size={15} />
         </button>
+        <button onClick={handleImport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Import workflow"><Upload size={15} /></button>
+        <button onClick={handlePreview} className={btnBase} style={{ color: 'var(--text-400)' }} title="Preview workflow"><Eye size={15} /></button>
+        <button onClick={handleSettings} className={btnBase} style={{ color: 'var(--text-400)' }} title="Agent Builder settings"><Settings size={15} /></button>
         {workflowId && (
           <button onClick={handleExportCode} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export as Code">
             <Code size={15} />
@@ -298,7 +349,7 @@ export default function WorkflowToolbar({
           </button>
         )}
         {workflowId && (
-          <button onClick={() => setShowPublish(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Publish as API">
+          <button onClick={() => setShowPublish(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Publish and share">
             <Globe size={15} />
           </button>
         )}
@@ -327,6 +378,8 @@ export default function WorkflowToolbar({
         onClose={() => setShowPublish(false)}
       />
     )}
+    {showPreview && <WorkflowPreviewModal name={name} nodes={nodes} edges={edges} onClose={() => setShowPreview(false)} />}
+    {showSettings && <AgentBuilderSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

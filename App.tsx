@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle, Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, SquarePen, ArrowLeft, Layers, RotateCcw, Package, X, Square, Wand2, WrapText, Type, HelpCircle, History, Play, StopCircle, Save, Download, Code, Undo2, Redo2, Maximize2, FileCode, BookmarkPlus, Network, Share2, Globe, AlertTriangle, CheckCircle2, LayoutDashboard, Upload, Eye, SlidersHorizontal } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { PromptInputBox } from './components/PromptInputBox';
 import { CHATGPT_LOGO, DEFAULT_MODELS } from './constants';
@@ -30,7 +30,10 @@ import SaveAsTemplateModal from './components/agent-builder/SaveAsTemplateModal'
 import PublishModal from './components/agent-builder/PublishModal';
 import { ShortcutButton } from './components/agent-builder/ShortcutOverlay';
 import { SEMANTIC_COLORS } from './components/agent-builder/shared/colors';
-import type { WorkflowHeaderControls } from './components/agent-builder/AgentBuilderMode';
+import type { WorkflowHeaderControls, WorkflowListHeaderControls } from './components/agent-builder/AgentBuilderMode';
+import WorkflowHeaderBar from './components/agent-builder/WorkflowHeaderBar';
+import AgentBuilderListHeader from './components/agent-builder/AgentBuilderListHeader';
+import SharedWorkflowChat from './components/agent-builder/SharedWorkflowChat';
 import SkemaPanel from './components/SkemaPanel';
 import LibraryPanel, { LibraryControls } from './components/LibraryPanel';
 import { AgentSidebar } from './components/library/AgentSidebar';
@@ -219,7 +222,7 @@ const App: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('none');
   const themeSettings = useThemeSettings();
-  const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, neonColor, setNeonColor, neonPreset, setNeonPreset, themePreset, setThemePreset, maxOutputTokens, setMaxOutputTokens } = themeSettings;
+  const { theme, setTheme, designSystem, setDesignSystem, fontSize, setFontSize, fontFamily, setFontFamily, neonColor, setNeonColor, neonPreset, setNeonPreset, themePreset, setThemePreset, maxOutputTokens, setMaxOutputTokens } = themeSettings;
   const [models, setModels] = useState<ModelConfig[]>(DEFAULT_MODELS);
   const [defaultModelId, setDefaultModelId] = useState<string>(() => {
     return localStorage.getItem('edward:labs_defaultModel') || DEFAULT_MODELS[0].id;
@@ -239,6 +242,7 @@ const App: React.FC = () => {
   const [dbHeaderControls, setDbHeaderControls] = useState<DatabaseHeaderControls | null>(null);
   const [notesControls, setNotesControls] = useState<NotesControls | null>(null);
   const [workflowHeaderControls, setWorkflowHeaderControls] = useState<WorkflowHeaderControls | null>(null);
+  const [workflowListHeaderControls, setWorkflowListHeaderControls] = useState<WorkflowListHeaderControls | null>(null);
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
 
   useEffect(() => {
@@ -250,6 +254,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAgentBuilderMode) {
       setWorkflowHeaderControls(null);
+      setWorkflowListHeaderControls(null);
     }
   }, [isAgentBuilderMode]);
   const [agentDockOpen, setAgentDockOpen] = useState(() => {
@@ -986,10 +991,25 @@ const App: React.FC = () => {
     </div>
   );
 
+  const sharedChatMatch = location.pathname.match(/^\/share\/([^/]+)\/?$/);
+  if (sharedChatMatch) {
+    return (
+      <>
+        <SharedWorkflowChat
+          key={sharedChatMatch[1]}
+          token={decodeURIComponent(sharedChatMatch[1])}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        />
+        <Toaster position="bottom-center" />
+      </>
+    );
+  }
+
   if (auth.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0f172a' }}>
-        <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center" style={{ background: 'var(--bg-0)' }}>
+        <div className="w-6 h-6 border-2 border-[var(--border-200)] border-t-[var(--neon-color)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -1092,6 +1112,8 @@ const App: React.FC = () => {
             <SettingsPage
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              designSystem={designSystem}
+              onChangeDesignSystem={setDesignSystem}
               neonColor={neonColor}
               onChangeNeonColor={(color) => { setNeonColor(color); setNeonPreset(''); }}
               neonPreset={neonPreset}
@@ -1213,7 +1235,11 @@ const App: React.FC = () => {
                 )}
               </div>
             </>
+          ) : location.pathname === '/agent-builder' && workflowListHeaderControls ? (
+            <AgentBuilderListHeader controls={workflowListHeaderControls} />
           ) : workflowHeaderControls ? (
+            <WorkflowHeaderBar controls={workflowHeaderControls} />
+          ) : false ? (
             (() => {
               const w = workflowHeaderControls;
               const errors = w.validationIssues.filter((i: any) => i.severity === 'error');
@@ -1233,6 +1259,7 @@ const App: React.FC = () => {
                       <button onClick={w.onUndo} disabled={!w.canUndo} className={btnBase} style={{ color: w.canUndo ? 'var(--text-300)' : 'var(--text-500)', opacity: w.canUndo ? 1 : 0.4 }} title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
                       <button onClick={w.onRedo} disabled={!w.canRedo} className={btnBase} style={{ color: w.canRedo ? 'var(--text-300)' : 'var(--text-500)', opacity: w.canRedo ? 1 : 0.4 }} title="Redo (Ctrl+Shift+Z)"><Redo2 size={15} /></button>
                       <button onClick={w.onFitView} className={btnBase} style={{ color: 'var(--text-300)' }} title="Fit View (F)"><Maximize2 size={15} /></button>
+                      <button onClick={w.onAutoLayout} className={btnBase} style={{ color: 'var(--text-300)' }} title="Auto layout"><LayoutDashboard size={15} /></button>
                       <ShortcutButton onClick={w.onShowShortcuts} />
                     </div>
                     <div className="w-px h-5 mx-1.5 flex-shrink-0" style={{ backgroundColor: 'var(--border-300)' }} />
@@ -1243,14 +1270,14 @@ const App: React.FC = () => {
                           <span className="text-[11px] font-medium">{w.validationIssues.length}</span>
                         </button>
                         {w.showValidation && (
-                          <div className="absolute top-full left-0 mt-1 w-[280px] rounded-lg border shadow-xl z-50 overflow-hidden" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #111114)' }} onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute top-full left-0 mt-1 w-[280px] rounded-lg border shadow-xl z-50 overflow-hidden" style={{ borderColor: 'var(--border-300)', backgroundColor: 'var(--bg-100, #1a1a1a)' }} onClick={(e) => e.stopPropagation()}>
                             <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--border-300)', color: 'var(--text-100)' }}>Validation ({errors.length} errors, {warnings.length} warnings)</div>
                             <div className="max-h-[200px] overflow-y-auto">
                               {w.validationIssues.map((issue: any, i: number) => (
-                                <div key={i} className="flex items-start gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid var(--border-300)' }}>
+                                <button key={i} onClick={() => { w.onFocusIssue(issue.nodeId); w.setShowValidation(false); }} className="flex items-start gap-2 px-3 py-1.5 w-full text-left cursor-pointer" style={{ borderBottom: '1px solid var(--border-300)' }}>
                                   <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" style={{ color: issue.severity === 'error' ? SEMANTIC_COLORS.danger : SEMANTIC_COLORS.warning }} />
                                   <span className="text-[10px]" style={{ color: 'var(--text-300)' }}>{issue.message}</span>
-                                </div>
+                                </button>
                               ))}
                             </div>
                           </div>
@@ -1270,6 +1297,9 @@ const App: React.FC = () => {
                     {w.workflowId && w.nodes.length > 0 && (
                       <button onClick={() => w.setShowSaveAsTemplate(true)} className={btnBase} style={{ color: 'var(--text-400)' }} title="Save as Template"><BookmarkPlus size={15} /></button>
                     )}
+                    <button onClick={w.handleImport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Import Workflow"><Upload size={15} /></button>
+                    <button onClick={w.handlePreview} className={btnBase} style={{ color: 'var(--text-400)' }} title="Preview Workflow"><Eye size={15} /></button>
+                    <button onClick={w.handleSettings} className={btnBase} style={{ color: 'var(--text-400)' }} title="Agent Builder Settings"><SlidersHorizontal size={15} /></button>
                     <button onClick={w.handleExport} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export JSON"><Download size={15} /></button>
                     {w.workflowId && (<button onClick={w.handleExportCode} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export as Code"><Code size={15} /></button>)}
                     {w.workflowId && (<button onClick={w.handleExportMermaid} className={btnBase} style={{ color: 'var(--text-400)' }} title="Export Mermaid Diagram"><Network size={15} /></button>)}
@@ -1419,18 +1449,19 @@ const App: React.FC = () => {
           >
 
             <Splitter.Panel id="chat" className="flex flex-col h-full min-h-0">
-              <div className="flex items-center justify-between px-4 py-2 shrink-0" style={{ background: theme === 'dark' ? '#1a1a1a' : '#dce0e8' }}>
-                <span className="text-sm font-mono" style={{ color: 'var(--text-500)', fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace' }}>html</span>
+              <div className="code-block-toolbar flex items-center justify-between px-4 py-2 shrink-0">
+                <span className="code-block-language">html source</span>
               </div>
               <div className="flex-1 overflow-auto">
                 <SyntaxHighlighter
+                  className="code-block-content"
                   language="html"
                   style={theme === 'dark' ? catppuccinMocha : catppuccinLatte}
                   wrapLongLines={true}
                   customStyle={{
                     margin: 0,
                     padding: '1rem',
-                    background: theme === 'dark' ? '#1e1e2e' : '#eff1f5',
+                    background: 'var(--code-block-bg)',
                     fontSize: '12px',
                     borderRadius: 0,
                     fontFamily: 'JetBrains Mono, Consolas, Monaco, "Courier New", monospace',
@@ -1616,7 +1647,7 @@ const App: React.FC = () => {
                 <Route path="/agent-builder/*" element={
                   <RequireAuth isAuth={isAgentBuilderAuthenticated}>
                     <div className="h-full">
-                      <AgentBuilderMode onHeaderControls={setWorkflowHeaderControls} />
+                      <AgentBuilderMode onHeaderControls={setWorkflowHeaderControls} onListHeaderControls={setWorkflowListHeaderControls} />
                     </div>
                   </RequireAuth>
                 } />
