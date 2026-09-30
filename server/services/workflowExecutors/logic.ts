@@ -111,6 +111,108 @@ export async function executeWhileNode(
   }
 }
 
+const ABSOLUTE_MAX_ITEMS = 1000;
+
+export async function executeForEachNode(
+  data: Record<string, any>,
+  state: any
+): Promise<any> {
+  const variables = state.variables || {};
+  const nodeKey = data.__nodeId ? `${data.__nodeId}__` : '';
+  const itemVar = String(data.itemVar || 'item').trim() || 'item';
+  const indexVar = String(data.indexVar || 'index').trim() || 'index';
+  const maxItems = Math.min(Number(data.maxItems) || 100, ABSOLUTE_MAX_ITEMS);
+  const index = Math.max(0, Number(data.__index ?? 0) || 0);
+  const priorResults: any[] = Array.isArray(variables[`${nodeKey}results`])
+    ? variables[`${nodeKey}results`]
+    : [];
+
+  try {
+    const items = Array.isArray(data.__items)
+      ? data.__items
+      : toArrayItems(resolveItemsExpression(data.items ?? data.forEachItems, state, variables, index));
+
+    const results = [...priorResults];
+    if (index > 0) results.push(variables.lastOutput);
+
+    if (index >= items.length) {
+      return {
+        output: {
+          shouldContinue: false,
+          total: items.length,
+          processed: results.length,
+          results,
+          stoppedReason: items.length === 0 ? 'empty' : 'done',
+        },
+        variableUpdates: { [`${nodeKey}results`]: results },
+      };
+    }
+
+    if (index >= maxItems) {
+      return {
+        output: {
+          shouldContinue: false,
+          total: items.length,
+          processed: results.length,
+          results,
+          stoppedReason: 'max_items',
+        },
+        variableUpdates: { [`${nodeKey}results`]: results },
+      };
+    }
+
+    const item = items[index];
+    return {
+      output: {
+        shouldContinue: true,
+        item,
+        index,
+        total: items.length,
+      },
+      variableUpdates: {
+        [itemVar]: item,
+        [indexVar]: index,
+        [`${nodeKey}results`]: results,
+        [`${nodeKey}index`]: index + 1,
+        [`${nodeKey}items`]: items,
+      },
+    };
+  } catch (err: any) {
+    return {
+      error: `For-each failed: ${err.message}`,
+      stoppedReason: 'error',
+    };
+  }
+}
+
+function resolveItemsExpression(items: any, state: any, variables: Record<string, any>, index: number): any {
+  const expression = String(items ?? '').trim();
+  if (!expression) throw new Error('Items expression is empty');
+  return vm.runInNewContext(expression, evaluationContext(state, variables, index), { timeout: 1000 });
+}
+
+function toArrayItems(rawItems: any): any[] {
+  if (rawItems === undefined || rawItems === null) return [];
+  if (Array.isArray(rawItems)) return rawItems;
+  if (typeof rawItems === 'string') {
+    const trimmed = rawItems.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        return [rawItems];
+      }
+    }
+    return [rawItems];
+  }
+  if (typeof rawItems === 'object' && typeof (rawItems as any).length === 'number') {
+    return Array.from(rawItems as ArrayLike<any>);
+  }
+  return [rawItems];
+}
+
 function evaluationContext(state: any, variables: Record<string, any>, iteration: number) {
   return {
     input: safeClone(variables.input),

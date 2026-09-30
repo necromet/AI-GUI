@@ -6,6 +6,7 @@ export { default as ArcadeNodeConfig } from './ArcadeNodeConfig';
 export { default as TransformNodeConfig } from './TransformNodeConfig';
 export { default as IfElseNodeConfig } from './IfElseNodeConfig';
 export { default as WhileNodeConfig } from './WhileNodeConfig';
+export { default as ForEachNodeConfig } from './ForEachNodeConfig';
 export { default as ApprovalNodeConfig } from './ApprovalNodeConfig';
 export { default as EndNodeConfig } from './EndNodeConfig';
 export { default as NoteNodeConfig } from './NoteNodeConfig';

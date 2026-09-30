@@ -132,6 +132,73 @@ test('ignores disconnected visual notes', () => {
   assert.equal(issues.some(issue => issue.nodeId === 'note'), false);
 });
 
+test('validates for-each items and loop handles', () => {
+  const missingItems = validateWorkflowGraph(
+    [
+      node('start', 'start'),
+      node('each', 'for-each', { items: '' }),
+      node('body', 'transform', { code: 'return input;' }),
+      node('end', 'end'),
+    ],
+    [
+      { id: 'a', source: 'start', target: 'each' },
+      { id: 'b', source: 'each', sourceHandle: 'continue', target: 'body' },
+      { id: 'c', source: 'body', target: 'each' },
+      { id: 'd', source: 'each', sourceHandle: 'break', target: 'end' },
+    ],
+  );
+  assert.ok(missingItems.some(issue => issue.code === 'for-each_items' && issue.severity === 'error'));
+
+  const missingBreak = validateWorkflowGraph(
+    [
+      node('start', 'start'),
+      node('each', 'for-each', { items: 'input.items' }),
+      node('body', 'transform', { code: 'return input;' }),
+      node('end', 'end'),
+    ],
+    [
+      { id: 'a', source: 'start', target: 'each' },
+      { id: 'b', source: 'each', sourceHandle: 'continue', target: 'body' },
+      { id: 'c', source: 'body', target: 'each' },
+    ],
+  );
+  assert.ok(missingBreak.some(issue => issue.code === 'missing_branch' && issue.message.includes('break')));
+
+  const valid = validateWorkflowGraph(
+    [
+      node('start', 'start'),
+      node('each', 'for-each', { items: 'input.items' }),
+      node('body', 'transform', { code: 'return input;' }),
+      node('end', 'end'),
+    ],
+    [
+      { id: 'a', source: 'start', target: 'each' },
+      { id: 'b', source: 'each', sourceHandle: 'loop', target: 'body' },
+      { id: 'c', source: 'body', target: 'each' },
+      { id: 'd', source: 'each', sourceHandle: 'done', target: 'end' },
+    ],
+  );
+  assert.equal(valid.filter(issue => issue.severity === 'error').length, 0);
+});
+
+test('normalizes error handle aliases and keeps error edges in reachability', () => {
+  const issues = validateWorkflowGraph(
+    [
+      node('start', 'start'),
+      node('http', 'http', { url: 'https://example.com' }),
+      node('fallback', 'transform', { code: 'return input;' }),
+      node('end', 'end'),
+    ],
+    [
+      { id: 'a', source: 'start', target: 'http' },
+      { id: 'b', source: 'http', target: 'end' },
+      { id: 'c', source: 'http', sourceHandle: 'on-error', target: 'fallback' },
+      { id: 'd', source: 'fallback', target: 'end' },
+    ],
+  );
+  assert.equal(issues.filter(issue => issue.severity === 'error').length, 0);
+});
+
 test('all bundled workflow templates pass structural validation', () => {
   for (const template of getBuiltinTemplates()) {
     const errors = validateWorkflowGraph(template.nodes, template.edges).filter(issue => issue.severity === 'error');

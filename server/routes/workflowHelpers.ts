@@ -1,5 +1,6 @@
 import * as workflowDB from '../db/workflows.js';
 import { normalizeWorkflowGraph } from '../../lib/workflow/graph.js';
+import { decryptWorkflowKey } from '../services/workflowKeyCipher.js';
 
 export function parseWorkflow(row: any) {
   const nodesRaw = typeof row.nodes === 'string' ? row.nodes : JSON.stringify(row.nodes);
@@ -44,7 +45,7 @@ export async function getApiKeys(): Promise<Record<string, string>> {
     const dbKeys = await workflowDB.getUserLLMKeys();
     for (const k of dbKeys) {
       try {
-        keys[k.provider] = Buffer.from(k.encrypted_key, 'base64').toString('utf-8');
+        keys[k.provider] = decryptWorkflowKey(k.encrypted_key);
       } catch {}
     }
   } catch {}
@@ -108,8 +109,21 @@ for (const node of executableNodes) {
   if (type === 'end') graph.addEdge(node.id, END);
   else if (type === 'if-else') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.branch || 'if', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
   else if (type === 'while') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.shouldContinue ? 'continue' : 'break', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
+  else if (type === 'for-each') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.shouldContinue ? 'continue' : 'break', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
   else if (type === 'user-approval') graph.addConditionalEdges(node.id, (state: any) => state.nodeResults[node.id]?.output?.approved === false ? 'reject' : 'approve', Object.fromEntries(outgoing.map((edge: any) => [edge.sourceHandle, edge.target])));
-  else for (const edge of outgoing) graph.addEdge(node.id, edge.target);
+  else {
+    const errorEdge = outgoing.find((edge: any) => ['error', 'fail', 'on-error', 'catch'].includes(String(edge.sourceHandle || edge.label || '').toLowerCase()));
+    const successEdges = outgoing.filter((edge: any) => !['error', 'fail', 'on-error', 'catch'].includes(String(edge.sourceHandle || edge.label || '').toLowerCase()));
+    if (errorEdge) {
+      graph.addConditionalEdges(
+        node.id,
+        (state: any) => state.nodeResults[node.id]?.errorRouted || state.nodeResults[node.id]?.output?.__failed ? 'error' : 'success',
+        { success: successEdges[0]?.target || END, error: errorEdge.target || END },
+      );
+    } else {
+      for (const edge of outgoing) graph.addEdge(node.id, edge.target);
+    }
+  }
 }
 
 const app = graph.compile();

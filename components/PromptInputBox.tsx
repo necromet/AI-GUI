@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, Paperclip, Square, X, Mic, Globe, BrainCog, ImageOff, FileText, Table } from "lucide-react";
+import { ArrowUp, Paperclip, Square, StopCircle, X, Mic, Globe, BrainCog, ImageOff, FileText, Table } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AIVoiceInput } from "./AIVoiceInput";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import ModelSelect from "./ModelSelect";
+import type { ModelConfig } from "../types";
 
 import { cn } from "@/lib/utils";
 
@@ -159,6 +160,7 @@ const PromptInputActions: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ ch
 interface PromptInputActionProps extends React.ComponentProps<typeof Tooltip> {
   tooltip: React.ReactNode;
   children: React.ReactNode;
+  className?: string;
   side?: "top" | "bottom" | "left" | "right";
 }
 const PromptInputAction: React.FC<PromptInputActionProps> = ({ tooltip, children, className, side = "top", ...props }) => {
@@ -194,7 +196,7 @@ interface PromptInputBoxProps {
   externalFiles?: File[];
   onExternalFilesConsumed?: () => void;
   currentModel?: string;
-  models?: Array<{ id: string; name: string; modelType?: string; provider?: string; apiModelId?: string }>;
+  models?: ModelConfig[];
   onSelectModel?: (modelId: string) => void;
   supportsThinking?: boolean;
   supportsSearch?: boolean;

@@ -7,6 +7,7 @@ export const NODE_COLORS = {
   arcade: '#2eb6e8',
   'if-else': '#f07830',
   while: '#b45af0',
+  'for-each': '#f472b6',
   'user-approval': '#e83d8c',
   transform: '#4a90f0',
   'set-state': '#9a6cf0',

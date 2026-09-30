@@ -30,6 +30,7 @@ export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
   arcade: { type: 'arcade', label: 'Arcade Tool', color: NODE_COLORS.arcade, icon: 'gamepad', category: 'ai', description: 'Run an Arcade.dev action with authorization', defaults: { arcadeTool: '', arcadeUserId: 'workflow-builder', arcadeInput: {} } },
   'if-else': { type: 'if-else', label: 'If/Else', color: NODE_COLORS['if-else'], icon: 'git-branch', category: 'logic', description: 'Conditional branching', defaults: { conditionMode: 'simple', conditionRule: { left: 'lastOutput', op: 'contains', right: '', caseSensitive: false }, condition: '', trueLabel: 'True', falseLabel: 'False', truePath: '', falsePath: '' } },
   while: { type: 'while', label: 'While Loop', color: NODE_COLORS.while, icon: 'repeat', category: 'logic', description: 'Iterate until condition', defaults: { condition: '', maxIterations: 10 } },
+  'for-each': { type: 'for-each', label: 'For Each', color: NODE_COLORS['for-each'], icon: 'list', category: 'logic', description: 'Loop over each item in a list', defaults: { items: '', itemVar: 'item', indexVar: 'index', maxItems: 100 } },
   'user-approval': { type: 'user-approval', label: 'User Approval', color: NODE_COLORS['user-approval'], icon: 'user-check', category: 'logic', description: 'Human-in-the-loop gate', defaults: { message: 'Approve to continue?' } },
   transform: { type: 'transform', label: 'Transform', color: NODE_COLORS.transform, icon: 'code', category: 'data', description: 'Run JavaScript to transform data', defaults: { code: 'return input;' } },
   'set-state': { type: 'set-state', label: 'Set State', color: NODE_COLORS['set-state'], icon: 'database', category: 'data', description: 'Set workflow variables', defaults: { variables: {} } },
@@ -43,7 +44,7 @@ export const NODE_DEFINITIONS: Record<WorkflowNodeType, NodeDefinition> = {
 export const NODE_CATEGORIES = [
   { id: 'flow', label: 'Flow Control', types: ['start', 'end', 'note'] as WorkflowNodeType[] },
   { id: 'ai', label: 'AI & Tools', types: ['agent', 'mcp', 'arcade', 'guardrails'] as WorkflowNodeType[] },
-  { id: 'logic', label: 'Logic', types: ['if-else', 'while', 'user-approval'] as WorkflowNodeType[] },
+  { id: 'logic', label: 'Logic', types: ['if-else', 'while', 'for-each', 'user-approval'] as WorkflowNodeType[] },
   { id: 'data', label: 'Data', types: ['transform', 'set-state', 'extract', 'database'] as WorkflowNodeType[] },
   { id: 'io', label: 'I/O', types: ['http', 'web-source'] as WorkflowNodeType[] },
 ];

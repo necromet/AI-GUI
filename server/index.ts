@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { randomBytes } from 'crypto';
+import type { Request, Response, NextFunction } from 'express';
 
 const envPath = resolve(process.cwd(), '.env');
 const envLocalPath = resolve(process.cwd(), '.env.local');
@@ -61,6 +62,7 @@ const { default: workflowShareRoutes } = await import('./routes/workflowShare');
 const { default: notesRoutes } = await import('./routes/notes');
 const { default: authRoutes } = await import('./routes/auth');
 const { requireModeAuth } = await import('./middleware/auth');
+const { registerJsonBodyParsers } = await import('./middleware/jsonBody');
 const { initializeDatabaseWithRetry } = await import('./db');
 
 if (!process.env.DB_ENCRYPTION_KEY) {
@@ -99,7 +101,7 @@ app.use(cors({
   credentials: true,
   maxAge: 86400,
 }));
-app.use(express.json({ limit: '1mb' }));
+registerJsonBodyParsers(app);
 
 app.use(session({
   secret: sessionSecret,
@@ -184,20 +186,20 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/python', pythonRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/agent-builder', agentBuilderRoutes);
-app.use('/api/workflows', workflowRoutes);
 app.use('/api/workflows', workflowMCPRoutes);
 app.use('/api/workflows', workflowApprovalRoutes);
 app.use('/api/workflows', workflowKeyRoutes);
 app.use('/api/workflows', workflowNodeRoutes);
 app.use('/api/workflows', workflowExecutionRoutes);
+app.use('/api/workflows', workflowRoutes);
 app.use('/api/shared-workflows', sharedChatLimiter, workflowShareRoutes);
 app.use('/api/notes', notesRoutes);
 
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[server] Unhandled error:', err);
   const status = err.status || 500;
   res.status(status).json({
-    error: process.env.NODE_ENV === 'production'
+    error: status === 413 ? 'Request body too large' : process.env.NODE_ENV === 'production'
       ? 'Internal server error'
       : (status >= 500 ? 'Internal server error' : err.message),
   });
@@ -208,6 +210,13 @@ app.listen(PORT, () => {
 });
 
 initializeDatabaseWithRetry().then(async () => {
+  try {
+    const { migrateLegacyUserLLMKeys } = await import('./db/workflows');
+    const migrated = await migrateLegacyUserLLMKeys();
+    if (migrated > 0) console.log(`[server] Encrypted ${migrated} legacy workflow provider keys`);
+  } catch (err) {
+    console.warn('[server] Workflow key migration skipped:', (err as Error).message);
+  }
   try {
     const { seedBuiltinTemplates } = await import('./db/workflows');
     await seedBuiltinTemplates();

@@ -55,9 +55,12 @@ export const ImagePopover: React.FC<ImagePopoverProps> = ({ editor, state, onClo
 
   const handleSaveAlt = () => {
     if (state.pos !== null) {
-      const tr = editor.view.state.tr;
-      tr.setNodeMarkup(state.pos, undefined, { ...editor.view.state.nodeAt(state.pos)?.attrs, alt: editAlt });
-      editor.view.dispatch(tr);
+      const imageNode = editor.view.state.doc.nodeAt(state.pos);
+      if (imageNode?.type.name === 'image' && imageNode.attrs.src === state.src) {
+        const tr = editor.view.state.tr;
+        tr.setNodeMarkup(state.pos, undefined, { ...imageNode.attrs, alt: editAlt });
+        editor.view.dispatch(tr);
+      }
     }
     setIsEditing(false);
   };

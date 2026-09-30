@@ -83,10 +83,11 @@ function WorkflowListView({
       anchor: { x: e.clientX, y: e.clientY },
       onConfirm: async () => {
         setConfirmBusy(true);
-        await deleteWorkflow(id);
+        const deleted = await deleteWorkflow(id);
         setConfirmBusy(false);
         setConfirmRequest(null);
-        toast.success('Workflow deleted');
+        if (deleted) toast.success('Workflow deleted');
+        else toast.error('Could not delete workflow');
       },
     });
   };

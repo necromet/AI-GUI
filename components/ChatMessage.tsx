@@ -8,7 +8,6 @@ import ThinkingIndicator from './chat/ThinkingIndicator';
 import MarkdownRenderer from './chat/MarkdownRenderer';
 import SearchCitations from './chat/SearchCitations';
 import MessageActions from './chat/MessageActions';
-import FileViewer from './chat/FileViewer';
 
 interface ChatMessageProps {
   message: Message;
@@ -16,14 +15,14 @@ interface ChatMessageProps {
   onFeedback?: (messageId: string, feedback: 'good' | 'bad') => void;
   onReattach?: (data: string, name: string, mimeType: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
+  onViewAttachment?: (attachment: Attachment) => void;
   isStreaming?: boolean;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach, onEdit, isStreaming }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRegenerate, onFeedback, onReattach, onEdit, onViewAttachment, isStreaming }) => {
   const isUser = message.role === Role.User;
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
-  const [selectedDocAttachment, setSelectedDocAttachment] = useState<Attachment | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);

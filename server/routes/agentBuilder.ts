@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { streamChatCompletion, readSSEStream, ChatMessage, detectLanguage, buildLanguageInstruction } from '../services/mimoService';
-import { parseToolCalls } from '../services/agentService';
 import { pool } from '../db/pg';
 import { setupSSEHeaders, createEmitter, setupCloseDetection, sendSSEError } from '../lib/sseHelpers';
-import { formatToolList, type PromptToolDef } from '../lib/formatToolPrompt';
+import { ensureWorkspace, discoverSkills, getMemorySummary, runHarness, detectPromptLanguage, mergeHarnessConfig } from '../lib/harness/index';
+import { resolvePending, getPendingStore } from '../lib/harness/tools/questionTool';
+import type { LLMMessage } from '../lib/harness/types';
 
 const router = Router();
 
@@ -357,36 +357,11 @@ router.delete('/workflows/:id/tools/:toolId', async (req, res) => {
   }
 });
 
-// ─── Chat (SSE streaming via prompt-based tool calling) ───
-
-function buildAgentBuilderToolPrompt(toolRows: any[]): string {
-  if (toolRows.length === 0) return '';
-  const tools: PromptToolDef[] = toolRows.map(t => {
-    const schema = jsonbParse(t.parameters_schema, {});
-    const props = schema.properties || {};
-    const parameters: Record<string, { type: string; description: string }> = {};
-    for (const [name, def] of Object.entries(props) as [string, any][]) {
-      parameters[name] = { type: def.type || 'string', description: def.description || '' };
-    }
-    return { name: t.name, description: t.description || '', parameters };
-  });
-  const toolDescriptions = formatToolList(tools);
-
-  return `You have access to the following tools. To use a tool, respond with a JSON block in this exact format:
-
-\`\`\`tool
-{"name": "tool_name", "arguments": {"param": "value"}}
-\`\`\`
-
-Available tools:
-${toolDescriptions}
-
-Important: Only use tools when necessary.`;
-}
+// ─── Chat (SSE streaming via harness) ───
 
 router.post('/chat', async (req, res) => {
   try {
-    const { agentId, messages, model: overrideModel, provider: overrideProvider, max_tokens } = req.body;
+    const { agentId, sessionId, messages, model: overrideModel, provider: overrideProvider } = req.body;
     if (!agentId) { res.status(400).json({ error: 'agentId required' }); return; }
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'messages required' }); return;
@@ -403,64 +378,69 @@ router.post('/chat', async (req, res) => {
       [agentId]
     );
 
-    const toolPrompt = buildAgentBuilderToolPrompt(toolRows);
-    const fullSystem = [agent.system_prompt || '', toolPrompt].filter(Boolean).join('\n\n');
-
     const providerName = overrideProvider || agent.provider;
     const modelName = overrideModel || agent.model;
+    const sessId = sessionId || ('sess_' + uid());
+    const workspaceRoot = await ensureWorkspace(agentId, sessId);
+    const skills = await discoverSkills(workspaceRoot, { maxSkills: 30 });
+    const memorySummary = await getMemorySummary(workspaceRoot);
+    const harnessConfig = mergeHarnessConfig(jsonbParse(agent.harness_config, {}));
+
+    const lastUserMsg = messages[messages.length - 1];
+    const languageHint = detectPromptLanguage(lastUserMsg?.content || '');
+
+    const apiMessages: LLMMessage[] = messages.map((m: any) => ({
+      role: (m.role === 'model' ? 'assistant' : m.role) as LLMMessage['role'],
+      content: m.content || '',
+    }));
 
     setupSSEHeaders(res);
     const emitEvent = createEmitter(res);
-    const conn = setupCloseDetection(req);
 
-    const apiMessages: ChatMessage[] = [];
-    apiMessages.push({ role: 'system', content: fullSystem });
-    for (const msg of messages) {
-      const role = msg.role === 'model' ? 'assistant' : msg.role;
-      apiMessages.push({ role, content: msg.content || '' });
-    }
-
-    const response = await streamChatCompletion({
-      model: modelName || 'mimo-v2.5',
+    const result = await runHarness({
+      agentId,
+      sessionId: sessId,
+      workspaceRoot,
       messages: apiMessages,
-      stream: true,
-      thinking: { type: 'disabled' },
-      ...(max_tokens ? { max_tokens } : {}),
-    }, providerName);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      emitEvent({ error: `API error ${response.status}: ${errorText}` });
-      emitEvent({ done: true });
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
-    let fullResponse = '';
-    await readSSEStream(response, (chunk) => {
-      if (conn.isClosed()) return;
-      if (chunk.content) {
-        fullResponse += chunk.content;
-        emitEvent({ content: chunk.content });
-      }
+      agentPrompt: agent.system_prompt || '',
+      model: modelName || 'mimo-v2.5',
+      provider: providerName || undefined,
+      config: harnessConfig,
+      skills,
+      memorySummary,
+      onEvent: emitEvent,
+      signal: req.signal,
     });
 
-    if (!conn.isClosed() && toolRows.length > 0) {
-      const toolCalls = parseToolCalls(fullResponse);
-      for (const call of toolCalls) {
-        emitEvent({ tool_call: { name: call.name, arguments: call.arguments } });
-        const output = `Tool "${call.name}" executed with: ${JSON.stringify(call.arguments)}`;
-        emitEvent({ tool_result: { name: call.name, output } });
-      }
-    }
-
-    emitEvent({ done: true });
+    emitEvent({ done: true, output: result.output });
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
     console.error('[agent-builder/chat] Error:', error.message);
     sendSSEError(res, error.message);
+  }
+});
+
+// ─── Resume (resolve pending permission / question) ───
+
+router.post('/chat/resume', async (req, res) => {
+  try {
+    const { pendingId, decision, answer } = req.body;
+    if (!pendingId) { res.status(400).json({ error: 'pendingId required' }); return; }
+
+    const ok = resolvePending(pendingId, {
+      decision: decision || 'allow',
+      answer,
+    });
+
+    if (!ok) {
+      res.status(404).json({ error: 'Unknown or expired pendingId' });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

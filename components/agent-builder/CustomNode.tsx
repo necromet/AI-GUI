@@ -7,12 +7,14 @@ import { ICON_MAP } from './shared/icons';
 import { NODE_COLORS, STATUS_COLORS, HTTP_METHOD_COLORS } from './shared/colors';
 import { useExecutionStatus } from './ExecutionStatusContext';
 import { formatConditionRule, resolveConditionMode, validateConditionNode } from '../../lib/workflow/conditions';
+import { RETRYABLE_NODE_TYPES } from '../../lib/workflow/retry';
 import VariablePillText from './shared/VariablePill';
 
 const HINTS: Partial<Record<WorkflowNodeType, string>> = {
   agent: 'Click to set model & prompt',
   'if-else': 'Click to set condition',
   while: 'Click to set condition',
+  'for-each': 'Click to set items',
   http: 'Click to set URL',
   transform: 'Click to set code',
   'set-state': 'Click to set variables',
@@ -50,8 +52,10 @@ function CustomNodeInner({ data, id }: NodeProps) {
   const isEnd = nodeType === 'end';
   const isIfElse = nodeType === 'if-else';
   const isWhile = nodeType === 'while';
+  const isForEach = nodeType === 'for-each';
   const isApproval = nodeType === 'user-approval';
   const isNote = nodeType === 'note';
+  const hasErrorHandle = RETRYABLE_NODE_TYPES.has(nodeType) && !isNote;
 
   const hint = HINTS[nodeType];
   const isUnconfigured = hint && !isConfigured(nodeType, data);
@@ -168,6 +172,16 @@ function CustomNodeInner({ data, id }: NodeProps) {
               {[data.includeChatHistory && 'History', data.includeChatMemory && 'Memory'].filter(Boolean).join(' + ')} · {data.persistenceScope || 'conversation'}
             </div>
           )}
+          {Number(data?.retry?.maxAttempts) > 1 && (
+            <div className="mt-0.5">
+              <span
+                className="text-[8px] px-1.5 py-0.5 rounded-full font-medium"
+                style={{ backgroundColor: 'rgba(45,212,138,0.12)', color: '#2dd48a' }}
+              >
+                retry ×{data.retry.maxAttempts}
+              </span>
+            </div>
+          )}
           {isIfElse && conditionSummary && conditionSummary !== 'Set condition' && (
             <div className="text-[10px] truncate font-mono mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
               <VariablePillText value={conditionSummary} />
@@ -185,6 +199,17 @@ function CustomNodeInner({ data, id }: NodeProps) {
           {!isIfElse && data?.condition && (
             <div className="text-[10px] truncate font-mono mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
               <VariablePillText value={String(data.condition)} />
+            </div>
+          )}
+          {isForEach && (data?.items || data?.forEachItems) && (
+            <div className="text-[10px] truncate font-mono mt-0.5" style={{ color: 'var(--text-500, #666)' }}>
+              <VariablePillText value={String(data.items || data.forEachItems)} />
+            </div>
+          )}
+          {isForEach && (
+            <div className="text-[9px] mt-1 space-y-0.5" style={{ color: 'var(--text-500)' }}>
+              <div className="truncate">as {String(data?.itemVar || 'item')} · i {String(data?.indexVar || 'index')}</div>
+              {data?.maxItems ? <div className="truncate">max {data.maxItems} items</div> : null}
             </div>
           )}
           {data?.url && (
@@ -224,6 +249,11 @@ function CustomNodeInner({ data, id }: NodeProps) {
               {(data.fetchMode || 'fetch-url') === 'fetch-url' ? data.url : `Search: ${data.searchQuery}`}
             </div>
           )}
+          {execStatus?.status === 'failed' && execStatus?.errorRouted && (
+            <div className="text-[9px] mt-0.5 italic" style={{ color: '#f05252' }}>
+              failed → error path
+            </div>
+          )}
           {isUnconfigured && !execStatus && (
             <div className="text-[9px] mt-0.5 italic" style={{ color: `${color}80` }}>
               {hint}
@@ -241,12 +271,12 @@ function CustomNodeInner({ data, id }: NodeProps) {
               <div className="absolute left-[calc(100%+8px)] top-[24%] text-[9px] font-semibold text-green-400 whitespace-nowrap">{String(data?.trueLabel || 'True')}</div>
               <div className="absolute left-[calc(100%+8px)] top-[64%] text-[9px] font-semibold text-red-400 whitespace-nowrap">{String(data?.falseLabel || 'False')}</div>
             </>
-          ) : isWhile ? (
+          ) : isWhile || isForEach ? (
             <>
               <Handle type="source" position={Position.Right} id="continue" className="!w-3 !h-3 !border-2 !top-[30%]" style={{ borderColor: NODE_COLORS.while, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
               <Handle type="source" position={Position.Right} id="break" className="!w-3 !h-3 !border-2 !top-[70%]" style={{ borderColor: NODE_COLORS.mcp, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
-              <div className="absolute -right-9 top-[28%] text-[9px] text-purple-400">loop</div>
-              <div className="absolute -right-9 top-[68%] text-[9px] text-yellow-400">exit</div>
+              <div className="absolute -right-9 top-[28%] text-[9px] text-purple-400">{isForEach ? 'each' : 'loop'}</div>
+              <div className="absolute -right-9 top-[68%] text-[9px] text-yellow-400">{isForEach ? 'done' : 'exit'}</div>
             </>
           ) : isApproval ? (
             <>
@@ -254,6 +284,12 @@ function CustomNodeInner({ data, id }: NodeProps) {
               <Handle type="source" position={Position.Right} id="reject" className="!w-3 !h-3 !border-2 !top-[70%]" style={{ borderColor: NODE_COLORS.end, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
               <div className="absolute -right-9 top-[28%] text-[9px] text-green-400">ok</div>
               <div className="absolute -right-9 top-[68%] text-[9px] text-red-400">no</div>
+            </>
+          ) : hasErrorHandle ? (
+            <>
+              <Handle type="source" position={Position.Right} className="!w-3 !h-3 !border-2 !top-[35%]" style={{ borderColor: color, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
+              <Handle type="source" position={Position.Right} id="error" className="!w-3 !h-3 !border-2 !top-[78%]" style={{ borderColor: STATUS_COLORS.failed, backgroundColor: 'var(--bg-100, #1a1a1a)' }} />
+              <div className="absolute -right-8 top-[76%] text-[9px] text-red-400">err</div>
             </>
           ) : !isEnd ? (
             <>
@@ -276,6 +312,7 @@ function isConfigured(nodeType: WorkflowNodeType, data: Record<string, any>): bo
     case 'http': return !!(data.url || data.httpUrl);
     case 'if-else': return !validateConditionNode(data);
     case 'while': return !!(data.condition);
+    case 'for-each': return !!(data.items || data.forEachItems);
     case 'transform': return !!(data.code || data.transformScript) && (data.code || data.transformScript) !== 'return input;';
     case 'set-state': return !!(data.variables && Object.keys(data.variables).length > 0);
     case 'extract': return !!(data.fields && data.fields.length > 0);

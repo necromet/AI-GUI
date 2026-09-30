@@ -57,8 +57,10 @@ export function useWorkflow() {
       const res = await fetch(`/api/workflows/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await fetchWorkflows();
+      return true;
     } catch (err: any) {
       setError(err.message);
+      return false;
     }
   }, [fetchWorkflows]);
 

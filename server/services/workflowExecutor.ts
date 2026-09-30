@@ -9,7 +9,7 @@ import {
   type BaseCheckpointSaver,
 } from '@langchain/langgraph';
 import { executeAgentNode } from './workflowExecutors/agent.js';
-import { executeIfElseNode, executeWhileNode } from './workflowExecutors/logic.js';
+import { executeIfElseNode, executeWhileNode, executeForEachNode } from './workflowExecutors/logic.js';
 import { executeTransformNode } from './workflowExecutors/transform.js';
 import { executeMCPNode } from './workflowExecutors/mcp.js';
 import { executeSetStateNode, substituteVariables } from './workflowExecutors/variables.js';
@@ -21,10 +21,18 @@ import { executeDatabaseNode } from './workflowExecutors/database.js';
 import { executeWebSourceNode } from './workflowExecutors/webSource.js';
 import {
   getWorkflowNodeType,
+  isErrorHandle,
   normalizeHandle,
   normalizeWorkflowGraph,
   resolveIfElseBranch,
 } from '../../lib/workflow/graph.js';
+import {
+  classifyOutputFailure,
+  computeBackoffMs,
+  isRetriableFailure,
+  normalizeRetryPolicy,
+  RETRYABLE_NODE_TYPES,
+} from '../../lib/workflow/retry.js';
 import type { NodeExecutionResult, WorkflowEdge, WorkflowNode } from '../../lib/workflow/types.js';
 
 const WorkflowStateAnnotation = Annotation.Root({
@@ -71,7 +79,7 @@ export function toMermaid(rawNodes: WorkflowNode[], rawEdges: WorkflowEdge[]): s
     const id = sanitize(node.id);
     const label = String(node.data?.label || node.label || node.type).replace(/"/g, "'");
     const type = getWorkflowNodeType(node);
-    lines.push(type === 'if-else' || type === 'while' ? `  ${id}{${label}}` : `  ${id}[${label}]`);
+    lines.push(type === 'if-else' || type === 'while' || type === 'for-each' ? `  ${id}{${label}}` : `  ${id}[${label}]`);
   }
   for (const edge of edges) {
     const label = edge.label || edge.sourceHandle;
@@ -142,8 +150,9 @@ export class WorkflowExecutor {
       const pathTargets = getWorkflowNodeType(node) === 'if-else'
         ? (['if', 'else'] as const).map(handle => resolveIfElseBranch(node, handle, this.nodes, this.edges).targetId).filter(Boolean) as string[]
         : [];
+      const hasErrorRoute = (edgesBySource.get(node.id) || []).some(edge => isErrorHandle(edge.sourceHandle || edge.label));
       const possibleEnds = [...new Set([...directTargets, ...pathTargets])];
-      graph.addNode(node.id, this.createNodeExecutor(node), possibleEnds.length > 1 ? { ends: possibleEnds as any } : undefined);
+      graph.addNode(node.id, this.createNodeExecutor(node, hasErrorRoute), possibleEnds.length > 1 ? { ends: possibleEnds as any } : undefined);
     }
 
     const startNode = this.nodes.find(node => getWorkflowNodeType(node) === 'start');
@@ -164,21 +173,37 @@ export class WorkflowExecutor {
           (state: WorkflowState) => state.nodeResults[node.id]?.output?.branch === 'else' ? 'else' : 'if',
           { if: ifTarget, else: elseTarget } as any,
         );
-      } else if (type === 'while') {
+      } else if (type === 'while' || type === 'for-each') {
         graph.addConditionalEdges(node.id as any, (state: WorkflowState) => state.nodeResults[node.id]?.output?.shouldContinue ? 'continue' : 'break', branchMap(outgoing, ['continue', 'break']) as any);
       } else if (type === 'user-approval') {
         graph.addConditionalEdges(node.id as any, (state: WorkflowState) => state.nodeResults[node.id]?.output?.approved === false ? 'reject' : 'approve', branchMap(outgoing, ['approve', 'reject']) as any);
       } else {
-        for (const edge of outgoing) graph.addEdge(node.id as any, edge.target as any);
+        const errorEdge = outgoing.find(edge => isErrorHandle(edge.sourceHandle || edge.label));
+        const successEdges = outgoing.filter(edge => !isErrorHandle(edge.sourceHandle || edge.label));
+        if (errorEdge) {
+          const successTarget = successEdges[0]?.target || END;
+          const errorTarget = errorEdge.target || END;
+          graph.addConditionalEdges(
+            node.id as any,
+            (state: WorkflowState) => {
+              const result = state.nodeResults[node.id];
+              return result?.errorRouted || result?.output?.__failed ? 'error' : 'success';
+            },
+            { success: successTarget, error: errorTarget } as any,
+          );
+        } else {
+          for (const edge of outgoing) graph.addEdge(node.id as any, edge.target as any);
+        }
       }
     }
     return graph;
   }
 
-  private createNodeExecutor(node: WorkflowNode) {
+  private createNodeExecutor(node: WorkflowNode, hasErrorRoute = false) {
     return async (state: WorkflowState): Promise<Partial<WorkflowState>> => {
       const startedAt = new Date().toISOString();
       this.options.onNodeUpdate?.(node.id, 'started', { nodeId: node.id, status: 'running', startedAt });
+      let attempts = 1;
       try {
         const type = getWorkflowNodeType(node);
         let output: any;
@@ -192,7 +217,9 @@ export class WorkflowExecutor {
           }) as { approved?: boolean; data?: any };
           output = { approved: decision?.approved !== false, data: decision?.data };
         } else {
-          output = await this.executeNode(node, state);
+          const first = await this.executeNodeWithRetry(node, state);
+          output = first.output;
+          attempts = first.attempts;
           if (output?.__arcadePendingAuth) {
             const authorization = interrupt({
               kind: 'arcade-authorization', approvalId: output.authId, nodeId: node.id,
@@ -200,7 +227,9 @@ export class WorkflowExecutor {
               executionId: this.options.executionId, threadId: this.options.threadId,
             }) as { approved?: boolean };
             if (authorization?.approved === false) throw new Error(`Authorization rejected for ${output.toolName}`);
-            output = await this.executeNode(node, state);
+            const second = await this.executeNodeWithRetry(node, state);
+            output = second.output;
+            attempts += second.attempts;
             if (output?.__arcadePendingAuth) throw new Error(`Authorization for ${output.toolName} is not complete yet`);
           }
         }
@@ -211,6 +240,7 @@ export class WorkflowExecutor {
           status: 'completed',
           output: output?.output ?? output?.result ?? output,
           toolCalls: output?.toolCalls || output?.__agentToolCalls,
+          attempts,
           startedAt,
           completedAt: new Date().toISOString(),
         };
@@ -223,6 +253,7 @@ export class WorkflowExecutor {
         if (nodeName) variables[nodeName] = actualOutput;
         Object.assign(variables, output?.variableUpdates || output?.stateUpdates || output?.__variableUpdates || {});
         if (type === 'while' && output?.__iteration !== undefined) variables[`${node.id}__iteration`] = output.__iteration;
+        if (type === 'for-each' && output?.__index !== undefined) variables[`${node.id}__index`] = output.__index;
 
         const historyUpdates = output?.chatHistoryUpdates || output?.__chatHistoryUpdates || [];
 
@@ -234,11 +265,74 @@ export class WorkflowExecutor {
         };
       } catch (error: any) {
         if (isGraphInterrupt(error)) throw error;
-        const result: NodeExecutionResult = { nodeId: node.id, status: 'failed', error: error?.message || 'Node execution failed', startedAt, completedAt: new Date().toISOString() };
+        const message = error?.message || 'Node execution failed';
+        const result: NodeExecutionResult = {
+          nodeId: node.id,
+          status: 'failed',
+          error: message,
+          attempts: Number(error?.attempts) || attempts,
+          errorRouted: hasErrorRoute,
+          output: hasErrorRoute ? { __failed: true, error: message, nodeId: node.id } : undefined,
+          startedAt,
+          completedAt: new Date().toISOString(),
+        };
         this.options.onNodeUpdate?.(node.id, 'failed', result);
-        throw error;
+
+        if (!hasErrorRoute) throw error;
+
+        const errorPayload = { __failed: true, error: message, nodeId: node.id };
+        return {
+          currentNodeId: node.id,
+          nodeResults: { [node.id]: result },
+          variables: {
+            lastOutput: errorPayload,
+            [node.id]: errorPayload,
+            [`${node.id}_output`]: errorPayload,
+            [`${node.id}_error`]: message,
+          },
+        };
       }
     };
+  }
+
+  private async executeNodeWithRetry(node: WorkflowNode, state: WorkflowState): Promise<{ output: any; attempts: number }> {
+    const policy = normalizeRetryPolicy(node.data?.retry);
+    const type = getWorkflowNodeType(node);
+    const canRetry = policy.maxAttempts > 1 && RETRYABLE_NODE_TYPES.has(String(type));
+    const maxAttempts = Math.max(1, policy.maxAttempts);
+    let attempts = 0;
+    let lastError: (Error & { attempts?: number }) | null = null;
+
+    while (attempts < maxAttempts) {
+      attempts += 1;
+      let output: any;
+      try {
+        output = await this.executeNode(node, state);
+      } catch (error: any) {
+        if (isGraphInterrupt(error)) throw error;
+        lastError = error;
+        lastError.attempts = attempts;
+        const retriable = isRetriableFailure(error?.message);
+        if (!canRetry || !retriable || attempts >= maxAttempts) {
+          error.attempts = attempts;
+          throw error;
+        }
+        await sleep(computeBackoffMs(policy, attempts));
+        continue;
+      }
+
+      const failure = classifyOutputFailure(output);
+      if (!failure.failed) return { output, attempts };
+      // Soft failures (HTTP ok:false / 5xx) keep legacy success semantics unless retry is configured.
+      if (failure.soft && maxAttempts <= 1) return { output, attempts };
+
+      lastError = new Error(failure.message) as Error & { attempts?: number };
+      lastError.attempts = attempts;
+      if (!canRetry || !failure.retriable || attempts >= maxAttempts) throw lastError;
+      await sleep(computeBackoffMs(policy, attempts));
+    }
+
+    throw lastError || Object.assign(new Error('Node execution failed'), { attempts });
   }
 
   private async executeNode(node: WorkflowNode, state: WorkflowState): Promise<any> {
@@ -253,6 +347,12 @@ export class WorkflowExecutor {
       case 'guardrails': return executeGuardrailsNode(node.data, state);
       case 'if-else': return executeIfElseNode(node.data, state);
       case 'while': return executeWhileNode({ ...node.data, __iteration: state.variables[`${node.id}__iteration`] || 0 }, state);
+      case 'for-each': return executeForEachNode({
+        ...node.data,
+        __nodeId: node.id,
+        __index: state.variables[`${node.id}__index`] || 0,
+        __items: state.variables[`${node.id}__items`],
+      }, state);
       case 'transform': return executeTransformNode(node.data, state);
       case 'set-state': return executeSetStateNode(node.data, state);
       case 'http': return executeHTTPNode(node.data, state);
@@ -339,4 +439,9 @@ function branchMap(edges: WorkflowEdge[], handles: string[]): Record<string, str
     if (edge) result[handle] = edge.target;
   }
   return result;
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

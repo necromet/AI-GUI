@@ -123,7 +123,9 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
         e.sourceHandle === params.sourceHandle
       );
       if (isDuplicate) return;
-      if (['if-else', 'while', 'user-approval'].includes(String(sourceType)) && edges.some(edge => edge.source === params.source && edge.sourceHandle === params.sourceHandle)) {
+      const isBranchType = ['if-else', 'while', 'for-each', 'user-approval'].includes(String(sourceType));
+      const isErrorEdge = String(params.sourceHandle || '') === 'error' || ['fail', 'on-error', 'catch'].includes(String(params.sourceHandle || ''));
+      if ((isBranchType || isErrorEdge) && edges.some(edge => edge.source === params.source && edge.sourceHandle === params.sourceHandle)) {
         toast.error('Each branch handle can have one destination');
         return;
       }
@@ -354,7 +356,7 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
     const getNodeSize = (nodeType: string) => {
       if (nodeType === 'start' || nodeType === 'end') return { width: 140, height: 64 };
       if (nodeType === 'note') return { width: 220, height: 80 };
-      if (['if-else', 'while', 'user-approval'].includes(nodeType)) return { width: 180, height: 88 };
+      if (['if-else', 'while', 'for-each', 'user-approval'].includes(nodeType)) return { width: 180, height: 88 };
       return { width: 180, height: 72 };
     };
 
@@ -381,10 +383,10 @@ function WorkflowCanvasInner({ workflowId, onWorkflowSaved, onLoadTemplate, onBa
       };
     });
 
-    // Branch adjustments: true/approve/continue up, false/reject/break down
+    // Branch adjustments: true/approve/continue up, false/reject/break/error down
     const BRANCH_OFFSET = 40;
     const branchEdges = edges.filter(e =>
-      ['if', 'else', 'continue', 'break', 'approve', 'reject'].includes(String(e.sourceHandle))
+      ['if', 'else', 'continue', 'break', 'approve', 'reject', 'error'].includes(String(e.sourceHandle))
     );
     for (const edge of branchEdges) {
       const isUp = ['if', 'continue', 'approve'].includes(String(edge.sourceHandle));

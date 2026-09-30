@@ -146,11 +146,18 @@ export default function ExecutionPanel({ nodes, edges, workflowId, validationIss
         const nodeId = event.nodeId || event.data?.nodeId;
         if (nodeId) {
           const existing = next.get(nodeId) || { nodeId, status: 'pending' };
-          next.set(nodeId, { ...existing, status: 'failed', error: event.error || event.data?.error, completedAt: new Date().toISOString() });
+          next.set(nodeId, {
+            ...existing,
+            status: 'failed',
+            error: event.error || event.data?.error,
+            errorRouted: event.data?.errorRouted ?? existing.errorRouted,
+            attempts: event.data?.attempts ?? existing.attempts,
+            completedAt: new Date().toISOString(),
+          });
         }
         return next;
       });
-      if (event.error) setError(event.error);
+      if (event.error && !event.data?.errorRouted) setError(event.error);
     } else if (event.type === 'pending-auth' || event.type === 'pending_approval' || event.type === 'workflow_paused') {
       setPendingApproval(event.pendingAction || event.data || event.pendingAuth);
       setIsExpanded(true);

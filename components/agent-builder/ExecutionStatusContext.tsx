@@ -5,6 +5,8 @@ export interface NodeExecStatus {
   status: 'pending' | 'running' | 'completed' | 'failed';
   output?: any;
   error?: string;
+  errorRouted?: boolean;
+  attempts?: number;
   startedAt?: string;
   completedAt?: string;
 }

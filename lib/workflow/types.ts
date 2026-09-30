@@ -1,6 +1,6 @@
 export const WORKFLOW_NODE_TYPES = [
   'start', 'end', 'agent', 'mcp', 'guardrails', 'arcade',
-  'if-else', 'while', 'user-approval', 'transform', 'set-state',
+  'if-else', 'while', 'for-each', 'user-approval', 'transform', 'set-state',
   'extract', 'http', 'note', 'database', 'web-source',
 ] as const;
 
@@ -79,6 +79,8 @@ export interface NodeExecutionResult {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
   output?: any;
   error?: string;
+  attempts?: number;
+  errorRouted?: boolean;
   startedAt?: string;
   completedAt?: string;
   toolCalls?: Array<{ name?: string; arguments?: any; output?: any }>;

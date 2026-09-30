@@ -7,6 +7,8 @@ import type { WorkflowNodeType } from './types';
 import PasteConfigModal from './PasteConfigModal';
 import { StaggeredContainer } from './shared/StaggeredContainer';
 import VariablePillText from './shared/VariablePill';
+import ResilienceSection from './shared/ResilienceSection';
+import { RETRYABLE_NODE_TYPES } from '../../lib/workflow/retry';
 import {
   StartNodeConfig,
   AgentNodeConfig,
@@ -16,6 +18,7 @@ import {
   TransformNodeConfig,
   IfElseNodeConfig,
   WhileNodeConfig,
+  ForEachNodeConfig,
   ApprovalNodeConfig,
   EndNodeConfig,
   NoteNodeConfig,
@@ -44,6 +47,9 @@ const CONFIG_PANELS: Record<string, React.ComponentType<{ data: Record<string, a
   'data-transform': TransformNodeConfig,
   'if-else': IfElseNodeConfig,
   while: WhileNodeConfig,
+  'for-each': ForEachNodeConfig,
+  foreach: ForEachNodeConfig,
+  'for each': ForEachNodeConfig,
   'user-approval': ApprovalNodeConfig,
   'user approval': ApprovalNodeConfig,
   approval: ApprovalNodeConfig,
@@ -190,6 +196,12 @@ export default function NodeSettingsPanel({ node, onUpdate, onClose, onDelete, u
                   <div className="py-[32px] text-center text-[13px] leading-[20px]" style={{ color: 'var(--text-400)' }}>
                     No settings available for this node type
                   </div>
+                )}
+                {RETRYABLE_NODE_TYPES.has(nodeType) && (
+                  <ResilienceSection
+                    data={node.data as Record<string, any>}
+                    onUpdate={handleUpdate}
+                  />
                 )}
               </StaggeredContainer>
             </motion.div>

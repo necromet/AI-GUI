@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import express from 'express';
 import * as path from 'path';
 import { chatCompletion, streamChatCompletion, ChatMessage } from '../services/mimoService';
 import { analyzeImages } from '../services/agentService';
@@ -24,12 +23,11 @@ router.get('/projects', async (_req: Request, res: Response) => {
 
 router.get('/projects/:id', async (req: Request, res: Response) => {
   try {
-    const project = await skemaDb.getSkemaProject(req.params.id);
+    const project = await skemaDb.getSkemaProject(String(req.params.id));
     if (!project) {
       res.status(404).json({ error: 'Project not found' });
       return;
     }
-    console.log('[skema GET] id:', req.params.id, 'boards_json length:', project.boards_json?.length, 'has generatedHtml:', project.boards_json?.includes('generatedHtml'), 'content:', project.boards_json);
     res.json({ project });
   } catch (error: any) {
     console.error('[skema/projects/:id GET] Error:', error.message);
@@ -37,17 +35,16 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/projects/:id', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+router.put('/projects/:id', async (req: Request, res: Response) => {
   try {
     const { title, description, project_type, boards_json, theme_json, full_design_spec_json, created_at, updated_at } = req.body;
     if (!title || boards_json === undefined) {
       res.status(400).json({ error: 'Missing required fields: title, boards_json' });
       return;
     }
-    console.log('[skema PUT] id:', req.params.id, 'boards_json length:', boards_json?.length, 'has generatedHtml:', boards_json?.includes('generatedHtml'), 'boards_json preview:', boards_json?.substring(0, 120), 'stack:', new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     const now = new Date().toISOString();
     await skemaDb.saveSkemaProject({
-      id: req.params.id,
+      id: String(req.params.id),
       title,
       description,
       project_type: project_type || 'canvas',
@@ -66,7 +63,7 @@ router.put('/projects/:id', express.json({ limit: '10mb' }), async (req: Request
 
 router.delete('/projects/:id', async (req: Request, res: Response) => {
   try {
-    await skemaDb.deleteSkemaProject(req.params.id);
+    await skemaDb.deleteSkemaProject(String(req.params.id));
     res.json({ success: true });
   } catch (error: any) {
     console.error('[skema/projects/:id DELETE] Error:', error.message);
@@ -219,7 +216,7 @@ router.post('/generate-spec', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/generate-html', express.json({ limit: '5mb' }), async (req: Request, res: Response) => {
+router.post('/generate-html', async (req: Request, res: Response) => {
   try {
     const { boardDescription, layout, prompt: userPrompt, model, provider, stream, isReasoning, currentHtml, history, projectType, images, slideNumber, totalSlides, referenceSlideHtml } = req.body;
 
@@ -385,7 +382,7 @@ router.get('/components', async (req: Request, res: Response) => {
 
 router.get('/components/:id', async (req: Request, res: Response) => {
   try {
-    const component = await library.getComponent(req.params.id);
+    const component = await library.getComponent(String(req.params.id));
     if (!component) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -425,7 +422,7 @@ router.post('/components', async (req: Request, res: Response) => {
 
 router.delete('/components/:id', async (req: Request, res: Response) => {
   try {
-    const deleted = await library.deleteComponent(req.params.id);
+    const deleted = await library.deleteComponent(String(req.params.id));
     if (!deleted) {
       res.status(404).json({ error: 'Component not found' });
       return;
@@ -536,7 +533,7 @@ router.post('/compile', async (req: Request, res: Response) => {
 });
 
 router.get('/preview-module/:key', (req: Request, res: Response) => {
-  const entry = previewModuleCache.get(req.params.key);
+  const entry = previewModuleCache.get(String(req.params.key));
   if (!entry) {
     res.status(404).send('export default null;');
     return;

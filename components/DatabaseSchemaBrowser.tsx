@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Table2, Eye, Key, Hash, RefreshCw, Search, Link2, Copy, FileText, BarChart3, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Table2, Eye, Key, Hash, RefreshCw, Search, Link2, Copy, FileText, BarChart3 } from 'lucide-react';
 import { TableInfo, ColumnInfo } from '../types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -131,12 +131,6 @@ const TableNode: React.FC<{
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onQuickAction('count', table.schema, table.name)}>
                 <BarChart3 size={12} className="mr-2" /> COUNT(*)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onQuickAction('insert', table.schema, table.name)}>
-                <Plus size={12} className="mr-2" /> INSERT template
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onQuickAction('describe', table.schema, table.name)}>
-                <Table2 size={12} className="mr-2" /> Table structure
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 navigator.clipboard.writeText(table.schema === 'public' ? table.name : `${table.schema}.${table.name}`);

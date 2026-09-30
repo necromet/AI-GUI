@@ -171,6 +171,7 @@ export function validateWorkflowGraph(rawNodes: any[] = [], rawEdges: any[] = []
   const requiredHandles: Record<string, string[]> = {
     'if-else': ['if', 'else'],
     while: ['continue', 'break'],
+    'for-each': ['continue', 'break'],
     'user-approval': ['approve', 'reject'],
   };
   for (const node of nodes) {
@@ -226,11 +227,16 @@ export function normalizeHandle(value?: string): string {
   const handle = String(value || '').toLowerCase().trim();
   if (['true', 'yes'].includes(handle)) return 'if';
   if (['false', 'no'].includes(handle)) return 'else';
-  if (['loop', 'next'].includes(handle)) return 'continue';
-  if (['exit', 'stop', 'complete'].includes(handle)) return 'break';
+  if (['loop', 'next', 'each', 'item', 'body'].includes(handle)) return 'continue';
+  if (['exit', 'stop', 'complete', 'done', 'after'].includes(handle)) return 'break';
   if (handle === 'approved') return 'approve';
   if (handle === 'rejected') return 'reject';
+  if (['fail', 'failed', 'failure', 'on-error', 'onerror', 'catch', 'caught', 'error-path'].includes(handle)) return 'error';
   return handle;
+}
+
+export function isErrorHandle(value?: string): boolean {
+  return normalizeHandle(value) === 'error';
 }
 
 export interface BranchResolution {
@@ -307,6 +313,11 @@ function validateNodeConfiguration(node: WorkflowNode, issues: WorkflowValidatio
     const conditionError = validateConditionNode(data);
     required(!conditionError, 'if-else_condition', conditionError || 'needs a condition');
   } else if (type === 'while') required(Boolean(String(data.condition || data.whileCondition || '').trim()), `${type}_condition`, 'needs a condition');
+  else if (type === 'for-each') {
+    required(Boolean(String(data.items || data.forEachItems || '').trim()), 'for-each_items', 'needs an items expression');
+    const maxItems = Number(data.maxItems ?? 100);
+    required(Number.isFinite(maxItems) && maxItems >= 1 && maxItems <= 1000, 'for-each_max_items', 'max items must be between 1 and 1000');
+  }
   else if (type === 'transform') required(Boolean(String(data.code || data.transformScript || '').trim()), 'transform_code', 'needs transformation code');
   else if (type === 'set-state') required(Boolean(data.stateKey || (data.variables && Object.keys(data.variables).length)), 'state_value', 'needs a state value');
   else if (type === 'extract') required(Boolean(data.schema || data.extractConfig?.schema || data.fields?.length), 'extract_schema', 'needs fields or a schema');
@@ -325,5 +336,15 @@ function validateNodeConfiguration(node: WorkflowNode, issues: WorkflowValidatio
       required(Number(data.topK ?? 5) >= 1 && Number(data.topK ?? 5) <= 20, 'documents_top_k', 'Top K must be between 1 and 20');
       required(Number(data.minScore ?? 0) >= 0 && Number(data.minScore ?? 0) <= 1, 'documents_min_score', 'minimum score must be between 0 and 1');
     }
+  }
+
+  const retry = data.retry && typeof data.retry === 'object' ? data.retry as Record<string, any> : null;
+  if (retry) {
+    const maxAttempts = Number(retry.maxAttempts ?? 1);
+    required(Number.isFinite(maxAttempts) && maxAttempts >= 1 && maxAttempts <= 5, 'retry_max_attempts', 'retry max attempts must be between 1 and 5');
+    const backoffMs = Number(retry.backoffMs ?? 500);
+    required(Number.isFinite(backoffMs) && backoffMs >= 0 && backoffMs <= 30000, 'retry_backoff', 'retry backoff must be between 0 and 30000 ms');
+    const backoffMultiplier = Number(retry.backoffMultiplier ?? 2);
+    required(Number.isFinite(backoffMultiplier) && backoffMultiplier >= 1 && backoffMultiplier <= 5, 'retry_backoff_multiplier', 'retry backoff multiplier must be between 1 and 5');
   }
 }

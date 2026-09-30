@@ -6,6 +6,7 @@ import multer from 'multer';
 import { join, resolve } from 'path';
 import { mkdirSync, existsSync, readdirSync, unlinkSync, statSync, rmdirSync, readFileSync } from 'fs';
 import { safeJsonParse } from '../lib/safeJsonParse';
+import { isSafeProjectFilename, resolveProjectFile } from '../lib/pythonFilePath';
 
 const router = Router();
 
@@ -29,14 +30,7 @@ function ensureProjectDir(projectId: string): string {
 }
 
 function resolveFilePath(projectId: string, filename: string): string | null {
-  const projectDir = getProjectDir(projectId);
-  const filePath = join(projectDir, filename);
-  const normalizedProject = projectDir.replace(/[/\\]+$/, '');
-  if (!filePath.startsWith(normalizedProject + path.sep) && filePath !== normalizedProject) {
-    return null;
-  }
-  if (!existsSync(filePath)) return null;
-  return filePath;
+  return resolveProjectFile(getProjectDir(projectId), filename);
 }
 
 const upload = multer({
@@ -47,6 +41,10 @@ const upload = multer({
       cb(null, dir);
     },
     filename: (_req, file, cb) => {
+      if (!isSafeProjectFilename(file.originalname)) {
+        cb(new Error('Invalid filename'), '');
+        return;
+      }
       cb(null, file.originalname);
     },
   }),
@@ -235,7 +233,7 @@ router.delete('/projects/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Project not found' });
       return;
     }
-    const projectDir = getProjectDir(req.params.id);
+    const projectDir = getProjectDir(String(req.params.id));
     if (existsSync(projectDir)) {
       try {
         const files = readdirSync(projectDir);
@@ -254,7 +252,7 @@ router.delete('/projects/:id', async (req: Request, res: Response) => {
 
 router.get('/projects/:id/files', (req: Request, res: Response) => {
   try {
-    const projectDir = getProjectDir(req.params.id);
+    const projectDir = getProjectDir(String(req.params.id));
     if (!existsSync(projectDir)) {
       res.json({ files: [] });
       return;
@@ -284,7 +282,7 @@ router.post('/projects/:id/files', (req: Request, res: Response) => {
       res.status(400).json({ error: err.message });
       return;
     }
-    const uploaded = (req.files as Express.Multer.File[] || []).map(f => ({
+    const uploaded = (((req as Request & { files?: Array<{ filename: string; size: number; path: string }> }).files) || []).map(f => ({
       filename: f.filename,
       size: f.size,
       path: f.path,
@@ -295,8 +293,8 @@ router.post('/projects/:id/files', (req: Request, res: Response) => {
 
 router.delete('/projects/:id/files/:filename', (req: Request, res: Response) => {
   try {
-    const filename = decodeURIComponent(req.params.filename);
-    const filePath = resolveFilePath(req.params.id, filename);
+    const filename = String(req.params.filename);
+    const filePath = resolveFilePath(String(req.params.id), filename);
     if (!filePath) {
       res.status(404).json({ error: 'File not found' });
       return;
@@ -318,10 +316,10 @@ function isTextFile(filename: string): boolean {
 
 router.get('/projects/:id/files/:filename/view', (req: Request, res: Response) => {
   try {
-    const filename = decodeURIComponent(req.params.filename);
-    const filePath = resolveFilePath(req.params.id, filename);
+    const filename = String(req.params.filename);
+    const filePath = resolveFilePath(String(req.params.id), filename);
     if (!filePath) {
-      console.error(`[python/view] File not found: ${join(getProjectDir(req.params.id), filename)}`);
+      console.error(`[python/view] File not found: ${join(getProjectDir(String(req.params.id)), filename)}`);
       res.status(404).json({ error: 'File not found', filename, projectId: req.params.id });
       return;
     }
@@ -352,10 +350,10 @@ router.get('/projects/:id/files/:filename/view', (req: Request, res: Response) =
 
 router.get('/projects/:id/files/:filename/download', (req: Request, res: Response) => {
   try {
-    const filename = decodeURIComponent(req.params.filename);
-    const filePath = resolveFilePath(req.params.id, filename);
+    const filename = String(req.params.filename);
+    const filePath = resolveFilePath(String(req.params.id), filename);
     if (!filePath) {
-      console.error(`[python/download] File not found: ${join(getProjectDir(req.params.id), filename)}`);
+      console.error(`[python/download] File not found: ${join(getProjectDir(String(req.params.id)), filename)}`);
       res.status(404).json({ error: 'File not found', filename, projectId: req.params.id });
       return;
     }

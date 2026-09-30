@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as workflowDB from '../db/workflows.js';
 import { nanoid } from 'nanoid';
+import { encryptWorkflowKey } from '../services/workflowKeyCipher.js';
 
 const router = Router();
 
@@ -40,7 +41,7 @@ router.post('/keys', async (req, res) => {
     const key = await workflowDB.saveUserLLMKey({
       id: `key_${nanoid(10)}`,
       provider,
-      encryptedKey: Buffer.from(apiKey).toString('base64'),
+      encryptedKey: encryptWorkflowKey(apiKey),
       keyPrefix: apiKey.slice(0, 8) + '...',
     });
     res.json({ id: key.id, provider: key.provider, keyPrefix: key.key_prefix, isActive: key.is_active });

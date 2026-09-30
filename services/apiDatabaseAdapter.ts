@@ -479,10 +479,11 @@ export const getDbSchema = async (connectionId: string) => {
   });
 };
 
-export const executeDbQuery = async (connectionId: string, sql: string, maxRows?: number, force?: boolean, timeout?: number) => {
-  return await apiFetch<{ columns: string[]; rows: any[][]; rowCount: number; executionTime: number; error?: string; needsConfirmation?: boolean; warning?: string; truncated?: boolean }>('/database/query', {
+export const executeDbQuery = async (connectionId: string, sql: string, maxRows?: number, timeout?: number, signal?: AbortSignal) => {
+  return await apiFetch<{ columns: string[]; rows: any[][]; rowCount: number; executionTime: number; error?: string; truncated?: boolean }>('/database/query', {
     method: 'POST',
-    body: JSON.stringify({ connectionId, sql, maxRows, force, timeout }),
+    body: JSON.stringify({ connectionId, sql, maxRows, timeout }),
+    signal,
   });
 };
 

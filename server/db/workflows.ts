@@ -1,5 +1,6 @@
 import { getAll, getOne, run, runReturning, pool } from './pg';
 import { redactWorkflowSecrets } from '../services/workflowRedaction.js';
+import { decryptWorkflowKey, encryptWorkflowKey, isEncryptedWorkflowKey } from '../services/workflowKeyCipher.js';
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -166,6 +167,21 @@ export async function getPendingApprovals() {
 
 export async function getUserLLMKeys() {
   return getAll('SELECT * FROM user_llm_keys WHERE is_active = TRUE ORDER BY provider');
+}
+
+export async function migrateLegacyUserLLMKeys(): Promise<number> {
+  const rows = await getAll('SELECT id, encrypted_key FROM user_llm_keys');
+  let migrated = 0;
+  for (const row of rows) {
+    if (isEncryptedWorkflowKey(row.encrypted_key)) continue;
+    const plaintext = decryptWorkflowKey(row.encrypted_key);
+    const result = await run(
+      'UPDATE user_llm_keys SET encrypted_key = $1 WHERE id = $2 AND encrypted_key = $3',
+      [encryptWorkflowKey(plaintext), row.id, row.encrypted_key]
+    );
+    migrated += result.rowCount;
+  }
+  return migrated;
 }
 
 export async function getUserLLMKey(id: string) {

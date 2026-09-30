@@ -15,6 +15,7 @@
     "seed": "tsx server/db/seed-dummy.ts",
     "build": "vite build",
     "test:agent-builder": "tsx --test --experimental-test-isolation=none tests/agent-builder/*.test.ts",
+    "test:route-bugfix": "tsx --test --experimental-test-isolation=none tests/route-bugfix/*.test.ts",
     "preview": "vite preview",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",

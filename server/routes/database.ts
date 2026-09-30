@@ -10,6 +10,7 @@ import {
   sanitizeDatabaseError,
   testDatabaseConnection,
   updateDatabaseConnection,
+  validateReadOnlySql,
 } from '../services/databaseConnectionService.js';
 
 const router = Router();
@@ -186,9 +187,15 @@ router.post('/schema', async (req: Request, res: Response) => {
 
 router.post('/query', async (req: Request, res: Response) => {
   try {
-    const { connectionId, sql, maxRows, force, timeout } = req.body;
-    if (!connectionId || !sql) {
+    const { connectionId, sql, maxRows, timeout } = req.body;
+    if (!connectionId || typeof sql !== 'string' || !sql.trim()) {
       res.status(400).json({ error: 'Missing connectionId or sql' });
+      return;
+    }
+    try {
+      validateReadOnlySql(sql);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
       return;
     }
     const result = await executeReadOnlyQuery(connectionId, sql, [], { maxRows: maxRows ?? 1000, timeoutMs: timeout });

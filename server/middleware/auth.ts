@@ -21,8 +21,8 @@ const ROUTE_MODE_MAP: Record<string, string> = {
 
 export function requireModeAuth(req: Request, res: Response, next: NextFunction) {
   const url = req.originalUrl || req.url;
-  const isPublishedWorkflowExecution = /^\/api\/workflows\/[^/]+\/execute(?:-stream)?(?:\?|$)/.test(url);
-  if (isPublishedWorkflowExecution && req.headers.authorization?.startsWith('Bearer ')) {
+  const isPublishedWorkflowRequest = /^\/api\/workflows\/[^/]+\/(?:execute(?:-stream)?|validate)(?:\?|$)/.test(url);
+  if (isPublishedWorkflowRequest && req.headers.authorization?.startsWith('Bearer ')) {
     return next();
   }
   const mode = Object.entries(ROUTE_MODE_MAP).find(([prefix]) =>
@@ -33,6 +33,12 @@ export function requireModeAuth(req: Request, res: Response, next: NextFunction)
 
   const unlockedModes: string[] = (req.session as any)?.unlockedModes ?? [];
   if (unlockedModes.includes(mode)) return next();
+
+  const pathname = url.split('?')[0];
+  const agentBuilderResource =
+    (req.method === 'GET' && (pathname === '/api/database/connections' || pathname === '/api/rag/documents')) ||
+    (req.method === 'POST' && (pathname === '/api/database/connections' || pathname === '/api/database/test' || /^\/api\/database\/connections\/[^/]+\/ping$/.test(pathname)));
+  if (agentBuilderResource && unlockedModes.includes('agent-builder')) return next();
 
   return res.status(401).json({ error: 'Authentication required', mode });
 }

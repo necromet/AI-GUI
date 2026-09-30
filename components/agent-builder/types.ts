@@ -3,7 +3,7 @@
 export type WorkflowNodeType =
   | 'start' | 'end'
   | 'agent' | 'mcp' | 'guardrails' | 'arcade'
-  | 'if-else' | 'while' | 'user-approval'
+  | 'if-else' | 'while' | 'for-each' | 'user-approval'
   | 'transform' | 'set-state'
   | 'extract' | 'http' | 'note'
   | 'database' | 'web-source';
@@ -46,6 +46,8 @@ export interface NodeExecutionResult {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
   output?: any;
   error?: string;
+  attempts?: number;
+  errorRouted?: boolean;
   startedAt?: string;
   completedAt?: string;
   toolCalls?: Array<{ name: string; input: any; output?: any }>;

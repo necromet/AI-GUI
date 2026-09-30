@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Copy, ExternalLink, Globe, Link2Off, MessageCircle, Share2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { exampleExecutionInput } from '../../lib/workflow/inputExamples';
 
 interface Props {
   workflowId: string;
@@ -14,6 +15,7 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
   const [endpointUrl, setEndpointUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [testInput, setTestInput] = useState('Hello from Agent Builder');
+  const [workflowNodes, setWorkflowNodes] = useState<any[]>([]);
   const [testResult, setTestResult] = useState<any>(null);
   const [testing, setTesting] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(false);
@@ -26,6 +28,7 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
     fetch(`/api/workflows/${workflowId}`)
       .then(r => r.json())
       .then(data => {
+        setWorkflowNodes(Array.isArray(data.nodes) ? data.nodes : []);
         if (data.published) {
           setPublished(true);
           setEndpointUrl(data.endpointUrl || `${window.location.origin}/api/workflows/${workflowId}/execute`);
@@ -69,7 +72,8 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
 
   const handleUnpublish = useCallback(async () => {
     try {
-      await fetch(`/api/workflows/${workflowId}/unpublish`, { method: 'POST' });
+      const response = await fetch(`/api/workflows/${workflowId}/unpublish`, { method: 'POST' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setPublished(false);
       setEndpointUrl('');
       setApiKey('');
@@ -117,14 +121,15 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
     }
   }, [workflowId]);
 
+  const exampleBody = JSON.stringify({ input: exampleExecutionInput(workflowNodes, 'your input here') });
   const curlExample = `curl -X POST ${endpointUrl} \\
   -H "Content-Type: application/json" \\
-  ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '{"input": "your input here"}'`;
+  ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '${exampleBody}'`;
 
   const curlStreamExample = `curl -X POST ${endpointUrl.replace(/\/execute$/, '/execute-stream')} \\
   -H "Content-Type: application/json" \\
   -H "Accept: text/event-stream" \\
-  ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '{"input": "your input here", "stream": true}'`;
+  ${apiKey ? `-H "Authorization: Bearer ${apiKey}" \\\n  ` : ''}-d '${exampleBody}'`;
 
   const handleTest = useCallback(async () => {
     setTesting(true);
@@ -133,7 +138,7 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: testInput }),
+        body: JSON.stringify({ input: exampleExecutionInput(workflowNodes, testInput) }),
       });
       const body = await response.json();
       setTestResult(body);
@@ -143,7 +148,7 @@ export default function PublishModal({ workflowId, workflowName, onClose }: Prop
     } finally {
       setTesting(false);
     }
-  }, [workflowId, testInput]);
+  }, [workflowId, testInput, workflowNodes]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>

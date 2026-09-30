@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { Database, Plus, Trash2, Play, Loader2, History, X, Server, Clock, Pencil, AlertTriangle, StopCircle, Wand2, WrapText, Type, HelpCircle, Loader2 as LoaderIcon } from 'lucide-react';
+import { Database, Plus, Trash2, Play, Loader2, History, X, Server, Clock, Pencil, StopCircle, Wand2, WrapText, Type, HelpCircle, Loader2 as LoaderIcon } from 'lucide-react';
 
 const ExplainCanvas = lazy(() => import('./actuallyexplain/ExplainCanvas'));
 import { format } from 'sql-formatter';
@@ -98,7 +98,6 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [schemaPanelCollapsed, setSchemaPanelCollapsed] = useState(false);
 
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; sql: string; warning: string }>({ open: false, sql: '', warning: '' });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; connId: string; connName: string }>({ open: false, connId: '', connName: '' });
   const [lastExecTime, setLastExecTime] = useState<number | null>(null);
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'checking' | 'reachable' | 'unreachable'>>({});
@@ -124,6 +123,8 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
   useEffect(() => {
     loadConnections();
   }, []);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (activeConnectionId) {
@@ -332,6 +333,12 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
     });
   };
 
+  const stopInFlightQuery = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsExecuting(false);
+  };
+
   const handleConnect = async (conn: { name: string; host: string; port: number; database: string; user: string; password: string; ssl: boolean }) => {
     try {
       setIsConnecting(true);
@@ -346,6 +353,7 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
         id = await db.saveDbConnection(conn);
         await loadConnections();
       }
+      stopInFlightQuery();
       setActiveConnectionId(id);
       setActiveConnectionName(conn.name);
       setShowForm(false);
@@ -362,6 +370,7 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
   };
 
   const handleQuickConnect = async (conn: DatabaseConnection) => {
+    stopInFlightQuery();
     setActiveConnectionId(conn.id);
     setActiveConnectionName(conn.name);
     setSql('');
@@ -370,6 +379,7 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
   };
 
   const handleDisconnect = () => {
+    stopInFlightQuery();
     if (activeConnectionId) {
       db.releaseDbPool(activeConnectionId).catch(() => {});
     }
@@ -417,39 +427,27 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
       case 'count':
         setSql(`SELECT COUNT(*) AS total\nFROM ${qualifiedName};`);
         break;
-      case 'insert':
-        setSql(`INSERT INTO ${qualifiedName} ()\nVALUES ();`);
-        break;
-      case 'describe': {
-        const table = schema.tables.find(t => t.schema === schemaName && t.name === tableName);
-        if (table) {
-          const lines = table.columns.map(c =>
-            `  ${c.name} ${c.dataType}${c.characterMaximumLength ? `(${c.characterMaximumLength})` : ''}${c.isNullable ? '' : ' NOT NULL'}${c.columnDefault ? ` DEFAULT ${c.columnDefault}` : ''}${c.isPrimaryKey ? ' PRIMARY KEY' : ''}`
-          );
-          setSql(`-- Table structure for ${qualifiedName}\n-- Columns: ${table.columns.length}\n-- Rows: ${table.rowCount ?? 'unknown'}\n\nCREATE TABLE ${qualifiedName} (\n${lines.join(',\n')}\n);`);
-        }
-        break;
-      }
     }
     setQueryResult(null);
-  }, [schema.tables]);
+  }, []);
 
-  const executeQuery = useCallback(async (forceSql?: string) => {
-    if (!activeConnectionId || (!sql.trim() && !forceSql) || isExecuting) return;
-    const sqlToRun = forceSql || sql.trim();
+  const executeQuery = useCallback(async () => {
+    if (!activeConnectionId || !sql.trim() || isExecuting) return;
+    const sqlToRun = sql.trim();
 
     const cleaned = sqlToRun.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
-    if (!/^\s*(SELECT|WITH|EXPLAIN|SHOW)\b/i.test(cleaned)) {
-      toast.error('Only SELECT queries are allowed in read-only mode');
+    if (!/^\s*(SELECT|WITH|SHOW|VALUES)\b/i.test(cleaned)) {
+      toast.error('Only read-only queries are allowed');
       return;
     }
 
+    const controller = new AbortController();
     try {
       setIsExecuting(true);
       setQueryResult(null);
-      abortRef.current = new AbortController();
-      const result = await db.executeDbQuery(activeConnectionId, sqlToRun, undefined, true);
-      abortRef.current = null;
+      abortRef.current = controller;
+      const result = await db.executeDbQuery(activeConnectionId, sqlToRun, undefined, undefined, controller.signal);
+      if (controller.signal.aborted || abortRef.current !== controller) return;
 
       setQueryResult(result);
       setLastExecTime(result.executionTime);
@@ -471,8 +469,10 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
         onNotification?.('Query failed: ' + err.message, 'error');
       }
     } finally {
-      setIsExecuting(false);
-      abortRef.current = null;
+      if (abortRef.current === controller) {
+        setIsExecuting(false);
+        abortRef.current = null;
+      }
     }
   }, [activeConnectionId, sql, isExecuting, history, onNotification]);
 
@@ -481,13 +481,9 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
       abortRef.current.abort();
       abortRef.current = null;
       setIsExecuting(false);
-      toast.info('Query cancelled');
+      toast.info('Stopped waiting for the query. It may continue on the server for up to 30 seconds.');
     }
   }, []);
-
-  const confirmDestructiveQuery = useCallback(() => {
-    setConfirmDialog({ open: false, sql: '', warning: '' });
-  }, [confirmDialog.sql]);
 
   const formatSql = useCallback(() => {
     try {
@@ -815,30 +811,6 @@ const DatabasePanel: React.FC<DatabasePanelProps> = ({
         onSave={handleConnect}
         initialData={editConnection}
       />
-
-      {/* Destructive query confirmation dialog */}
-      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, sql: '', warning: '' })}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
-              Confirm Destructive Query
-            </DialogTitle>
-            <DialogDescription>{confirmDialog.warning}</DialogDescription>
-          </DialogHeader>
-          <pre className="text-xs font-mono p-2 rounded" style={{ backgroundColor: 'var(--bg-200)', color: 'var(--text-300)' }}>
-            {confirmDialog.sql}
-          </pre>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialog({ open: false, sql: '', warning: '' })} className="cursor-pointer">
-              Cancel
-            </Button>
-            <Button onClick={confirmDestructiveQuery} style={{ backgroundColor: '#f59e0b', color: '#000' }} className="cursor-pointer">
-              Execute Anyway
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete connection confirmation dialog */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, connId: '', connName: '' })}>
